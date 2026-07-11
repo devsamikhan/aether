@@ -19,4 +19,4 @@ Examples of unacceptable behavior by participants include:
 - Other conduct which could reasonably be considered inappropriate in a professional setting.
 
 ## Enforcement
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team at `core-team@aether-lang.org`. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team at `samikhanniazi285@gmail.com`. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances.
