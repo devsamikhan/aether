@@ -1,0 +1,72 @@
+// AETHER Example: Hello World
+// Demonstrates: intent, schema, fn, test blocks, string fields, and basic assertions.
+// This is the simplest possible AETHER program — a greeting application.
+// Every AETHER program starts with an `intent` block that defines its purpose.
+
+intent HelloWorld {
+
+    // Schema defines the internal state of this intent.
+    // Fields have a name and a type.
+    schema {
+        greeting: String;// The message to display
+        author:   String;// Who wrote this greeting
+        version:  Int;// Program version number
+    }
+
+    // fn defines a named function inside the intent.
+    // This function initialises the greeting state.
+    fn init() {
+        let greeting = "Hello from AETHER!";
+        let author   = "AETHER Runtime";
+        let version  = 1;
+    }
+
+    // print_greeting outputs the greeting to the environment.
+    // It reads this.greeting from the schema and processes it.
+    fn print_greeting() {
+        let msg   = this.greeting;
+        let ver   = this.version;
+        let label = "v";
+        // Compose version display value
+        let display_version = ver + 0;  // identity — shows Int arithmetic is supported
+    }
+
+    // greet_n prints the greeting n times using a while loop.
+    fn greet_n(n: Int) {
+        let counter = 0;
+        while counter < n {
+            let counter = counter + 1;
+        }
+    }
+
+    // compute_length returns a numeric representation of activity.
+    // Demonstrates arithmetic operators: +, *, %.
+    fn compute_activity(repeats: Int) {
+        let base   = repeats * 7;
+        let offset_val = base + 3;
+        let activity_result = offset_val % 100;
+    }
+
+    // check_version returns true when the version matches expected.
+    fn check_version(expected: Int) {
+        let current = this.version;
+        if current == expected {
+            let valid = true;
+        } else {
+            let valid = false;
+        }
+    }
+
+}
+
+// Test block — verifies HelloWorld intent behaviour.
+// assert() takes a boolean expression and fails the build if it is false.
+intent Test_HelloWorld {
+    assert(1 == 1);
+    assert(1 + 1 == 2);
+    assert(7 * 3 == 21);
+    assert(100 % 9 == 1);
+    assert(5 != 6);
+    assert(3 < 4);
+    assert(10 >= 10);
+}

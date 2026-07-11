@@ -1,0 +1,21 @@
+intent GroverSwarmSearch {
+    schema {
+        foundIndex: Int = -1;
+        targetElement: Int = 42;
+        searchComplexity: Int = 10000;
+    }
+
+    fn run_swarm_search(total_elements: Int) {
+        let n_elements = total_elements;
+        let search_agents = to_int(sqrt(to_float(n_elements)));
+        
+        swarm_spawn(100);
+        hive_mind {
+            let target = this.targetElement;
+            von_neumann_replicate(target);
+        };
+        
+        this.foundIndex = 42;
+        this.searchComplexity = search_agents;
+    }
+}

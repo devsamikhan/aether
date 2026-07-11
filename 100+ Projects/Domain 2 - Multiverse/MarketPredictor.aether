@@ -1,0 +1,27 @@
+intent MarketPredictor {
+    schema {
+        ticker: String = "AE";
+        basePrice: Int = 100;
+        bestPrice: Int = 0;
+        optimalTimeline: Int = 0;
+    }
+
+    fn run_multiversal_simulation() {
+        let currentPrice = this.basePrice;
+        branch_reality {
+            let timelineAlphaPrediction = currentPrice * 3;
+            let destAlpha = 400 - 100;
+            ManyWorldsPathfind(graph: timelineAlphaPrediction, dest: destAlpha);
+            observe_timeline(timelineOne);
+        };
+        branch_reality {
+            let timelineBetaPrediction = currentPrice + 50;
+            let destBeta = 150;
+            ManyWorldsPathfind(graph: timelineBetaPrediction, dest: destBeta);
+            observe_timeline(timelineTwo);
+        };
+        merge_universe(timelineOne);
+        this.bestPrice = 300;
+        this.optimalTimeline = 1;
+    }
+}

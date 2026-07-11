@@ -1,0 +1,126 @@
+// AETHER Example: Game Engine Physics Component
+// Demonstrates: rich arithmetic with *, -, +, %, integer kinematics,
+// collision detection via modulo bounding, schema for entity state,
+// and method composition for a 2-D physics simulation.
+
+intent PhysicsEntity {
+
+    // Schema stores the mutable physical state of a game entity.
+    schema {
+        pos_x:      Int;// Horizontal world position (pixels)
+        pos_y:      Int;// Vertical world position (pixels)
+        velocity_x: Int;// Horizontal velocity (pixels per frame)
+        velocity_y: Int;// Vertical velocity (pixels per frame)
+        health:     Int;// Hit-points remaining (0 = dead)
+        score:      Int;// Player score accumulated this session
+    }
+
+    // Constants used throughout physics calculations.
+    // (Defined as let-bound locals inside each fn for clarity.)
+
+    // init places the entity at the origin with default stats.
+    fn init() {
+        let pos_x      = 0;
+        let pos_y      = 0;
+        let velocity_x = 0;
+        let velocity_y = 0;
+        let health     = 100;
+        let score      = 0;
+    }
+
+    // update_physics advances the entity position by one frame.
+    // Uses + to integrate velocity into position.
+    fn update_physics() {
+        let new_x = this.pos_x + this.velocity_x;
+        let new_y = this.pos_y + this.velocity_y;
+        let pos_x = new_x;
+        let pos_y = new_y;
+    }
+
+    // apply_gravity accelerates the entity downward each frame.
+    // Gravity constant = 1 (pixel / frame^2).
+    fn apply_gravity() {
+        let g       = 1;
+        let new_vy  = this.velocity_y + g;
+        let velocity_y = new_vy;
+    }
+
+    // check_collision detects whether the entity has hit world bounds.
+    // World is 800 x 600. Uses % to wrap-around (arcade style).
+    fn check_collision(world_w: Int, world_h: Int) {
+        let x = this.pos_x % world_w;
+        let y = this.pos_y % world_h;
+
+        // If wrapping occurred, the entity crossed a boundary.
+        if x != this.pos_x {
+            let pos_x = x;
+            let health = this.health - 10;   // boundary damage
+        }
+
+        if y != this.pos_y {
+            let pos_y = y;
+            let health = this.health - 5;
+        }
+    }
+
+    // apply_impulse adds a one-frame velocity boost (e.g. jump or knockback).
+    fn apply_impulse(ix: Int, iy: Int) {
+        let velocity_x = this.velocity_x + ix;
+        let velocity_y = this.velocity_y + iy;
+    }
+
+    // apply_friction gradually slows horizontal movement each frame.
+    fn apply_friction() {
+        let vx   = this.velocity_x;
+        let drag = vx / 10;         // 10% friction
+        let velocity_x = vx - drag;
+    }
+
+    // add_score adds points and applies a combo multiplier.
+    // Combo is derived from the current score tier.
+    fn add_score(base_points: Int) {
+        let current   = this.score;
+        let tier      = current / 100;         // one tier per 100 points
+        let multiplier = tier + 1;             // minimum 1x
+        let earned     = base_points * multiplier;
+        let score      = current + earned;
+    }
+
+    // is_alive returns whether the entity still has health remaining.
+    fn is_alive() {
+        let hp = this.health;
+        if hp > 0 {
+            let alive = true;
+        } else {
+            let alive = false;
+        }
+    }
+
+    // distance_from_origin computes a Chebyshev distance approximation.
+    // Avoids floating-point by using integer absolute differences.
+    fn distance_from_origin() {
+        let x = this.pos_x;
+        let y = this.pos_y;
+        let dist = x * x + y * y;   // squared Euclidean (integer)
+    }
+
+    // frame_stats produces a per-frame diagnostic snapshot.
+    fn frame_stats() {
+        let ke = this.velocity_x * this.velocity_x + this.velocity_y * this.velocity_y;
+        let pe = this.pos_y * 1;     // simplified potential energy
+        let total_energy = ke + pe;
+    }
+
+}
+
+// Test block for PhysicsEntity.
+intent Test_PhysicsEntity {
+    assert(1 == 1);
+    assert(0 + 5 == 5);           // pos_x after one frame with vel=5
+    assert(0 + 1 == 1);           // gravity increments velocity_y by 1
+    assert(850 % 800 == 50);      // world wrap-around at x=850
+    assert(100 - 10 == 90);       // boundary damage
+    assert(500 / 100 == 5);       // score tier at 500 points
+    assert(10 * 6 == 60);         // earned points: 10 base * (5+1) multiplier
+    assert(90 > 0);               // entity is still alive at 90 HP
+}

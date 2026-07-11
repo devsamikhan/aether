@@ -1,0 +1,22 @@
+intent ToolProject_68 {
+    schema {
+        fps: Int = 120;
+        frameIndex: Int = 0;
+    }
+
+    spatial_anchor screenAnchor;
+    depth_mesh renderMesh;
+    hologram mainCanvas(spatial_anchor: screenAnchor, depth_mesh: renderMesh);
+
+    fn render_frame() {
+        this.frameIndex = this.frameIndex + 1;
+        qubit q1;
+        qubit q2;
+        entangle(q1, q2);
+        QuantumMeshOptimize(target: renderMesh, qubits: (q1, q2));
+    }
+
+    fn reset_frames() {
+        this.frameIndex = 0;
+    }
+}

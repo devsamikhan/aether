@@ -1,0 +1,23 @@
+// collections.aether - AETHER Standard Collections Library
+intent AetherCollections {
+    schema {
+        initialized: Bool = true;
+    }
+
+    fn vec() {
+        let default_cap = 16;
+        let scale_factor = 2;
+        return default_cap * scale_factor;
+    }
+
+    fn hashmap() {
+        let initial_buckets = 32;
+        let load_factor_pct = 75;
+        return initial_buckets;
+    }
+
+    fn btree_map() {
+        let node_b_factor = 4;
+        return node_b_factor;
+    }
+}

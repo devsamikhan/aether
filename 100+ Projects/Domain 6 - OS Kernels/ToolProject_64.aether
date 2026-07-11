@@ -1,0 +1,19 @@
+intent ToolProject_64 {
+    schema {
+        taskPriority: Int = 1;
+        uptimeSeconds: Int = 0;
+        logName: String = "os.log";
+    }
+
+    fn run_scheduler() {
+        this.uptimeSeconds = to_int(now());
+        create_dir("sys/bin");
+        let fd = open_file(this.logName);
+        write_bytes(fd, "Scheduler tick: uptime update.");
+        close_file(fd);
+    }
+
+    fn set_priority(level: Int) {
+        this.taskPriority = level;
+    }
+}

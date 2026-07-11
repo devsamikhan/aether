@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETHER — The Post-Quantum Programming Language</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo-box">
+        <svg viewBox="0 0 100 100" class="logo-icon">
+          <circle cx="50" cy="50" r="15" fill="#00F5FF"/>
+          <path d="M 15,50 Q 35,10 50,50 T 85,50" fill="none" stroke="#7B2CBF" stroke-width="6"/>
+        </svg>
+        <span class="logo-text">AETHER</span>
+      </div>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#playground">Playground</a>
+        <a href="https://github.com/devsamikhan/aether" class="github-link">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>The Post-Quantum,<br><span class="gradient-text">Intent-Driven</span> Language</h1>
+      <p>AETHER is a modern systems programming language with built-in quantum simulation, multiverse branching, and self-healing runtime diagnostics.</p>
+      <div class="cta-buttons">
+        <a href="#quickstart" class="btn btn-primary">Get Started</a>
+        <a href="#playground" class="btn btn-secondary">Try Sandbox</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Showcase -->
+  <section id="features" class="features">
+    <h2>Core Paradigm Shift</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>⚛️ Quantum Native</h3>
+        <p>Built-in primitives for `qubit`, `entangle`, and `measure`. Compile directly to simulated or physical gate sequences.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🌌 Multiverse Branching</h3>
+        <p>Fork runtime state atomically via `branch_reality` blocks and resolve paths with custom cost metrics.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🩹 Self-Healing Runtime</h3>
+        <p>Active anomaly checking. Compiler synthesizes hot-patches and updates execution graphs automatically on error.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart -->
+  <section id="quickstart" class="quickstart">
+    <h2>Quick Installation</h2>
+    <div class="code-container">
+      <button class="copy-btn" onclick="copyInstall()">Copy</button>
+      <pre><code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/install.sh | bash</code></pre>
+    </div>
+  </section>
+
+  <!-- Interactive Sandbox / Playground -->
+  <section id="playground" class="playground-section">
+    <h2>Interactive Code Explorer</h2>
+    <div class="playground">
+      <div class="editor-tabs">
+        <button class="tab-btn active" onclick="switchTab('hello')">Hello World</button>
+        <button class="tab-btn" onclick="switchTab('quantum')">Quantum Superposition</button>
+        <button class="tab-btn" onclick="switchTab('multiverse')">Multiverse Routing</button>
+      </div>
+      <div class="playground-layout">
+        <textarea id="code-editor" readonly class="code-area"></textarea>
+        <div class="console-output">
+          <div class="console-header">JIT COMPILER SIMULATION LOGS</div>
+          <pre id="console-logs"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>&copy; 2026 AETHER Core Team. Released under the MIT License.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+intent ToolProject_42 {
+    schema {
+        accuracy: Int = 98;
+        epochCount: Int = 10;
+        status: String = "ready";
+    }
+
+    model NeuralNetClassifier {
+        Conv2D(filters: 32, kernel: 3),
+        MaxPool2D(size: 2),
+        Dense(units: 10)
+    }
+
+    tensor inputBuffer: float(1, 256) = 0;
+
+    fn run_training_cycle() {
+        let classifier = NeuralNetClassifier();
+        let prediction = classifier.forward(this.inputBuffer);
+        println("Neural Network prediction computed.");
+    }
+
+    fn increase_epochs() {
+        this.epochCount = this.epochCount + 1;
+    }
+}

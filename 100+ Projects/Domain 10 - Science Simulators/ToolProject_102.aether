@@ -1,0 +1,15 @@
+intent ToolProject_102 {
+    schema {
+        temperature: Int = 273;
+        simulationStep: Int = 0;
+    }
+
+    fn run_thermodynamic_step() {
+        let mathRes = sqrt(pow(this.temperature, 2));
+        this.simulationStep = this.simulationStep + 1;
+    }
+
+    fn heat_system(amount: Int) {
+        this.temperature = this.temperature + amount;
+    }
+}

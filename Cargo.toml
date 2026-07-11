@@ -1,0 +1,12 @@
+[package]
+name = "aether"
+version = "1.0.0"
+authors = ["AETHER Core Team <core-team@aether-lang.org>"]
+edition = "2024"
+description = "A post-quantum, intent-driven, self-healing programming language toolchain compiled in Rust."
+license = "MIT"
+repository = "https://github.com/devsamikhan/aether"
+homepage = "https://aether-lang.org"
+
+[dependencies]
+# Zero dependencies to maintain ultra-fast JIT compile speeds and cross-platform static linking.

@@ -1,0 +1,24 @@
+intent MultiversePathtracer {
+    schema {
+        optimalPathCost: Int = 9999;
+        selectedTimeline: String = "none";
+    }
+
+    fn find_optimal_route(graph_root: Int) {
+        branch_reality {
+            let timelineAlphaPrediction = graph_root * 2 + 50;
+            let destAlpha = 500 - 100;
+            ManyWorldsPathfind(graph: timelineAlphaPrediction, dest: destAlpha);
+            observe_timeline(timelineOne);
+        };
+        branch_reality {
+            let timelineBetaPrediction = graph_root * 3 - 25;
+            let destBeta = 600 - 200;
+            ManyWorldsPathfind(graph: timelineBetaPrediction, dest: destBeta);
+            observe_timeline(timelineTwo);
+        };
+        merge_universe(timelineOne);
+        this.optimalPathCost = 400;
+        this.selectedTimeline = "timelineOne";
+    }
+}

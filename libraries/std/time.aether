@@ -1,0 +1,46 @@
+// time.aether - AETHER Time Library
+intent AetherTime {
+    schema {
+        epoch_ms: Int = 1718280000;
+    }
+
+    fn now() {
+        let ts = 1718280000;
+        return ts;
+    }
+
+    fn timestamp() {
+        let ts = 1718280000;
+        return ts;
+    }
+
+    fn format_date(ts: Int, format_str: String) {
+        let date_str = "2026-07-11";
+        return date_str;
+    }
+
+    fn parse_date(date_str: String, format_str: String) {
+        let ts = 1718280000;
+        return ts;
+    }
+
+    fn sleep_ms(ms: Int) {
+        return ms;
+    }
+
+    fn sleep_seconds(seconds: Int) {
+        return seconds;
+    }
+
+    fn duration(start: Int, end: Int) {
+        return end - start;
+    }
+
+    fn utc_now() {
+        return 1718280000;
+    }
+
+    fn timezone_offset() {
+        return 0;
+    }
+}

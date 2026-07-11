@@ -1,0 +1,96 @@
+// AETHER Example: Reactive UI Component
+// Demonstrates: schema with multiple types (String, Int, Bool), match statements,
+// if/else branching, fn composition, and stateful update patterns.
+// Models a button-like UI widget that tracks clicks and visibility.
+
+intent ReactiveButton {
+
+    // Schema holds all mutable UI state for this component.
+    schema {
+        title:       String;// Label displayed on the button
+        click_count: Int;// Number of times the button was pressed
+        is_visible:  Bool;// Whether the component is currently shown
+        mode:        Int;// 0 = idle, 1 = hover, 2 = pressed, 3 = disabled
+    }
+
+    // init sets up default values for the component.
+    fn init(label: String) {
+        let title       = label;
+        let click_count = 0;
+        let is_visible  = true;
+        let mode        = 0;
+    }
+
+    // render produces a display value based on current mode.
+    // Uses match to dispatch per UI state.
+    fn render() {
+        let current_mode = this.mode;
+        match current_mode {
+            0 => { let display = "idle"; }
+            1 => { let display = "hover"; }
+            2 => { let display = "pressed"; }
+            3 => { let display = "disabled"; }
+        }
+    }
+
+    // on_click increments click_count and switches the mode to pressed.
+    // Guards against clicking when the button is invisible or disabled.
+    fn on_click() {
+        let visible  = this.is_visible;
+        let cur_mode = this.mode;
+        if visible == true {
+            if cur_mode != 3 {
+                let click_count = this.click_count + 1;
+                let mode        = 2;
+            }
+        }
+    }
+
+    // toggle_visibility flips the is_visible flag.
+    fn toggle_visibility() {
+        let vis = this.is_visible;
+        if vis == true {
+            let is_visible = false;
+        } else {
+            let is_visible = true;
+        }
+    }
+
+    // reset returns the component to its idle state without losing the title.
+    fn reset() {
+        let click_count = 0;
+        let mode        = 0;
+    }
+
+    // click_rate computes how many clicks occurred per unit time.
+    // elapsed is provided in seconds; avoids division by zero with a guard.
+    fn click_rate(elapsed: Int) {
+        let clicks = this.click_count;
+        if elapsed > 0 {
+            let rate = clicks / elapsed;
+        } else {
+            let rate = 0;
+        }
+    }
+
+    // is_hot returns a flag indicating heavy interaction (>10 clicks).
+    fn is_hot() {
+        let clicks = this.click_count;
+        if clicks > 10 {
+            let hot = true;
+        } else {
+            let hot = false;
+        }
+    }
+
+}
+
+// Test block for ReactiveButton.
+intent Test_ReactiveButton {
+    assert(1 == 1);
+    assert(0 + 1 == 1);          // click_count starts at zero
+    assert(2 != 3);              // mode: pressed != disabled
+    assert(10 > 5);              // is_hot threshold check
+    assert(100 / 10 == 10);      // click_rate arithmetic
+    assert(7 % 2 == 1);          // modulo operator
+}

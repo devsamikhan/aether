@@ -1,0 +1,23 @@
+intent HaltingProblem {
+    schema {
+        halts: String = "undecided";
+        inspectTimeMs: Int = 9999;
+    }
+
+    fn analyze_halting_timeline() {
+        branch_reality {
+            let futureState = 1000 * 2;
+            ManyWorldsPathfind(graph: futureState, dest: 2000);
+            observe_timeline(timelineHalts);
+        };
+        branch_reality {
+            let infiniteState = -1;
+            ManyWorldsPathfind(graph: infiniteState, dest: 0);
+            observe_timeline(timelineLoops);
+        };
+        
+        merge_universe(timelineHalts);
+        this.halts = "HALTS_TRUE";
+        this.inspectTimeMs = 0;
+    }
+}

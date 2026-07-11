@@ -1,0 +1,72 @@
+// system.aether - AETHER System Library
+intent AetherSystem {
+    schema {
+        host_os: String = "simulated";
+    }
+
+    fn env_var(name: String) {
+        let dummy_val = "mock_value";
+        return dummy_val;
+    }
+
+    fn set_env_var(name: String, value: String) {
+        let success = 1;
+        return success;
+    }
+
+    fn current_dir() {
+        return "/aether/workspace";
+    }
+
+    fn change_dir(path: String) {
+        return 0;
+    }
+
+    fn home_dir() {
+        return "/home/aether";
+    }
+
+    fn temp_dir() {
+        return "/tmp";
+    }
+
+    fn create_dir(path: String) {
+        return 0;
+    }
+
+    fn remove_dir(path: String) {
+        return 0;
+    }
+
+    fn list_dir(path: String) {
+        return 0;
+    }
+
+    fn file_exists(path: String) {
+        return true;
+    }
+
+    fn remove_file(path: String) {
+        return 0;
+    }
+
+    fn copy_file(src: String, dst: String) {
+        return 0;
+    }
+
+    fn move_file(src: String, dst: String) {
+        return 0;
+    }
+
+    fn cpu_count() {
+        return 8;
+    }
+
+    fn memory_total() {
+        return 16384;
+    }
+
+    fn memory_available() {
+        return 8192;
+    }
+}

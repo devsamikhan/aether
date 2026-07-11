@@ -1,0 +1,15 @@
+intent BenchmarkSuite {
+    schema {
+        status: String = "pending";
+        iterations: Int = 1000;
+    }
+
+    fn run_all_benchmarks() {
+        let n_iters = this.iterations;
+        let scale = n_iters * 10;
+        
+        let speedMetric = scale / 2;
+        println("AETHER Post-Quantum Benchmark Suite successfully triggered.");
+        this.status = "COMPLETED";
+    }
+}

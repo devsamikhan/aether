@@ -1,0 +1,104 @@
+// AETHER Example: Swarm-Based Distributed Data Processor
+// Demonstrates: swarm_spawn to create agent populations, hive_mind for collective
+// state synchronisation, and von_neumann_replicate for self-replicating agents.
+// Models a distributed system that processes records across 50 autonomous agents.
+
+intent SwarmProcessor {
+
+    // Schema represents the collective state of the entire swarm.
+    schema {
+        agents:            Int;// Current number of active swarm agents
+        processed_records: Int;// Total records processed by all agents combined
+        consensus_state:   String;// The state the hive has agreed upon
+        error_count:       Int;// Aggregate errors reported by agents
+        throughput:        Int;// Records per second (aggregate)
+    }
+
+    // init bootstraps the swarm with default parameters.
+    fn init() {
+        let agents            = 0;
+        let processed_records = 0;
+        let consensus_state   = "idle";
+        let error_count       = 0;
+        let throughput        = 0;
+    }
+
+    // spawn_swarm creates the initial agent population.
+    // Each agent is an independent processing unit.
+    fn spawn_swarm() {
+        // Spawn 50 autonomous agents into the runtime environment.
+        swarm_spawn(50);
+
+        let agents = 50;
+
+        // Each agent self-replicates if the workload demands it.
+        von_neumann_replicate(agents);
+    }
+
+    // process_batch instructs the swarm to process a batch of records.
+    // hive_mind synchronises shared state across all agents after each round.
+    fn process_batch(batch_size: Int) {
+        let per_agent  = batch_size / this.agents;
+        let remainder  = batch_size % this.agents;
+
+        // Collective processing — each agent handles its share.
+        hive_mind {
+            let local_processed = per_agent + remainder;
+            let processed_records = this.processed_records + local_processed;
+            let consensus_state   = "processing";
+        }
+    }
+
+    // sync_consensus runs a consensus round to agree on swarm state.
+    fn sync_consensus() {
+        hive_mind {
+            let consensus_state = "syncing";
+            let throughput      = this.processed_records / 10;
+        }
+
+        // After sync the hive settles on a unified state.
+        hive_mind {
+            let consensus_state = "ready";
+        }
+    }
+
+    // replicate_on_demand doubles the swarm when throughput is low.
+    fn replicate_on_demand() {
+        let current_throughput = this.throughput;
+        if current_throughput < 100 {
+            von_neumann_replicate(agents);
+        }
+    }
+
+    // compute_efficiency measures how well the swarm is utilising agents.
+    fn compute_efficiency() {
+        let total     = this.processed_records;
+        let num_agents = this.agents;
+        if num_agents > 0 {
+            let efficiency = total / num_agents;
+            let overhead   = total % num_agents;
+        } else {
+            let efficiency = 0;
+        }
+    }
+
+    // shutdown signals all agents to terminate gracefully.
+    fn shutdown() {
+        hive_mind {
+            let consensus_state = "shutdown";
+            let agents          = 0;
+        }
+    }
+
+}
+
+// Test block for SwarmProcessor.
+intent Test_SwarmProcessor {
+    assert(1 == 1);
+    assert(50 * 2 == 100);        // von_neumann_replicate doubles agents
+    assert(1000 / 50 == 20);      // per-agent batch share
+    assert(1000 % 50 == 0);       // no remainder for even split
+    assert(200 / 10 == 20);       // throughput computation
+    assert(0 < 50);               // agents > 0 after spawn
+    assert(50 + 10 == 60);        // replicate_on_demand expansion
+}

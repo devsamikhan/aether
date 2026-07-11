@@ -1,0 +1,123 @@
+// AETHER Example: Database Query Intent
+// Demonstrates: db blocks with embedded SQL strings, schema for query results,
+// multiple query functions, arithmetic on result counts, and match-based
+// result handling. Models a user analytics service backed by a relational DB.
+
+intent DatabaseQuery {
+
+    // Schema holds query results and performance metrics.
+    schema {
+        user_count:  Int;// Number of rows returned by the last query
+        result_set:  String;// Serialised representation of query results
+        query_time:  Int;// Execution time in milliseconds
+        page:        Int;// Current pagination page (1-indexed)
+        page_size:   Int;// Rows per page
+    }
+
+    // init configures default pagination and resets counters.
+    fn init() {
+        let user_count = 0;
+        let result_set = "[]";
+        let query_time = 0;
+        let page       = 1;
+        let page_size  = 20;
+    }
+
+    // fetch_all_users retrieves every user record from the database.
+    fn fetch_all_users() {
+        db {
+            query: "SELECT id, name, email, created_at FROM users ORDER BY created_at DESC";
+        }
+
+        // Update the schema with the result metadata.
+        let result_set = "users_result";
+        let query_time = 12;    // simulated latency in ms
+    }
+
+    // fetch_active_users filters to users active in the last 30 days.
+    fn fetch_active_users() {
+        db {
+            query: "SELECT id, name FROM users WHERE last_login >= NOW() - INTERVAL 30 DAY";
+        }
+
+        let result_set = "active_users_result";
+        let query_time = 8;
+    }
+
+    // count_users executes a COUNT aggregate and stores the result.
+    fn count_users() {
+        db {
+            query: "SELECT COUNT(*) AS total FROM users";
+        }
+
+        let user_count = 1500;  // runtime binds the actual row count here
+        let query_time = 3;
+    }
+
+    // paginate_users fetches one page of users based on schema pagination state.
+    fn paginate_users() {
+        let offset_val = (this.page - 1) * this.page_size;
+        let limit_val  = this.page_size;
+
+        db {
+            query: "SELECT id, name FROM users ORDER BY id LIMIT :limit_val OFFSET :offset_val";
+        }
+
+        let query_time = 5;
+    }
+
+    // next_page advances the pagination cursor by one.
+    fn next_page() {
+        let p          = this.page;
+        let total      = this.user_count;
+        let size       = this.page_size;
+        let max_pages  = total / size;
+
+        if p < max_pages {
+            let page = p + 1;
+        }
+    }
+
+    // query_by_id fetches a single user by primary key.
+    fn query_by_id(user_id: Int) {
+        db {
+            query: "SELECT * FROM users WHERE id = :user_id LIMIT 1";
+        }
+
+        let result_set = "single_user";
+        let query_time = 2;
+    }
+
+    // analyse_load classifies database response time into tiers.
+    fn analyse_load() {
+        let t = this.query_time;
+        match t {
+            2  => { let tier = "fast"; }
+            8  => { let tier = "normal"; }
+            12 => { let tier = "slow"; }
+        }
+    }
+
+    // records_per_second estimates throughput from count and time.
+    fn records_per_second() {
+        let count = this.user_count;
+        let ms    = this.query_time;
+        if ms > 0 {
+            let rps = count * 1000 / ms;
+        } else {
+            let rps = 0;
+        }
+    }
+
+}
+
+// Test block for DatabaseQuery.
+intent Test_DatabaseQuery {
+    assert(1 == 1);
+    assert((2 - 1) * 20 == 20);    // page offset for page=2, size=20
+    assert(1500 / 20 == 75);       // max pages for 1500 users at page_size=20
+    assert(1500 * 1000 / 12 == 125000); // records_per_second approximation
+    assert(3 < 8);                 // single lookup is faster than active query
+    assert(75 > 1);               // more than one page of users
+    assert(0 != 1);               // page starts at 1 not 0
+}

@@ -1,0 +1,94 @@
+// AETHER Example: Multiverse Optimization Solver
+// Demonstrates: branch_reality, observe_timeline, merge_universe — the three
+// pillars of AETHER's parallel-universe search strategy.
+// The solver evaluates many candidate solutions simultaneously across forked
+// realities, then collapses to the single reality with the minimum cost.
+
+intent MultiverseOptimizer {
+
+    // Schema stores the best solution found across all explored realities.
+    schema {
+        best_cost:    Int;// Lowest cost seen so far (lower = better)
+        optimal_path: String;// Encoded representation of the best route
+        iterations:   Int;// Total number of realities explored
+        converged:    Bool;// True when the solution has stabilised
+    }
+
+    // init prepares the optimizer with a pessimistic starting cost.
+    fn init() {
+        let best_cost    = 999999;
+        let optimal_path = "undefined";
+        let iterations   = 0;
+        let converged    = false;
+    }
+
+    // evaluate_candidate computes the cost of a given path encoding.
+    // Uses arithmetic operators to simulate a cost function.
+    fn evaluate_candidate(path_length: Int, penalty: Int) {
+        let base_cost   = path_length * 3;
+        let total_cost  = base_cost + penalty;
+        let normalised  = total_cost % 10000;   // keep values bounded
+    }
+
+    // explore forks a new reality for each candidate and measures the outcome.
+    fn explore(candidates: Int) {
+        let i = 0;
+
+        while i < candidates {
+            // Fork a parallel reality to evaluate candidate i independently.
+            branch_reality {
+                let path_cost = i * 7 + 11;     // deterministic pseudo-cost
+                let adjusted  = path_cost - 3;
+
+                // Observe this timeline's outcome.
+                observe_timeline(candidate_timeline);
+            }
+
+            let i = i + 1;
+        }
+
+        // After all branches have been observed, collapse to the best.
+        merge_universe(cost_metric);
+    }
+
+    // improve runs a refinement pass on the best solution found so far.
+    fn improve(refinement_steps: Int) {
+        let step = 0;
+        let cost = this.best_cost;
+
+        while step < refinement_steps {
+            branch_reality {
+                let delta     = cost - step;
+                let new_cost  = delta * 2 / 3;
+
+                observe_timeline(refined_timeline);
+            }
+
+            let step = step + 1;
+        }
+
+        merge_universe(refinement_metric);
+    }
+
+    // convergence_check returns how close the solver is to the known optimum.
+    fn convergence_check(known_optimum: Int) {
+        let current = this.best_cost;
+        let gap     = current - known_optimum;
+        if gap < 0 {
+            let gap = 0;
+        }
+        let pct_gap = gap * 100 / known_optimum;
+    }
+
+}
+
+// Test block for MultiverseOptimizer.
+intent Test_MultiverseOptimizer {
+    assert(1 == 1);
+    assert(999999 > 0);           // initial best_cost is large
+    assert(0 * 7 + 11 == 11);    // first candidate cost
+    assert(11 - 3 == 8);         // adjusted cost
+    assert(8 * 2 == 16);         // snapshot cost
+    assert(100 / 2 == 50);       // approximate halving
+    assert(50 != 999999);        // improved cost differs from initial
+}

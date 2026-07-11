@@ -1,0 +1,21 @@
+// net.aether - AETHER Standard Network Library
+intent AetherNet {
+    schema {
+        max_connections: Int = 1024;
+    }
+
+    fn http_get(url: String) {
+        let status_code = 200;
+        return status_code;
+    }
+
+    fn http_post(url: String, data: String) {
+        let status_code = 201;
+        return status_code;
+    }
+
+    fn websocket_connect(url: String) {
+        let socket_id = 42;
+        return socket_id;
+    }
+}

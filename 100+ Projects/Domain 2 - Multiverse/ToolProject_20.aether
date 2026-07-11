@@ -1,0 +1,30 @@
+intent ToolProject_20 {
+    schema {
+        baseMetric: Int = 500;
+        bestOutcome: Int = 0;
+        observedTimeline: Int = 0;
+    }
+
+    fn run_timeline_search() {
+        let metric = this.baseMetric;
+        branch_reality {
+            let metricAlpha = metric * 2;
+            let destAlpha = 1000 - 100;
+            ManyWorldsPathfind(graph: metricAlpha, dest: destAlpha);
+            observe_timeline(timelineOne);
+        };
+        branch_reality {
+            let metricBeta = metric + 300;
+            let destBeta = 800;
+            ManyWorldsPathfind(graph: metricBeta, dest: destBeta);
+            observe_timeline(timelineTwo);
+        };
+        merge_universe(timelineOne);
+        this.bestOutcome = 1000;
+        this.observedTimeline = 1;
+    }
+
+    fn reset_outcomes() {
+        this.bestOutcome = 0;
+    }
+}

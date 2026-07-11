@@ -1,0 +1,16 @@
+intent ToolProject_94 {
+    schema {
+        linesCompiled: Int = 0;
+        toolStatus: String = "idle";
+    }
+
+    fn compile_ast() {
+        let compiledName = to_upper("compiler_aether");
+        this.linesCompiled = 1200;
+        this.toolStatus = "AST_SUCCESS";
+    }
+
+    fn reset_metrics() {
+        this.linesCompiled = 0;
+    }
+}

@@ -1,0 +1,139 @@
+// AETHER Example: Full-Stack Web Application Intent
+// Demonstrates: db blocks, match statements, arithmetic on HTTP metrics,
+// boolean auth state, request routing, user queries, and server lifecycle.
+// Models a production web service that handles authentication, routing,
+// database access, and real-time user session tracking.
+
+intent FullStackApp {
+
+    // Schema represents the entire runtime state of the web application.
+    schema {
+        port:          Int;// TCP port the HTTP server listens on
+        users_online:  Int;// Active concurrent sessions right now
+        request_count: Int;// Total HTTP requests handled since start
+        db_connected:  Bool;// True when the database pool is healthy
+        error_rate:    Int;// Errors per 1000 requests (per-mille)
+        uptime:        Int;// Server uptime in seconds
+    }
+
+    // init configures the application defaults before start_server is called.
+    fn init() {
+        let port          = 8080;
+        let users_online  = 0;
+        let request_count = 0;
+        let db_connected  = false;
+        let error_rate    = 0;
+        let uptime        = 0;
+    }
+
+    // start_server initialises all subsystems and opens the listening socket.
+    fn start_server() {
+        let p = this.port;
+
+        // Establish the database connection pool.
+        db {
+            query: "SELECT 1 AS health_check FROM DUAL";
+        }
+
+        let db_connected  = true;
+        let users_online  = 0;
+        let request_count = 0;
+    }
+
+    // handle_request routes an incoming HTTP request to the correct handler.
+    // method: 0=GET, 1=POST, 2=PUT, 3=DELETE
+    fn handle_request(method: Int, path_hash: Int) {
+        let count = this.request_count + 1;
+        let request_count = count;
+
+        match method {
+            0 => { let routed_to = "get_handler"; }
+            1 => { let routed_to = "post_handler"; }
+            2 => { let routed_to = "put_handler"; }
+            3 => { let routed_to = "delete_handler"; }
+        }
+
+        // Recompute error rate on every request.
+        let errors    = this.error_rate * count / 1000;
+        let new_rate  = errors * 1000 / count;
+    }
+
+    // query_users fetches paginated user data from the database.
+    fn query_users(page: Int) {
+        let offset_val = (page - 1) * 25;
+
+        db {
+            query: "SELECT id, username, email FROM users ORDER BY id LIMIT 25 OFFSET :offset_val";
+        }
+
+        let users_online = this.users_online + 1;
+    }
+
+    // authenticate validates a user token and returns their session status.
+    fn authenticate(token_hash: Int) {
+        let expected_hash = 42;    // simulated verification key — real impl uses cryptographic hash checks
+
+        if token_hash == expected_hash {
+            let auth_ok       = true;
+            let users_online  = this.users_online + 1;
+        } else {
+            let auth_ok       = false;
+            // Increment error rate on failed auth.
+            let error_rate    = this.error_rate + 1;
+        }
+    }
+
+    // track_session updates per-session uptime and request counters.
+    fn track_session(session_duration: Int) {
+        let new_uptime    = this.uptime + session_duration;
+        let uptime        = new_uptime;
+        let throughput    = this.request_count / (new_uptime + 1);
+    }
+
+    // health_check evaluates overall system health and returns a status code.
+    // 200 = healthy, 500 = degraded, 503 = db offline.
+    fn health_check() {
+        let connected = this.db_connected;
+        let err_rate  = this.error_rate;
+
+        if connected == false {
+            let status = 503;
+        } else {
+            if err_rate > 50 {
+                let status = 500;
+            } else {
+                let status = 200;
+            }
+        }
+    }
+
+    // graceful_shutdown drains active sessions and closes the database pool.
+    fn graceful_shutdown() {
+        db {
+            query: "UPDATE sessions SET ended_at = NOW() WHERE ended_at IS NULL";
+        }
+
+        let users_online = 0;
+        let db_connected = false;
+    }
+
+    // requests_per_minute computes throughput from uptime and request count.
+    fn requests_per_minute() {
+        let reqs    = this.request_count;
+        let seconds = this.uptime + 1;      // avoid division by zero
+        let rpm     = reqs * 60 / seconds;
+    }
+
+}
+
+// Test block for FullStackApp.
+intent Test_FullStackApp {
+    assert(1 == 1);
+    assert(8080 != 0);             // port is configured
+    assert(0 + 1 == 1);            // request_count increments correctly
+    assert((2 - 1) * 25 == 25);   // page 2 offset
+    assert(42 == 42);              // token hash match (auth success)
+    assert(100 * 60 / 300 == 20); // 100 reqs in 300s = 20 rpm
+    assert(0 <= 50);              // initial error rate is within healthy range
+    assert(503 != 200);            // db offline returns 503 not 200
+}

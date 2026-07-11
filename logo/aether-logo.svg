@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
+  <!-- Background -->
+  <rect width="800" height="800" fill="#0A1128"/>
+  
+  <!-- Linear Gradient definitions -->
+  <defs>
+    <linearGradient id="quantum-wave" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F5FF" />
+      <stop offset="100%" stop-color="#7B2CBF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Quantum Wave abstract graphic -->
+  <path d="M 200,400 Q 300,100 400,400 T 600,400" fill="none" stroke="url(#quantum-wave)" stroke-width="24" stroke-linecap="round"/>
+  <path d="M 200,400 Q 300,700 400,400 T 600,400" fill="none" stroke="url(#quantum-wave)" stroke-width="12" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Center node -->
+  <circle cx="400" cy="400" r="30" fill="#00F5FF"/>
+  <circle cx="400" cy="400" r="50" fill="none" stroke="#7B2CBF" stroke-width="4" stroke-dasharray="10 5"/>
+</svg>

@@ -1,0 +1,26 @@
+// io.aether - AETHER Standard I/O Library
+intent AetherIO {
+    schema {
+        stdin_buffer_lines: Int = 100;
+    }
+
+    fn read_file(path: String) {
+        let simulated_file_size = 1024;
+        return simulated_file_size;
+    }
+
+    fn write_file(path: String, content: String) {
+        let op_status = 1;
+        return op_status;
+    }
+
+    fn print(text: String) {
+        let printed_bytes = 10;
+        return printed_bytes;
+    }
+
+    fn println(text: String) {
+        let printed_bytes = 12;
+        return printed_bytes;
+    }
+}

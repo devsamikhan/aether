@@ -1,0 +1,23 @@
+intent ByzantineConsensus {
+    schema {
+        consensusState: String = "undecided";
+        maliciousNodes: Int = 33;
+        latencyMs: Int = 1000;
+    }
+
+    fn run_swarm_consensus() {
+        swarm_spawn(100);
+        hive_mind {
+            let localCopy = "LedgerBlock";
+            von_neumann_replicate(localCopy);
+        };
+        
+        qubit entangleQubit1;
+        qubit entangleQubit2;
+        entangle(entangleQubit1, entangleQubit2);
+        QuantumSwarmConsensus(nodes: (entangleQubit1, entangleQubit2));
+        
+        this.consensusState = "FULLY_ENTANGLED_CONSENSUS";
+        this.latencyMs = 0;
+    }
+}

@@ -1,0 +1,107 @@
+// AETHER Example: Brain-Computer Interface Controller
+// Demonstrates: cortex_bind with neural_stream, thought_intent mappings,
+// schema for BCI state, match-based command dispatch, and confidence thresholds.
+// This intent bridges neural signals to system actions via motor-cortex binding.
+
+intent BCIController {
+
+    // Schema captures the decoded brain signal state.
+    schema {
+        current_command: String;// Last decoded motor command
+        confidence:      Int;// Signal confidence 0-100
+        mode:            Int;// 0 = idle, 1 = control, 2 = calibrate
+        signal_quality:  Int;// Raw EEG signal quality score
+        action_count:    Int;// Number of commands executed this session
+    }
+
+    // init prepares the BCI controller in idle mode.
+    fn init() {
+        let current_command = "none";
+        let confidence      = 0;
+        let mode            = 0;
+        let signal_quality  = 0;
+        let action_count    = 0;
+    }
+
+    // bind_motor_cortex establishes the neural stream and maps thoughts to actions.
+    // cortex_bind neural_stream connects to the specified cortical region.
+    fn bind_motor_cortex() {
+        cortex_bind neural_stream("motor_cortex") {
+            thought_intent("move_left")  => { let current_command = "LEFT"; }
+            thought_intent("move_right") => { let current_command = "RIGHT"; }
+            thought_intent("jump")       => { let current_command = "JUMP"; }
+            thought_intent("stop")       => { let current_command = "STOP"; }
+        }
+    }
+
+    // bind_prefrontal connects to the prefrontal cortex for higher-order commands.
+    fn bind_prefrontal() {
+        cortex_bind neural_stream("prefrontal_cortex") {
+            thought_intent("select")    => { let current_command = "SELECT"; }
+            thought_intent("confirm")   => { let current_command = "CONFIRM"; }
+            thought_intent("cancel")    => { let current_command = "CANCEL"; }
+        }
+    }
+
+    // dispatch_command executes the decoded command if confidence is sufficient.
+    fn dispatch_command() {
+        let conf = this.confidence;
+        let cmd  = this.current_command;
+
+        // Only act when the decoded signal exceeds the threshold.
+        if conf >= 70 {
+            match conf {
+                70 => { let action_count = this.action_count + 1; }
+                85 => { let action_count = this.action_count + 2; }
+                99 => { let action_count = this.action_count + 3; }
+            }
+        } else {
+            let current_command = "none";
+        }
+    }
+
+    // calibrate runs a calibration sequence to baseline signal quality.
+    fn calibrate(samples: Int) {
+        let i     = 0;
+        let total = 0;
+
+        while i < samples {
+            let total = total + this.signal_quality;
+            let i     = i + 1;
+        }
+
+        let avg_quality = total / samples;
+        let mode        = 0;     // return to idle after calibration
+    }
+
+    // quality_rating translates the numeric signal_quality into a tier.
+    fn quality_rating() {
+        let q = this.signal_quality;
+        match q {
+            0  => { let rating = "none"; }
+            50 => { let rating = "fair"; }
+            80 => { let rating = "good"; }
+            95 => { let rating = "excellent"; }
+        }
+    }
+
+    // session_score computes an overall session quality metric.
+    fn session_score() {
+        let acts  = this.action_count;
+        let conf  = this.confidence;
+        let score = acts * conf / 100;
+        let bonus = score % 10;
+    }
+
+}
+
+// Test block for BCIController.
+intent Test_BCIController {
+    assert(1 == 1);
+    assert(70 >= 70);             // confidence threshold boundary
+    assert(99 > 85);              // high confidence tier
+    assert(10 * 85 / 100 == 8);  // session_score arithmetic
+    assert(8 % 10 == 8);         // bonus computation
+    assert(0 != 1);              // idle mode != control mode
+    assert(3 < 70);              // action_count starts below threshold
+}

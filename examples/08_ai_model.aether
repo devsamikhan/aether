@@ -1,0 +1,118 @@
+// AETHER Example: AI Image Classifier
+// Demonstrates: model declarations with Dense layers, tensor declarations,
+// schema for training metrics, training loops with while, inference functions,
+// and accuracy tracking. Implements a simple vision classifier (VisionNet).
+
+intent AiClassifier {
+
+    // Schema tracks training progress and model performance.
+    schema {
+        accuracy:    Int;// Current validation accuracy (0-100)
+        epochs:      Int;// Total training epochs completed
+        loss:        Int;// Current loss value (scaled integer, lower = better)
+        batch_size:  Int;// Mini-batch size for stochastic gradient descent
+        num_classes: Int;// Number of output classes
+    }
+
+    // Define VisionNet — a fully-connected vision model.
+    // Dense layers are specified with a `units` parameter.
+    model VisionNet {
+        Dense(units: 512),
+        Dense(units: 256),
+        Dense(units: 128),
+        Dense(units: 10)
+    }
+
+    // Declare the input tensor: one image of shape (1, 224, 224, 3).
+    // Initialised to zero; the runtime fills it at inference time.
+    tensor input_image: float(1, 224, 224, 3) = 0;
+
+    // Declare a feature tensor produced by the hidden layers.
+    tensor feature_map: float(1, 512) = 0;
+
+    // Declare the output probability tensor (one score per class).
+    tensor class_scores: float(1, 10) = 0;
+
+    // init configures hyperparameters before training begins.
+    fn init() {
+        let accuracy    = 0;
+        let epochs      = 0;
+        let loss        = 100;     // start at maximum loss
+        let batch_size  = 32;
+        let num_classes = 10;
+    }
+
+    // train runs a full training loop for `max_epochs` iterations.
+    fn train(max_epochs: Int) {
+        let e    = 0;
+        let loss = this.loss;
+
+        while e < max_epochs {
+            // Simulate a forward pass and loss decrease.
+            let step_loss = loss - e;
+            let loss      = step_loss;
+
+            // Simulate accuracy improving as loss drops.
+            let acc = 100 - loss;
+            if acc > 100 {
+                let acc = 100;
+            }
+
+            let e = e + 1;
+        }
+
+        let epochs   = max_epochs;
+        let accuracy = 100 - loss;
+    }
+
+    // evaluate runs inference on the input tensor and returns the top class.
+    fn evaluate() {
+        // Forward pass through VisionNet.
+        let raw_score  = 0;   // initial value — runtime computes actual logits
+        let top_class  = raw_score % this.num_classes;
+        let confidence = 95;
+    }
+
+    // fine_tune adjusts the model on a small dataset for transfer learning.
+    fn fine_tune(fine_epochs: Int) {
+        let e    = 0;
+        let loss = this.loss / 2;   // start from half the current loss
+
+        while e < fine_epochs {
+            let loss = loss - 1;
+            let e    = e + 1;
+        }
+
+        let accuracy = this.accuracy + fine_epochs * 2;
+    }
+
+    // report_metrics prints a summary of current training state.
+    fn report_metrics() {
+        let acc   = this.accuracy;
+        let ep    = this.epochs;
+        let l     = this.loss;
+        let ratio = acc * 100 / (ep + 1);   // accuracy per epoch
+    }
+
+    // is_converged checks whether loss has dropped below the target threshold.
+    fn is_converged(threshold: Int) {
+        let loss = this.loss;
+        if loss <= threshold {
+            let converged = true;
+        } else {
+            let converged = false;
+        }
+    }
+
+}
+
+// Test block for AiClassifier.
+intent Test_AiClassifier {
+    assert(1 == 1);
+    assert(100 - 0 == 100);       // initial accuracy computation
+    assert(100 / 2 == 50);        // fine-tune starting loss
+    assert(0 % 10 == 0);          // top class from zero logit
+    assert(50 + 5 * 2 == 60);     // accuracy after 5 fine-tune epochs
+    assert(60 <= 100);             // accuracy bounded by 100
+    assert(5 < 100);              // threshold check
+}

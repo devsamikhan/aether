@@ -1,0 +1,23 @@
+intent QuantumLedger {
+    schema {
+        blockId: Int = 0;
+        prevHash: String = "0000000000000000";
+        merkleRoot: String = "0000000000000000";
+        status: String = "pending";
+    }
+
+    constraint 0 <= blockId;
+
+    fn mine_quantum_block(sender: String, receiver: String, amount: Int) {
+        qubit q_sender;
+        qubit q_receiver;
+        entangle(q_sender, q_receiver);
+        measure(q_sender) => parityCollapse;
+        QuantumSwarmConsensus(nodes: (q_sender, q_receiver));
+        
+        match parityCollapse {
+            1 => this.status = "VERIFIED_QUANTUM_CONSENSUS";
+            _ => this.status = "EAVESDROPPER_COLLAPSE_DETECTED";
+        }
+    }
+}

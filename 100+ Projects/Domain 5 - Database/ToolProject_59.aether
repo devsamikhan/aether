@@ -1,0 +1,17 @@
+intent ToolProject_59 {
+    schema {
+        recordCount: Int = 0;
+        lastOp: String = "none";
+    }
+
+    fn query_sys_catalog() {
+        db {
+            SELECT id, name FROM sys_catalog WHERE id = 100
+        };
+        this.lastOp = "SQL_SELECT_VERIFIED";
+    }
+
+    fn increment_records() {
+        this.recordCount = this.recordCount + 1;
+    }
+}

@@ -1,0 +1,266 @@
+:root {
+  --bg-color: #0A1128;
+  --text-color: #F4F4F9;
+  --primary-color: #7B2CBF;
+  --accent-color: #00F5FF;
+  --card-bg: #131E3D;
+  --font-sans: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+header {
+  padding: 24px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.header-container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.logo-text {
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+
+nav a {
+  color: var(--text-color);
+  text-decoration: none;
+  margin-left: 24px;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+nav a:hover, nav a.github-link {
+  color: var(--accent-color);
+}
+
+.hero {
+  padding: 100px 0;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 64px;
+  font-weight: 800;
+  margin-bottom: 24px;
+  line-height: 1.1;
+}
+
+.gradient-text {
+  background: linear-gradient(45deg, var(--accent-color), var(--primary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero p {
+  font-size: 20px;
+  max-width: 600px;
+  margin: 0 auto 40px auto;
+  opacity: 0.8;
+}
+
+.cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.btn {
+  padding: 14px 28px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: var(--bg-color);
+}
+
+.btn-secondary {
+  border: 2px solid var(--text-color);
+  color: var(--text-color);
+}
+
+.features {
+  padding: 80px 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 90%;
+}
+
+.features h2 {
+  text-align: center;
+  font-size: 36px;
+  margin-bottom: 48px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+}
+
+.feature-card {
+  background-color: var(--card-bg);
+  padding: 32px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.feature-card h3 {
+  font-size: 22px;
+  margin-bottom: 16px;
+  color: var(--accent-color);
+}
+
+.quickstart {
+  padding: 80px 0;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 90%;
+  text-align: center;
+}
+
+.quickstart h2 {
+  margin-bottom: 32px;
+}
+
+.code-container {
+  position: relative;
+  background-color: var(--card-bg);
+  padding: 24px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  text-align: left;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.copy-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.playground-section {
+  padding: 80px 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 90%;
+}
+
+.playground-section h2 {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.editor-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  opacity: 0.6;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  opacity: 1;
+  border-bottom: 2px solid var(--accent-color);
+}
+
+.playground-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  height: 400px;
+}
+
+.code-area {
+  background-color: var(--card-bg);
+  color: var(--text-color);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  resize: none;
+}
+
+.console-output {
+  background-color: #050A19;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.console-header {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  color: var(--primary-color);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.console-output pre {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #00F5FF;
+  white-space: pre-wrap;
+}
+
+footer {
+  text-align: center;
+  padding: 40px 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  opacity: 0.6;
+}

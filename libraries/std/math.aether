@@ -1,0 +1,76 @@
+// math.aether - AETHER Mathematics Library
+intent AetherMath {
+    schema {
+        pi_val: Float = 3.14159265358979;
+        e_val: Float = 2.71828182845905;
+    }
+
+    fn abs(x: Float) {
+        return abs(x);
+    }
+
+    fn sqrt(x: Float) {
+        return sqrt(x);
+    }
+
+    fn pow(base: Float, exp: Float) {
+        return pow(base, exp);
+    }
+
+    fn sin(x: Float) {
+        return sin(x);
+    }
+
+    fn cos(x: Float) {
+        return cos(x);
+    }
+
+    fn tan(x: Float) {
+        return tan(x);
+    }
+
+    fn log(x: Float) {
+        return log(x);
+    }
+
+    fn exp(x: Float) {
+        return exp(x);
+    }
+
+    fn floor(x: Float) {
+        return floor(x);
+    }
+
+    fn ceil(x: Float) {
+        return ceil(x);
+    }
+
+    fn round(x: Float) {
+        let fl = floor(x);
+        return fl;
+    }
+
+    fn min(a: Float, b: Float) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+
+    fn max(a: Float, b: Float) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+
+    fn clamp(x: Float, min_val: Float, max_val: Float) {
+        if (x < min_val) {
+            return min_val;
+        }
+        if (x > max_val) {
+            return max_val;
+        }
+        return x;
+    }
+}

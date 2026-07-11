@@ -1,0 +1,30 @@
+intent CollapseSort {
+    schema {
+        status: String = "unsorted";
+        sortComplexity: Int = 9999;
+        size: Int = 100;
+    }
+
+    fn run_superposition_sort() {
+        qubit q_state_one;
+        qubit q_state_two;
+        entangle(q_state_one, q_state_two);
+        
+        let initial_n = this.size;
+        let classical_complexity = initial_n * initial_n;
+        let quantum_complexity = 1;
+        
+        measure(q_state_one) => sortFilter;
+        
+        match sortFilter {
+            1 => {
+                this.status = "COLLAPSED_SORTED_STATE";
+                this.sortComplexity = quantum_complexity;
+            }
+            _ => {
+                this.status = "COHERENCE_LOST";
+                this.sortComplexity = classical_complexity;
+            }
+        }
+    }
+}

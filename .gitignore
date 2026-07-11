@@ -1,0 +1,30 @@
+# Build artifacts
+/target/
+Cargo.lock
+
+# IDE / editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# AETHER runtime artifacts
+*.aether.cache
+*.aether.jit
+*.aether.lock
+
+# Logs
+*.log
+logs/
