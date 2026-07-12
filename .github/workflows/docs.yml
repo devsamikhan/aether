@@ -32,6 +32,7 @@ jobs:
           mkdir -p public
           cp -r website/* public/
           cp README.md public/
+          cp -r logo public/logo 2>/dev/null || true
           cp -r docs public/docs 2>/dev/null || true
 
       - name: Setup Pages

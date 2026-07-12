@@ -50,10 +50,12 @@ intent specPath {
 const editor = document.getElementById("code-editor");
 const logs = document.getElementById("console-logs");
 
-function switchTab(tab) {
+function switchTab(tab, event) {
   // Update tabs active state
   document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
-  event.target.classList.add("active");
+  if (event) {
+    event.currentTarget.classList.add("active");
+  }
 
   // Load sample content
   editor.value = samples[tab].code;
@@ -63,7 +65,18 @@ function switchTab(tab) {
 function copyInstall() {
   const cmd = document.getElementById("install-cmd").innerText;
   navigator.clipboard.writeText(cmd);
-  alert("Installation command copied to clipboard!");
+  
+  // Custom button feedback
+  const btn = document.querySelector(".copy-btn");
+  const originalText = btn.innerText;
+  btn.innerText = "Copied! ✓";
+  btn.style.backgroundColor = "#22d3ee";
+  btn.style.color = "#000";
+  setTimeout(() => {
+    btn.innerText = originalText;
+    btn.style.backgroundColor = "rgba(34, 211, 238, 0.1)";
+    btn.style.color = "var(--accent-color)";
+  }, 2000);
 }
 
 // Initial load

@@ -3,80 +3,123 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AETHER — The Post-Quantum Programming Language</title>
+  <meta name="description" content="AETHER — The Post-Quantum, Intent-Driven Programming Language featuring quantum native primitives, multiverse branching, and self-healing JIT diagnostics.">
+  <title>AETHER — Speculative & Post-Quantum Programming Language</title>
   <link rel="stylesheet" href="styles.css">
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Animated Background Blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
   <!-- Header -->
   <header>
     <div class="header-container">
       <div class="logo-container">
-        <img src="../logo/aether-logo.svg" alt="AETHER Logo" class="logo">
+        <img src="logo/aether-logo.svg" alt="AETHER Logo" class="logo">
         <span class="logo-text">AETHER</span>
       </div>
       <nav>
         <a href="#features">Features</a>
         <a href="#quickstart">Quickstart</a>
         <a href="#playground">Playground</a>
-        <a href="https://github.com/devsamikhan/aether" class="github-link">GitHub</a>
+        <a href="https://github.com/devsamikhan/aether" target="_blank" class="github-link">GitHub ↗</a>
       </nav>
     </div>
   </header>
 
   <!-- Hero Section -->
   <section class="hero">
-    <div class="hero-content">
-      <h1>The Post-Quantum,<br><span class="gradient-text">Intent-Driven</span> Language</h1>
-      <p>AETHER is a modern systems programming language with built-in quantum simulation, multiverse branching, and self-healing runtime diagnostics.</p>
-      <div class="cta-buttons">
-        <a href="#quickstart" class="btn btn-primary">Get Started</a>
-        <a href="#playground" class="btn btn-secondary">Try Sandbox</a>
+    <div class="hero-container">
+      <div class="hero-text">
+        <div class="badge">AETHER v1.0.0 Live</div>
+        <h1>The speculative,<br><span class="gradient-text">Intent-Driven</span> Language</h1>
+        <p>AETHER is a modern systems language designed for future paradigms, combining in-process quantum simulation, multiverse branching representations, and self-healing compiler diagnostic graphs.</p>
+        <div class="cta-buttons">
+          <a href="#quickstart" class="btn btn-primary">Get Started</a>
+          <a href="#playground" class="btn btn-secondary">Try Sandbox</a>
+        </div>
+      </div>
+      <div class="hero-preview">
+        <div class="preview-card">
+          <div class="preview-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+            <span class="preview-title">Aether Speculative Output</span>
+          </div>
+          <div class="preview-content">
+            <pre><code><span class="keyword">intent</span> <span class="type">FutureSystem</span> {
+    <span class="fn">fn</span> <span class="name">compute</span>() {
+        <span class="comment">// Fork computational branching</span>
+        <span class="keyword">branch_reality</span> {
+            <span class="name">RunSpeculativeSearch</span>();
+        };
+    }
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Feature Showcase -->
   <section id="features" class="features">
-    <h2>Core Paradigm Shift</h2>
+    <div class="section-header">
+      <h2>Advanced Paradigm Features</h2>
+      <p>Innovative computational primitives mapped directly to static execution architectures.</p>
+    </div>
     <div class="features-grid">
       <div class="feature-card">
-        <h3>⚛️ Quantum Native</h3>
-        <p>Built-in primitives for `qubit`, `entangle`, and `measure`. Compile directly to simulated or physical gate sequences.</p>
+        <div class="feature-icon">⚛️</div>
+        <h3>Quantum Register</h3>
+        <p>Simulate states, apply logic gates (H, X, CNOT), and collapse wave functions using Born rule probabilities.</p>
       </div>
       <div class="feature-card">
-        <h3>🌌 Multiverse Branching</h3>
-        <p>Fork runtime state atomically via `branch_reality` blocks and resolve paths with custom cost metrics.</p>
+        <div class="feature-icon">🌌</div>
+        <h3>Multiverse Branching</h3>
+        <p>Model multiple execution realities dynamically. Fork program state and select paths with custom criteria.</p>
       </div>
       <div class="feature-card">
-        <h3>🩹 Self-Healing Runtime</h3>
-        <p>Active anomaly checking. Compiler synthesizes hot-patches and updates execution graphs automatically on error.</p>
+        <div class="feature-icon">🩹</div>
+        <h3>Self-Healing Graphs</h3>
+        <p>Compiler walks AST graphs on error to synthesize recovery paths and JIT-lowers fallback blocks.</p>
       </div>
     </div>
   </section>
 
   <!-- Quickstart -->
   <section id="quickstart" class="quickstart">
-    <h2>Quick Installation</h2>
+    <div class="section-header">
+      <h2>Get Started Instantly</h2>
+      <p>Install the compiled AETHER toolchain with a single command.</p>
+    </div>
     <div class="code-container">
-      <button class="copy-btn" onclick="copyInstall()">Copy</button>
+      <div class="code-header">
+        <span>Terminal</span>
+        <button class="copy-btn" onclick="copyInstall()">Copy</button>
+      </div>
       <pre><code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/install.sh | bash</code></pre>
     </div>
   </section>
 
-  <!-- Interactive Sandbox / Playground -->
+  <!-- Interactive Sandbox -->
   <section id="playground" class="playground-section">
-    <h2>Interactive Code Explorer</h2>
+    <div class="section-header">
+      <h2>Interactive Code Sandbox</h2>
+      <p>Explore AETHER syntax and see compile logs dynamically.</p>
+    </div>
     <div class="playground">
       <div class="editor-tabs">
-        <button class="tab-btn active" onclick="switchTab('hello')">Hello World</button>
-        <button class="tab-btn" onclick="switchTab('quantum')">Quantum Superposition</button>
-        <button class="tab-btn" onclick="switchTab('multiverse')">Multiverse Routing</button>
+        <button class="tab-btn active" onclick="switchTab('hello', event)">Hello World</button>
+        <button class="tab-btn" onclick="switchTab('quantum', event)">Quantum Superposition</button>
+        <button class="tab-btn" onclick="switchTab('multiverse', event)">Multiverse Routing</button>
       </div>
       <div class="playground-layout">
         <textarea id="code-editor" readonly class="code-area"></textarea>
         <div class="console-output">
-          <div class="console-header">JIT COMPILER SIMULATION LOGS</div>
+          <div class="console-header">JIT SIMULATION LOGS</div>
           <pre id="console-logs"></pre>
         </div>
       </div>
@@ -85,7 +128,10 @@
 
   <!-- Footer -->
   <footer>
-    <p>&copy; 2026 AETHER Core Team. Released under the MIT License.</p>
+    <div class="footer-container">
+      <p>&copy; 2026 AETHER Core Team. Licensed under the MIT License.</p>
+      <p>Designed for speculative computer science exploration.</p>
+    </div>
   </footer>
 
   <script src="script.js"></script>
