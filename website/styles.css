@@ -35,15 +35,21 @@ header {
   align-items: center;
 }
 
-.logo-box {
+.logo-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.logo-icon {
-  width: 40px;
-  height: 40px;
+.logo {
+  width: 48px;
+  height: 48px;
+  filter: drop-shadow(0 0 15px rgba(123, 44, 191, 0.5));
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.1);
 }
 
 .logo-text {
