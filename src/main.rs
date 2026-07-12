@@ -1,5 +1,15 @@
+#![allow(
+    clippy::new_without_default,
+    clippy::should_implement_trait,
+    clippy::collapsible_if,
+    clippy::unwrap_or_default,
+    clippy::manual_memcpy,
+    clippy::single_match
+)]
+
 use std::collections::HashMap;
 use std::path::PathBuf;
+
 
 // =========================================================================
 // 1. AST Data Structures
@@ -50,7 +60,7 @@ pub enum Expression {
     MemberAccess(Box<Expression>, String),
     MethodCall(Box<Expression>, String, Vec<Expression>),
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
-    
+
     // Phase 10 AST Extensions
     Await(Box<Expression>),
     Match {
@@ -152,7 +162,7 @@ pub enum Statement {
         catch_body: Vec<Statement>,
     },
     Defer(Box<Statement>),
-    
+
     // Phase 11 Extensions
     DbQuery {
         query_string: String,
@@ -168,7 +178,7 @@ pub enum Statement {
         name: String,
         layers: Vec<ModelLayer>,
     },
-    
+
     // Phase 12 Extensions
     QubitDecl {
         name: String,
@@ -183,7 +193,7 @@ pub enum Statement {
     Block {
         statements: Vec<Statement>,
     },
-    
+
     // Phase 13 Extensions
     CortexBind {
         source: String,
@@ -198,7 +208,7 @@ pub enum Statement {
         target_mesh: String,
         qubits: Vec<String>,
     },
-    
+
     // Phase 14 Extensions
     BranchReality {
         body: Vec<Statement>,
@@ -287,72 +297,344 @@ pub struct MethodSignature {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Core Flow Keywords
-    If, Else, Match, For, While, Loop, Break, Continue, Return, Yield, Goto, Then, Elif, Unless, Switch, Case, DefaultKw,
+    If,
+    Else,
+    Match,
+    For,
+    While,
+    Loop,
+    Break,
+    Continue,
+    Return,
+    Yield,
+    Goto,
+    Then,
+    Elif,
+    Unless,
+    Switch,
+    Case,
+    DefaultKw,
 
     // Declarations
-    Let, Var, Const, Mut, Fn, Func, Struct, Class, Enum, Trait, Interface, Impl, Type, Alias, Namespace, Module, Use, Import, Export, As, Package, Include,
+    Let,
+    Var,
+    Const,
+    Mut,
+    Fn,
+    Func,
+    Struct,
+    Class,
+    Enum,
+    Trait,
+    Interface,
+    Impl,
+    Type,
+    Alias,
+    Namespace,
+    Module,
+    Use,
+    Import,
+    Export,
+    As,
+    Package,
+    Include,
 
     // Modifiers
-    Pub, Priv, Protected, Static, Final, Abstract, Virtual, Override, Inline, Extern, Consteval, Async, Unsafe, Safe, ThreadLocal, NoMangle, Lazy, Dynamic, Generic, MacroRules, Auto,
+    Pub,
+    Priv,
+    Protected,
+    Static,
+    Final,
+    Abstract,
+    Virtual,
+    Override,
+    Inline,
+    Extern,
+    Consteval,
+    Async,
+    Unsafe,
+    Safe,
+    ThreadLocal,
+    NoMangle,
+    Lazy,
+    Dynamic,
+    Generic,
+    MacroRules,
+    Auto,
 
     // Memory & Safety
-    Borrow, CloneKw, CopyKw, Drop, Try, Catch, Throw, Panic, Recover, Defer, Ref, Move, BoxKw, Pin, Weak, Shared, Owned, Alloc, Dealloc, Free, Nil, NullKw,
+    Borrow,
+    CloneKw,
+    CopyKw,
+    Drop,
+    Try,
+    Catch,
+    Throw,
+    Panic,
+    Recover,
+    Defer,
+    Ref,
+    Move,
+    BoxKw,
+    Pin,
+    Weak,
+    Shared,
+    Owned,
+    Alloc,
+    Dealloc,
+    Free,
+    Nil,
+    NullKw,
 
     // Concurrency & Async
-    Await, Spawn, Join, Mutex, Atomic, Channel, Select, Sync, Lock, Unlock, Thread, Fork, Exec, YieldNow, Future,
+    Await,
+    Spawn,
+    Join,
+    Mutex,
+    Atomic,
+    Channel,
+    Select,
+    Sync,
+    Lock,
+    Unlock,
+    Thread,
+    Fork,
+    Exec,
+    YieldNow,
+    Future,
 
     // Data Structures
-    List, Map, Set, Queue, Stack, Tuple, Array, Dict, VecKw, OptionKw, ResultKw, SomeKw, NoneKw, OkKw, ErrKw,
+    List,
+    Map,
+    Set,
+    Queue,
+    Stack,
+    Tuple,
+    Array,
+    Dict,
+    VecKw,
+    OptionKw,
+    ResultKw,
+    SomeKw,
+    NoneKw,
+    OkKw,
+    ErrKw,
 
     // Math & Logic
-    And, Or, Not, Xor, BitAnd, BitOr, BitXor, BitNot, ShiftL, ShiftR, Mod, Pow, Sqrt, Abs, Ceil, Floor,
+    And,
+    Or,
+    Not,
+    Xor,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitNot,
+    ShiftL,
+    ShiftR,
+    Mod,
+    Pow,
+    Sqrt,
+    Abs,
+    Ceil,
+    Floor,
 
     // I/O & System
-    Print, Println, Read, Write, Open, Close, File, Dir, Env, Sleep, Time, Clock, Socket, Listen, Connect, Send, Recv, Stdout, Stderr, Stdin,
+    Print,
+    Println,
+    Read,
+    Write,
+    Open,
+    Close,
+    File,
+    Dir,
+    Env,
+    Sleep,
+    Time,
+    Clock,
+    Socket,
+    Listen,
+    Connect,
+    Send,
+    Recv,
+    Stdout,
+    Stderr,
+    Stdin,
 
     // Meta & Macros
-    Macro, Rule, Expand, Quote, Unquote, Eval, Compile, Reflect, Inspect, Derive, Attribute, Pragma, Builtin, Typeof, Nameof,
+    Macro,
+    Rule,
+    Expand,
+    Quote,
+    Unquote,
+    Eval,
+    Compile,
+    Reflect,
+    Inspect,
+    Derive,
+    Attribute,
+    Pragma,
+    Builtin,
+    Typeof,
+    Nameof,
 
     // Primitives
-    Int, Int8, Int16, Int32, Int64, Int128, Uint, Uint8, Uint16, Uint32, Uint64, Uint128, FloatKw, Float32, Float64, Char, Str, StringKw, Bool, Byte, Bytes, Void, Any, Never, SelfValue, SelfType,
+    Int,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Int128,
+    Uint,
+    Uint8,
+    Uint16,
+    Uint32,
+    Uint64,
+    Uint128,
+    FloatKw,
+    Float32,
+    Float64,
+    Char,
+    Str,
+    StringKw,
+    Bool,
+    Byte,
+    Bytes,
+    Void,
+    Any,
+    Never,
+    SelfValue,
+    SelfType,
 
     // SQL & Query
-    SelectSql, Where, From, JoinSql, Insert, Update, Delete, Into, Values, SetSql, Index, Table, Database, Query, Order, Group, By, Having, Limit, Offset,
+    SelectSql,
+    Where,
+    From,
+    JoinSql,
+    Insert,
+    Update,
+    Delete,
+    Into,
+    Values,
+    SetSql,
+    Index,
+    Table,
+    Database,
+    Query,
+    Order,
+    Group,
+    By,
+    Having,
+    Limit,
+    Offset,
 
     // AETHER Core
-    Intent, Schema, Ui, Constraint, On, Local, Db, Tensor, Model, Qubit, Entangle, Measure, NeuralStream, CortexBind, ThoughtIntent, Hologram, SpatialAnchor, DepthMesh, BranchReality, ObserveTimeline, MergeUniverse, SwarmSpawn, HiveMind, VonNeumannReplicate,
-    Substring, Replace, Trim, Split, ToUpper, ToLower, Contains, StartsWith, EndsWith, RegexMatch, CharAt,
-    Round, Sin, Cos, Tan, Log, Random, Min, Max, Clamp, Factorial, Pi, Infinity,
-    OpenFile, ReadLine, ReadBytes, WriteBytes, AppendFile, CloseFile, FileExists, DeleteFile, CreateDir, ListDir,
-    Now, Timestamp, FormatDate, SleepMs, Duration,
-    BitAndKw, BitOrKw, BitXorKw, BitShiftLeft, BitShiftRight, ToHex, ToBin, ToStringKw, ToInt, ToFloat,
-    Push, Pop, Shift, Unshift, SortBy, FilterMap, Reduce, ContainsKey, Keys,
+    Intent,
+    Schema,
+    Ui,
+    Constraint,
+    On,
+    Local,
+    Db,
+    Tensor,
+    Model,
+    Qubit,
+    Entangle,
+    Measure,
+    NeuralStream,
+    CortexBind,
+    ThoughtIntent,
+    Hologram,
+    SpatialAnchor,
+    DepthMesh,
+    BranchReality,
+    ObserveTimeline,
+    MergeUniverse,
+    SwarmSpawn,
+    HiveMind,
+    VonNeumannReplicate,
+    Substring,
+    Replace,
+    Trim,
+    Split,
+    ToUpper,
+    ToLower,
+    Contains,
+    StartsWith,
+    EndsWith,
+    RegexMatch,
+    CharAt,
+    Round,
+    Sin,
+    Cos,
+    Tan,
+    Log,
+    Random,
+    Min,
+    Max,
+    Clamp,
+    Factorial,
+    Pi,
+    Infinity,
+    OpenFile,
+    ReadLine,
+    ReadBytes,
+    WriteBytes,
+    AppendFile,
+    CloseFile,
+    FileExists,
+    DeleteFile,
+    CreateDir,
+    ListDir,
+    Now,
+    Timestamp,
+    FormatDate,
+    SleepMs,
+    Duration,
+    BitAndKw,
+    BitOrKw,
+    BitXorKw,
+    BitShiftLeft,
+    BitShiftRight,
+    ToHex,
+    ToBin,
+    ToStringKw,
+    ToInt,
+    ToFloat,
+    Push,
+    Pop,
+    Shift,
+    Unshift,
+    SortBy,
+    FilterMap,
+    Reduce,
+    ContainsKey,
+    Keys,
 
     // Symbols
-    OpenBrace,      // {
-    CloseBrace,     // }
-    OpenParen,      // (
-    CloseParen,     // )
-    At,             // @
-    Colon,          // :
-    Semicolon,      // ;
-    Comma,          // ,
-    Dot,            // .
-    Arrow,          // =>
-    ThinArrow,      // ->
-    LessEqual,      // <=
-    Equal,          // =
-    DotDot,         // ..
-    Plus,           // +
-    Minus,          // -
-    Star,           // *
-    Slash,          // /
-    Percent,        // %
-    EqualEqual,     // ==
-    NotEqual,       // !=
-    Less,           // <
-    Greater,        // >
-    GreaterEqual,   // >=
+    OpenBrace,    // {
+    CloseBrace,   // }
+    OpenParen,    // (
+    CloseParen,   // )
+    At,           // @
+    Colon,        // :
+    Semicolon,    // ;
+    Comma,        // ,
+    Dot,          // .
+    Arrow,        // =>
+    ThinArrow,    // ->
+    LessEqual,    // <=
+    Equal,        // =
+    DotDot,       // ..
+    Plus,         // +
+    Minus,        // -
+    Star,         // *
+    Slash,        // /
+    Percent,      // %
+    EqualEqual,   // ==
+    NotEqual,     // !=
+    Less,         // <
+    Greater,      // >
+    GreaterEqual, // >=
 
     // Literals
     StringLiteral(String),
@@ -455,7 +737,10 @@ impl<'a> Lexer<'a> {
                         self.next();
                         Token::NotEqual
                     } else {
-                        return Err(CompileError::new(start_line, "Unexpected character: '!'".to_string()));
+                        return Err(CompileError::new(
+                            start_line,
+                            "Unexpected character: '!'".to_string(),
+                        ));
                     }
                 }
                 '-' => {
@@ -483,12 +768,18 @@ impl<'a> Lexer<'a> {
                         }
                         if is_float {
                             let val = num.parse::<f64>().map_err(|_| {
-                                CompileError::new(start_line, format!("Invalid float literal: {}", num))
+                                CompileError::new(
+                                    start_line,
+                                    format!("Invalid float literal: {}", num),
+                                )
                             })?;
                             Token::FloatLiteral(val)
                         } else {
                             let val = num.parse::<i64>().map_err(|_| {
-                                CompileError::new(start_line, format!("Invalid integer literal: {}", num))
+                                CompileError::new(
+                                    start_line,
+                                    format!("Invalid integer literal: {}", num),
+                                )
                             })?;
                             Token::IntegerLiteral(val)
                         }
@@ -529,7 +820,10 @@ impl<'a> Lexer<'a> {
                         Token::FloatLiteral(val)
                     } else {
                         let val = num.parse::<i64>().map_err(|_| {
-                            CompileError::new(start_line, format!("Invalid integer literal: {}", num))
+                            CompileError::new(
+                                start_line,
+                                format!("Invalid integer literal: {}", num),
+                            )
                         })?;
                         Token::IntegerLiteral(val)
                     }
@@ -546,135 +840,331 @@ impl<'a> Lexer<'a> {
 
                     match ident.as_str() {
                         // Core Flow
-                        "if" => Token::If, "else" => Token::Else, "match" => Token::Match,
-                        "for" => Token::For, "while" => Token::While, "loop" => Token::Loop,
-                        "break" => Token::Break, "continue" => Token::Continue, "return" => Token::Return,
-                        "yield" => Token::Yield, "goto" => Token::Goto, "then" => Token::Then,
-                        "elif" => Token::Elif, "unless" => Token::Unless, "switch" => Token::Switch,
-                        "case" => Token::Case, "default" => Token::DefaultKw,
+                        "if" => Token::If,
+                        "else" => Token::Else,
+                        "match" => Token::Match,
+                        "for" => Token::For,
+                        "while" => Token::While,
+                        "loop" => Token::Loop,
+                        "break" => Token::Break,
+                        "continue" => Token::Continue,
+                        "return" => Token::Return,
+                        "yield" => Token::Yield,
+                        "goto" => Token::Goto,
+                        "then" => Token::Then,
+                        "elif" => Token::Elif,
+                        "unless" => Token::Unless,
+                        "switch" => Token::Switch,
+                        "case" => Token::Case,
+                        "default" => Token::DefaultKw,
 
                         // Declarations
-                        "let" => Token::Let, "var" => Token::Var, "const" => Token::Const, "mut" => Token::Mut,
-                        "fn" => Token::Fn, "func" => Token::Func, "struct" => Token::Struct, "class" => Token::Class,
-                        "enum" => Token::Enum, "trait" => Token::Trait, "interface" => Token::Interface,
-                        "impl" => Token::Impl, "type" => Token::Type, "alias" => Token::Alias,
-                        "namespace" => Token::Namespace, "module" => Token::Module, "use" => Token::Use,
-                        "import" => Token::Import, "export" => Token::Export, "as" => Token::As,
-                        "package" => Token::Package, "include" => Token::Include,
+                        "let" => Token::Let,
+                        "var" => Token::Var,
+                        "const" => Token::Const,
+                        "mut" => Token::Mut,
+                        "fn" => Token::Fn,
+                        "func" => Token::Func,
+                        "struct" => Token::Struct,
+                        "class" => Token::Class,
+                        "enum" => Token::Enum,
+                        "trait" => Token::Trait,
+                        "interface" => Token::Interface,
+                        "impl" => Token::Impl,
+                        "type" => Token::Type,
+                        "alias" => Token::Alias,
+                        "namespace" => Token::Namespace,
+                        "module" => Token::Module,
+                        "use" => Token::Use,
+                        "import" => Token::Import,
+                        "export" => Token::Export,
+                        "as" => Token::As,
+                        "package" => Token::Package,
+                        "include" => Token::Include,
 
                         // Modifiers
-                        "pub" => Token::Pub, "priv" => Token::Priv, "protected" => Token::Protected,
-                        "static" => Token::Static, "final" => Token::Final, "abstract" => Token::Abstract,
-                        "virtual" => Token::Virtual, "override" => Token::Override, "inline" => Token::Inline,
-                        "extern" => Token::Extern, "consteval" => Token::Consteval, "async" => Token::Async,
-                        "unsafe" => Token::Unsafe, "safe" => Token::Safe, "thread_local" => Token::ThreadLocal,
-                        "no_mangle" => Token::NoMangle, "lazy" => Token::Lazy, "dynamic" => Token::Dynamic,
-                        "generic" => Token::Generic, "macro_rules" => Token::MacroRules, "auto" => Token::Auto,
+                        "pub" => Token::Pub,
+                        "priv" => Token::Priv,
+                        "protected" => Token::Protected,
+                        "static" => Token::Static,
+                        "final" => Token::Final,
+                        "abstract" => Token::Abstract,
+                        "virtual" => Token::Virtual,
+                        "override" => Token::Override,
+                        "inline" => Token::Inline,
+                        "extern" => Token::Extern,
+                        "consteval" => Token::Consteval,
+                        "async" => Token::Async,
+                        "unsafe" => Token::Unsafe,
+                        "safe" => Token::Safe,
+                        "thread_local" => Token::ThreadLocal,
+                        "no_mangle" => Token::NoMangle,
+                        "lazy" => Token::Lazy,
+                        "dynamic" => Token::Dynamic,
+                        "generic" => Token::Generic,
+                        "macro_rules" => Token::MacroRules,
+                        "auto" => Token::Auto,
 
                         // Memory & Safety
-                        "borrow" => Token::Borrow, "clone" => Token::CloneKw, "copy" => Token::CopyKw,
-                        "drop" => Token::Drop, "try" => Token::Try, "catch" => Token::Catch,
-                        "throw" => Token::Throw, "panic" => Token::Panic, "recover" => Token::Recover,
-                        "defer" => Token::Defer, "ref" => Token::Ref, "move" => Token::Move,
-                        "box" => Token::BoxKw, "pin" => Token::Pin, "weak" => Token::Weak,
-                        "shared" => Token::Shared, "owned" => Token::Owned, "alloc" => Token::Alloc,
-                        "dealloc" => Token::Dealloc, "free" => Token::Free, "nil" => Token::Nil,
+                        "borrow" => Token::Borrow,
+                        "clone" => Token::CloneKw,
+                        "copy" => Token::CopyKw,
+                        "drop" => Token::Drop,
+                        "try" => Token::Try,
+                        "catch" => Token::Catch,
+                        "throw" => Token::Throw,
+                        "panic" => Token::Panic,
+                        "recover" => Token::Recover,
+                        "defer" => Token::Defer,
+                        "ref" => Token::Ref,
+                        "move" => Token::Move,
+                        "box" => Token::BoxKw,
+                        "pin" => Token::Pin,
+                        "weak" => Token::Weak,
+                        "shared" => Token::Shared,
+                        "owned" => Token::Owned,
+                        "alloc" => Token::Alloc,
+                        "dealloc" => Token::Dealloc,
+                        "free" => Token::Free,
+                        "nil" => Token::Nil,
                         "null" => Token::NullKw,
 
                         // Concurrency
-                        "await" => Token::Await, "spawn" => Token::Spawn, "join" => Token::Join,
-                        "mutex" => Token::Mutex, "atomic" => Token::Atomic, "channel" => Token::Channel,
-                        "select" => Token::Select, "sync" => Token::Sync, "lock" => Token::Lock,
-                        "unlock" => Token::Unlock, "thread" => Token::Thread, "fork" => Token::Fork,
-                        "exec" => Token::Exec, "yield_now" => Token::YieldNow, "future" => Token::Future,
+                        "await" => Token::Await,
+                        "spawn" => Token::Spawn,
+                        "join" => Token::Join,
+                        "mutex" => Token::Mutex,
+                        "atomic" => Token::Atomic,
+                        "channel" => Token::Channel,
+                        "select" => Token::Select,
+                        "sync" => Token::Sync,
+                        "lock" => Token::Lock,
+                        "unlock" => Token::Unlock,
+                        "thread" => Token::Thread,
+                        "fork" => Token::Fork,
+                        "exec" => Token::Exec,
+                        "yield_now" => Token::YieldNow,
+                        "future" => Token::Future,
 
                         // Data Structures
-                        "list" => Token::List, "map" => Token::Map, "set" => Token::Set,
-                        "queue" => Token::Queue, "stack" => Token::Stack, "tuple" => Token::Tuple,
-                        "array" => Token::Array, "dict" => Token::Dict, "vec" => Token::VecKw,
-                        "option" => Token::OptionKw, "result" => Token::ResultKw, "some" => Token::SomeKw,
-                        "none" => Token::NoneKw, "ok" => Token::OkKw, "err" => Token::ErrKw,
+                        "list" => Token::List,
+                        "map" => Token::Map,
+                        "set" => Token::Set,
+                        "queue" => Token::Queue,
+                        "stack" => Token::Stack,
+                        "tuple" => Token::Tuple,
+                        "array" => Token::Array,
+                        "dict" => Token::Dict,
+                        "vec" => Token::VecKw,
+                        "option" => Token::OptionKw,
+                        "result" => Token::ResultKw,
+                        "some" => Token::SomeKw,
+                        "none" => Token::NoneKw,
+                        "ok" => Token::OkKw,
+                        "err" => Token::ErrKw,
 
                         // Math & Logic
-                        "and" => Token::And, "or" => Token::Or, "not" => Token::Not, "xor" => Token::Xor,
-                        "bitand" => Token::BitAnd, "bitor" => Token::BitOr, "bitxor" => Token::BitXor,
-                        "bitnot" => Token::BitNot, "shiftl" => Token::ShiftL, "shiftr" => Token::ShiftR,
-                        "mod" => Token::Mod, "pow" => Token::Pow, "sqrt" => Token::Sqrt, "abs" => Token::Abs,
-                        "ceil" => Token::Ceil, "floor" => Token::Floor,
+                        "and" => Token::And,
+                        "or" => Token::Or,
+                        "not" => Token::Not,
+                        "xor" => Token::Xor,
+                        "bitand" => Token::BitAnd,
+                        "bitor" => Token::BitOr,
+                        "bitxor" => Token::BitXor,
+                        "bitnot" => Token::BitNot,
+                        "shiftl" => Token::ShiftL,
+                        "shiftr" => Token::ShiftR,
+                        "mod" => Token::Mod,
+                        "pow" => Token::Pow,
+                        "sqrt" => Token::Sqrt,
+                        "abs" => Token::Abs,
+                        "ceil" => Token::Ceil,
+                        "floor" => Token::Floor,
 
                         // I/O & System
-                        "print" => Token::Print, "println" => Token::Println, "read" => Token::Read,
-                        "write" => Token::Write, "open" => Token::Open, "close" => Token::Close,
-                        "file" => Token::File, "dir" => Token::Dir, "env" => Token::Env,
-                        "sleep" => Token::Sleep, "time" => Token::Time, "clock" => Token::Clock,
-                        "socket" => Token::Socket, "listen" => Token::Listen, "connect" => Token::Connect,
-                        "send" => Token::Send, "recv" => Token::Recv, "stdout" => Token::Stdout,
-                        "stderr" => Token::Stderr, "stdin" => Token::Stdin,
+                        "print" => Token::Print,
+                        "println" => Token::Println,
+                        "read" => Token::Read,
+                        "write" => Token::Write,
+                        "open" => Token::Open,
+                        "close" => Token::Close,
+                        "file" => Token::File,
+                        "dir" => Token::Dir,
+                        "env" => Token::Env,
+                        "sleep" => Token::Sleep,
+                        "time" => Token::Time,
+                        "clock" => Token::Clock,
+                        "socket" => Token::Socket,
+                        "listen" => Token::Listen,
+                        "connect" => Token::Connect,
+                        "send" => Token::Send,
+                        "recv" => Token::Recv,
+                        "stdout" => Token::Stdout,
+                        "stderr" => Token::Stderr,
+                        "stdin" => Token::Stdin,
 
                         // Meta & Macros
-                        "macro" => Token::Macro, "rule" => Token::Rule, "expand" => Token::Expand,
-                        "quote" => Token::Quote, "unquote" => Token::Unquote, "eval" => Token::Eval,
-                        "compile" => Token::Compile, "reflect" => Token::Reflect, "inspect" => Token::Inspect,
-                        "derive" => Token::Derive, "attribute" => Token::Attribute, "pragma" => Token::Pragma,
-                        "builtin" => Token::Builtin, "typeof" => Token::Typeof, "nameof" => Token::Nameof,
+                        "macro" => Token::Macro,
+                        "rule" => Token::Rule,
+                        "expand" => Token::Expand,
+                        "quote" => Token::Quote,
+                        "unquote" => Token::Unquote,
+                        "eval" => Token::Eval,
+                        "compile" => Token::Compile,
+                        "reflect" => Token::Reflect,
+                        "inspect" => Token::Inspect,
+                        "derive" => Token::Derive,
+                        "attribute" => Token::Attribute,
+                        "pragma" => Token::Pragma,
+                        "builtin" => Token::Builtin,
+                        "typeof" => Token::Typeof,
+                        "nameof" => Token::Nameof,
 
                         // Primitives
-                        "int" => Token::Int, "int8" => Token::Int8, "int16" => Token::Int16,
-                        "int32" => Token::Int32, "int64" => Token::Int64, "int128" => Token::Int128,
-                        "uint" => Token::Uint, "uint8" => Token::Uint8, "uint16" => Token::Uint16,
-                        "uint32" => Token::Uint32, "uint64" => Token::Uint64, "uint128" => Token::Uint128,
-                        "float" => Token::FloatKw, "float32" => Token::Float32, "float64" => Token::Float64,
-                        "char" => Token::Char, "str" => Token::Str, "string" => Token::StringKw,
-                        "bool" => Token::Bool, "byte" => Token::Byte, "bytes" => Token::Bytes,
-                        "void" => Token::Void, "any" => Token::Any, "never" => Token::Never,
-                        "self" => Token::SelfValue, "Self" => Token::SelfType,
+                        "int" => Token::Int,
+                        "int8" => Token::Int8,
+                        "int16" => Token::Int16,
+                        "int32" => Token::Int32,
+                        "int64" => Token::Int64,
+                        "int128" => Token::Int128,
+                        "uint" => Token::Uint,
+                        "uint8" => Token::Uint8,
+                        "uint16" => Token::Uint16,
+                        "uint32" => Token::Uint32,
+                        "uint64" => Token::Uint64,
+                        "uint128" => Token::Uint128,
+                        "float" => Token::FloatKw,
+                        "float32" => Token::Float32,
+                        "float64" => Token::Float64,
+                        "char" => Token::Char,
+                        "str" => Token::Str,
+                        "string" => Token::StringKw,
+                        "bool" => Token::Bool,
+                        "byte" => Token::Byte,
+                        "bytes" => Token::Bytes,
+                        "void" => Token::Void,
+                        "any" => Token::Any,
+                        "never" => Token::Never,
+                        "self" => Token::SelfValue,
+                        "Self" => Token::SelfType,
 
                         // SQL & Query
-                        "select_sql" => Token::SelectSql, "where" => Token::Where, "from" => Token::From,
-                        "join_sql" => Token::JoinSql, "insert" => Token::Insert, "update" => Token::Update,
-                        "delete" => Token::Delete, "into" => Token::Into, "values" => Token::Values,
-                        "set_sql" => Token::SetSql, "index" => Token::Index, "table" => Token::Table,
-                        "database" => Token::Database, "query" => Token::Query, "order" => Token::Order,
-                        "group" => Token::Group, "by" => Token::By, "having" => Token::Having,
-                        "limit" => Token::Limit, "offset" => Token::Offset,
+                        "select_sql" => Token::SelectSql,
+                        "where" => Token::Where,
+                        "from" => Token::From,
+                        "join_sql" => Token::JoinSql,
+                        "insert" => Token::Insert,
+                        "update" => Token::Update,
+                        "delete" => Token::Delete,
+                        "into" => Token::Into,
+                        "values" => Token::Values,
+                        "set_sql" => Token::SetSql,
+                        "index" => Token::Index,
+                        "table" => Token::Table,
+                        "database" => Token::Database,
+                        "query" => Token::Query,
+                        "order" => Token::Order,
+                        "group" => Token::Group,
+                        "by" => Token::By,
+                        "having" => Token::Having,
+                        "limit" => Token::Limit,
+                        "offset" => Token::Offset,
 
                         // AETHER Core
-                        "intent" => Token::Intent, "schema" => Token::Schema, "ui" => Token::Ui,
-                        "constraint" => Token::Constraint, "on" => Token::On, "local" => Token::Local,
-                        "db" => Token::Db, "tensor" => Token::Tensor, "model" => Token::Model,
-                        "qubit" => Token::Qubit, "entangle" => Token::Entangle, "measure" => Token::Measure,
-                        "neural_stream" => Token::NeuralStream, "cortex_bind" => Token::CortexBind, "thought_intent" => Token::ThoughtIntent,
-                        "hologram" => Token::Hologram, "spatial_anchor" => Token::SpatialAnchor, "depth_mesh" => Token::DepthMesh,
-                        "branch_reality" => Token::BranchReality, "observe_timeline" => Token::ObserveTimeline, "merge_universe" => Token::MergeUniverse,
-                        "swarm_spawn" => Token::SwarmSpawn, "hive_mind" => Token::HiveMind, "von_neumann_replicate" => Token::VonNeumannReplicate,
-                        "substring" => Token::Substring, "replace" => Token::Replace, "trim" => Token::Trim,
-                        "split" => Token::Split, "to_upper" => Token::ToUpper,
-                        "to_lower" => Token::ToLower, "contains" => Token::Contains, "starts_with" => Token::StartsWith,
-                        "ends_with" => Token::EndsWith, "regex_match" => Token::RegexMatch, "char_at" => Token::CharAt,
-                        "round" => Token::Round, "sin" => Token::Sin, "cos" => Token::Cos, "tan" => Token::Tan,
-                        "log" => Token::Log, "random" => Token::Random, "min" => Token::Min, "max" => Token::Max,
-                        "clamp" => Token::Clamp, "factorial" => Token::Factorial, "pi" => Token::Pi, "infinity" => Token::Infinity,
-                        "open_file" => Token::OpenFile, "read_line" => Token::ReadLine, "read_bytes" => Token::ReadBytes,
-                        "write_bytes" => Token::WriteBytes, "append_file" => Token::AppendFile, "close_file" => Token::CloseFile,
-                        "file_exists" => Token::FileExists, "delete_file" => Token::DeleteFile, "create_dir" => Token::CreateDir,
-                        "list_dir" => Token::ListDir, "now" => Token::Now, "timestamp" => Token::Timestamp,
-                        "format_date" => Token::FormatDate, "sleep_ms" => Token::SleepMs, "duration" => Token::Duration,
-                        "bit_and" => Token::BitAndKw, "bit_or" => Token::BitOrKw, "bit_xor" => Token::BitXorKw,
-                        "bit_shift_left" => Token::BitShiftLeft, "bit_shift_right" => Token::BitShiftRight,
-                        "to_hex" => Token::ToHex, "to_bin" => Token::ToBin, "to_string" => Token::ToStringKw,
-                        "to_int" => Token::ToInt, "to_float" => Token::ToFloat,
-                        "push" => Token::Push, "pop" => Token::Pop, "shift" => Token::Shift, "unshift" => Token::Unshift,
-                        "sort_by" => Token::SortBy, "filter_map" => Token::FilterMap, "reduce" => Token::Reduce,
-                        "contains_key" => Token::ContainsKey, "keys" => Token::Keys,
+                        "intent" => Token::Intent,
+                        "schema" => Token::Schema,
+                        "ui" => Token::Ui,
+                        "constraint" => Token::Constraint,
+                        "on" => Token::On,
+                        "local" => Token::Local,
+                        "db" => Token::Db,
+                        "tensor" => Token::Tensor,
+                        "model" => Token::Model,
+                        "qubit" => Token::Qubit,
+                        "entangle" => Token::Entangle,
+                        "measure" => Token::Measure,
+                        "neural_stream" => Token::NeuralStream,
+                        "cortex_bind" => Token::CortexBind,
+                        "thought_intent" => Token::ThoughtIntent,
+                        "hologram" => Token::Hologram,
+                        "spatial_anchor" => Token::SpatialAnchor,
+                        "depth_mesh" => Token::DepthMesh,
+                        "branch_reality" => Token::BranchReality,
+                        "observe_timeline" => Token::ObserveTimeline,
+                        "merge_universe" => Token::MergeUniverse,
+                        "swarm_spawn" => Token::SwarmSpawn,
+                        "hive_mind" => Token::HiveMind,
+                        "von_neumann_replicate" => Token::VonNeumannReplicate,
+                        "substring" => Token::Substring,
+                        "replace" => Token::Replace,
+                        "trim" => Token::Trim,
+                        "split" => Token::Split,
+                        "to_upper" => Token::ToUpper,
+                        "to_lower" => Token::ToLower,
+                        "contains" => Token::Contains,
+                        "starts_with" => Token::StartsWith,
+                        "ends_with" => Token::EndsWith,
+                        "regex_match" => Token::RegexMatch,
+                        "char_at" => Token::CharAt,
+                        "round" => Token::Round,
+                        "sin" => Token::Sin,
+                        "cos" => Token::Cos,
+                        "tan" => Token::Tan,
+                        "log" => Token::Log,
+                        "random" => Token::Random,
+                        "min" => Token::Min,
+                        "max" => Token::Max,
+                        "clamp" => Token::Clamp,
+                        "factorial" => Token::Factorial,
+                        "pi" => Token::Pi,
+                        "infinity" => Token::Infinity,
+                        "open_file" => Token::OpenFile,
+                        "read_line" => Token::ReadLine,
+                        "read_bytes" => Token::ReadBytes,
+                        "write_bytes" => Token::WriteBytes,
+                        "append_file" => Token::AppendFile,
+                        "close_file" => Token::CloseFile,
+                        "file_exists" => Token::FileExists,
+                        "delete_file" => Token::DeleteFile,
+                        "create_dir" => Token::CreateDir,
+                        "list_dir" => Token::ListDir,
+                        "now" => Token::Now,
+                        "timestamp" => Token::Timestamp,
+                        "format_date" => Token::FormatDate,
+                        "sleep_ms" => Token::SleepMs,
+                        "duration" => Token::Duration,
+                        "bit_and" => Token::BitAndKw,
+                        "bit_or" => Token::BitOrKw,
+                        "bit_xor" => Token::BitXorKw,
+                        "bit_shift_left" => Token::BitShiftLeft,
+                        "bit_shift_right" => Token::BitShiftRight,
+                        "to_hex" => Token::ToHex,
+                        "to_bin" => Token::ToBin,
+                        "to_string" => Token::ToStringKw,
+                        "to_int" => Token::ToInt,
+                        "to_float" => Token::ToFloat,
+                        "push" => Token::Push,
+                        "pop" => Token::Pop,
+                        "shift" => Token::Shift,
+                        "unshift" => Token::Unshift,
+                        "sort_by" => Token::SortBy,
+                        "filter_map" => Token::FilterMap,
+                        "reduce" => Token::Reduce,
+                        "contains_key" => Token::ContainsKey,
+                        "keys" => Token::Keys,
 
                         // Booleans
-                        "true" => Token::BooleanLiteral(true), "false" => Token::BooleanLiteral(false),
+                        "true" => Token::BooleanLiteral(true),
+                        "false" => Token::BooleanLiteral(false),
 
                         _ => Token::Identifier(ident),
                     }
                 }
                 _ => {
-                    return Err(CompileError::new(start_line, format!("Unexpected character: '{}'", c)));
+                    return Err(CompileError::new(
+                        start_line,
+                        format!("Unexpected character: '{}'", c),
+                    ));
                 }
             };
             tokens.push((tok, start_line));
@@ -714,11 +1204,17 @@ impl<'a> Lexer<'a> {
             match self.next() {
                 Some('"') => return Ok(s),
                 Some('\n') => {
-                    return Err(CompileError::new(start_line, "Unterminated string literal".into()));
+                    return Err(CompileError::new(
+                        start_line,
+                        "Unterminated string literal".into(),
+                    ));
                 }
                 Some(c) => s.push(c),
                 None => {
-                    return Err(CompileError::new(start_line, "Unterminated string literal".into()));
+                    return Err(CompileError::new(
+                        start_line,
+                        "Unterminated string literal".into(),
+                    ));
                 }
             }
         }
@@ -748,7 +1244,10 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<(Token, usize)>) -> Self {
-        Self { tokens, position: 0 }
+        Self {
+            tokens,
+            position: 0,
+        }
     }
 
     fn peek(&self) -> &Token {
@@ -825,7 +1324,7 @@ impl Parser {
     pub fn parse_program(&mut self) -> Result<ProgramNode, CompileError> {
         let mut intents = Vec::new();
         let mut statements = Vec::new();
-        
+
         while self.peek() != &Token::Eof {
             match self.peek() {
                 Token::Intent => {
@@ -857,14 +1356,14 @@ impl Parser {
                             }
                         }
                         self.expect(Token::CloseParen)?;
-                        
+
                         let mut return_type = None;
                         if self.peek() == &Token::Arrow || self.peek() == &Token::ThinArrow {
                             self.next();
                             return_type = Some(self.expect_identifier_or_type()?);
                         }
                         self.expect(Token::Semicolon)?;
-                        
+
                         signatures.push(MethodSignature {
                             is_async,
                             name: fn_name,
@@ -883,8 +1382,11 @@ impl Parser {
                 }
             }
         }
-        
-        Ok(ProgramNode { intents, statements })
+
+        Ok(ProgramNode {
+            intents,
+            statements,
+        })
     }
 
     pub fn parse_intent(&mut self) -> Result<IntentNode, CompileError> {
@@ -954,7 +1456,9 @@ impl Parser {
             }
             Token::Fn => self.parse_fn_declaration(),
             Token::Async => {
-                if self.position + 1 < self.tokens.len() && self.tokens[self.position + 1].0 == Token::Fn {
+                if self.position + 1 < self.tokens.len()
+                    && self.tokens[self.position + 1].0 == Token::Fn
+                {
                     self.parse_fn_declaration()
                 } else {
                     self.parse_async_block()
@@ -971,7 +1475,9 @@ impl Parser {
                 if self.peek() == &Token::Semicolon {
                     self.next();
                 }
-                Ok(Statement::Expr(Expression::Spawn(Box::new(Statement::Block { statements: body }))))
+                Ok(Statement::Expr(Expression::Spawn(Box::new(
+                    Statement::Block { statements: body },
+                ))))
             }
             Token::Let | Token::Var => {
                 let is_mut = self.next() == Token::Var;
@@ -987,7 +1493,12 @@ impl Parser {
                     initializer = Some(self.parse_expression()?);
                 }
                 self.expect(Token::Semicolon)?;
-                Ok(Statement::VarDecl { is_mutable: is_mut, name, type_annotation, initializer })
+                Ok(Statement::VarDecl {
+                    is_mutable: is_mut,
+                    name,
+                    type_annotation,
+                    initializer,
+                })
             }
             Token::Try => {
                 self.next();
@@ -997,15 +1508,20 @@ impl Parser {
                     try_body.push(self.parse_statement()?);
                 }
                 self.expect(Token::CloseBrace)?;
-                
+
                 // Expect catch
                 let catch_line = self.current_line();
                 match self.next() {
                     Token::Identifier(ref name) if name == "catch" => {}
                     Token::Catch => {}
-                    tok => return Err(CompileError::new(catch_line, format!("Expected 'catch', found {:?}", tok))),
+                    tok => {
+                        return Err(CompileError::new(
+                            catch_line,
+                            format!("Expected 'catch', found {:?}", tok),
+                        ));
+                    }
                 }
-                
+
                 self.expect(Token::OpenParen)?;
                 let catch_var = self.expect_identifier()?;
                 self.expect(Token::CloseParen)?;
@@ -1015,7 +1531,11 @@ impl Parser {
                     catch_body.push(self.parse_statement()?);
                 }
                 self.expect(Token::CloseBrace)?;
-                Ok(Statement::TryCatch { try_body, catch_var, catch_body })
+                Ok(Statement::TryCatch {
+                    try_body,
+                    catch_var,
+                    catch_body,
+                })
             }
             Token::Defer => {
                 self.next();
@@ -1089,7 +1609,12 @@ impl Parser {
                 let count = match self.next() {
                     Token::IntegerLiteral(i) => i.to_string(),
                     Token::Identifier(ident) => ident,
-                    tok => return Err(CompileError::new(self.current_line(), format!("Expected count, found {:?}", tok))),
+                    tok => {
+                        return Err(CompileError::new(
+                            self.current_line(),
+                            format!("Expected count, found {:?}", tok),
+                        ));
+                    }
                 };
                 self.expect(Token::CloseParen)?;
                 self.expect(Token::Semicolon)?;
@@ -1150,7 +1675,10 @@ impl Parser {
                         target_mesh = self.expect_identifier()?;
                     } else if key == "qubits" {
                         self.next(); // Consume brace/bracket
-                        while self.peek() != &Token::CloseParen && self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
+                        while self.peek() != &Token::CloseParen
+                            && self.peek() != &Token::CloseBrace
+                            && self.peek() != &Token::Eof
+                        {
                             if let Token::Identifier(q) = self.peek() {
                                 qubits.push(q.clone());
                                 self.next();
@@ -1169,7 +1697,10 @@ impl Parser {
                 }
                 self.expect(Token::CloseParen)?;
                 self.expect(Token::Semicolon)?;
-                Ok(Statement::QuantumMeshOptimize { target_mesh, qubits })
+                Ok(Statement::QuantumMeshOptimize {
+                    target_mesh,
+                    qubits,
+                })
             }
             Token::Identifier(name) if name == "ManyWorldsPathfind" => {
                 self.next();
@@ -1180,12 +1711,21 @@ impl Parser {
                     let key = self.expect_identifier()?;
                     self.expect(Token::Colon)?;
                     let val = match self.peek().clone() {
-                        Token::IntegerLiteral(n) => { self.next(); n.to_string() }
-                        Token::FloatLiteral(f)   => { self.next(); f.to_string() }
+                        Token::IntegerLiteral(n) => {
+                            self.next();
+                            n.to_string()
+                        }
+                        Token::FloatLiteral(f) => {
+                            self.next();
+                            f.to_string()
+                        }
                         Token::Minus => {
                             self.next();
                             match self.peek().clone() {
-                                Token::IntegerLiteral(n) => { self.next(); format!("-{}", n) }
+                                Token::IntegerLiteral(n) => {
+                                    self.next();
+                                    format!("-{}", n)
+                                }
                                 _ => self.expect_identifier()?,
                             }
                         }
@@ -1202,7 +1742,10 @@ impl Parser {
                 }
                 self.expect(Token::CloseParen)?;
                 self.expect(Token::Semicolon)?;
-                Ok(Statement::ManyWorldsPathfind { path_graph, target_dest })
+                Ok(Statement::ManyWorldsPathfind {
+                    path_graph,
+                    target_dest,
+                })
             }
             Token::Identifier(name) if name == "QuantumSwarmConsensus" => {
                 self.next();
@@ -1213,7 +1756,10 @@ impl Parser {
                     self.expect(Token::Colon)?;
                     if key == "nodes" {
                         self.next(); // Consume brace/paren/bracket
-                        while self.peek() != &Token::CloseParen && self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
+                        while self.peek() != &Token::CloseParen
+                            && self.peek() != &Token::CloseBrace
+                            && self.peek() != &Token::Eof
+                        {
                             if let Token::Identifier(n) = self.peek() {
                                 nodes.push(n.clone());
                                 self.next();
@@ -1239,7 +1785,10 @@ impl Parser {
                 if self.peek() == &Token::Semicolon {
                     self.next();
                 }
-                Ok(Statement::Expr(Expression::Variable(format!("{:?}", action))))
+                Ok(Statement::Expr(Expression::Variable(format!(
+                    "{:?}",
+                    action
+                ))))
             }
             _ => {
                 let expr = self.parse_expression()?;
@@ -1267,23 +1816,23 @@ impl Parser {
     pub fn parse_class(&mut self) -> Result<Statement, CompileError> {
         self.expect(Token::Class)?;
         let name = self.expect_identifier()?;
-        
+
         let mut _extends_trait = None;
         if self.peek() == &Token::Impl {
             self.next();
             _extends_trait = Some(self.expect_identifier()?);
         }
-        
+
         self.expect(Token::OpenBrace)?;
         let mut fields = Vec::new();
         let mut methods = Vec::new();
-        
+
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             // Field/method pub/priv check
             if self.peek() == &Token::Pub || self.peek() == &Token::Priv {
                 self.next();
             }
-            
+
             if self.peek() == &Token::Var || self.peek() == &Token::Let {
                 let _is_mut = self.next() == Token::Var;
                 let field_name = self.expect_identifier()?;
@@ -1294,13 +1843,13 @@ impl Parser {
                     self.next();
                     default_value = Some(self.parse_expression()?);
                 }
-                
+
                 let mut annotations = Vec::new();
                 while self.peek() == &Token::At {
                     annotations.push(self.parse_annotation()?);
                 }
                 self.expect(Token::Semicolon)?;
-                
+
                 fields.push(FieldDefinition {
                     name: field_name,
                     field_type,
@@ -1312,7 +1861,7 @@ impl Parser {
                 let field_name = self.expect_identifier()?;
                 self.expect(Token::Colon)?;
                 let field_type = self.expect_identifier_or_type()?;
-                
+
                 self.expect(Token::OpenParen)?;
                 let mut shape = Vec::new();
                 while self.peek() != &Token::CloseParen && self.peek() != &Token::Eof {
@@ -1320,21 +1869,26 @@ impl Parser {
                         Token::IntegerLiteral(val) => {
                             shape.push(val as usize);
                         }
-                        tok => return Err(CompileError::new(self.current_line(), format!("Expected integer literal in shape, found {:?}", tok))),
+                        tok => {
+                            return Err(CompileError::new(
+                                self.current_line(),
+                                format!("Expected integer literal in shape, found {:?}", tok),
+                            ));
+                        }
                     }
                     if self.peek() == &Token::Comma {
                         self.next();
                     }
                 }
                 self.expect(Token::CloseParen)?;
-                
+
                 let mut default_value = None;
                 if self.peek() == &Token::Equal {
                     self.next();
                     default_value = Some(self.parse_expression()?);
                 }
                 self.expect(Token::Semicolon)?;
-                
+
                 fields.push(FieldDefinition {
                     name: field_name,
                     field_type: format!("{}({:?})", field_type, shape),
@@ -1373,7 +1927,12 @@ impl Parser {
                         Token::Identifier(s) => s,
                         Token::SpatialAnchor => "spatial_anchor".to_string(),
                         Token::DepthMesh => "depth_mesh".to_string(),
-                        tok => return Err(CompileError::new(self.current_line(), format!("Expected key, found {:?}", tok))),
+                        tok => {
+                            return Err(CompileError::new(
+                                self.current_line(),
+                                format!("Expected key, found {:?}", tok),
+                            ));
+                        }
                     };
                     self.expect(Token::Colon)?;
                     let val = self.expect_identifier()?;
@@ -1390,7 +1949,10 @@ impl Parser {
                 self.expect(Token::Semicolon)?;
                 fields.push(FieldDefinition {
                     name: field_name,
-                    field_type: format!("hologram(spatial_anchor: {}, depth_mesh: {})", spatial_anchor, depth_mesh),
+                    field_type: format!(
+                        "hologram(spatial_anchor: {}, depth_mesh: {})",
+                        spatial_anchor, depth_mesh
+                    ),
                     default_value: None,
                     annotations: vec![],
                 });
@@ -1415,20 +1977,20 @@ impl Parser {
                     }
                 }
                 self.expect(Token::CloseParen)?;
-                
+
                 let mut return_type = None;
                 if self.peek() == &Token::Arrow || self.peek() == &Token::ThinArrow {
                     self.next();
                     return_type = Some(self.expect_identifier_or_type()?);
                 }
-                
+
                 self.expect(Token::OpenBrace)?;
                 let mut body = Vec::new();
                 while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
                     body.push(self.parse_statement()?);
                 }
                 self.expect(Token::CloseBrace)?;
-                
+
                 methods.push(MethodDefinition {
                     signature: MethodSignature {
                         is_async,
@@ -1439,12 +2001,15 @@ impl Parser {
                     body,
                 });
             } else {
-                return Err(CompileError::new(self.current_line(), format!("Unexpected token in class body: {:?}", self.peek())));
+                return Err(CompileError::new(
+                    self.current_line(),
+                    format!("Unexpected token in class body: {:?}", self.peek()),
+                ));
             }
         }
-        
+
         self.expect(Token::CloseBrace)?;
-        
+
         Ok(Statement::ClassDef(ClassDefinition {
             name,
             fields,
@@ -1455,30 +2020,33 @@ impl Parser {
     pub fn parse_for_loop(&mut self) -> Result<Statement, CompileError> {
         self.expect(Token::For)?;
         let iterator = self.expect_identifier()?;
-        
+
         let id = self.expect_identifier()?;
         if id != "in" {
-            return Err(CompileError::new(self.current_line(), format!("Expected 'in', found '{}'", id)));
+            return Err(CompileError::new(
+                self.current_line(),
+                format!("Expected 'in', found '{}'", id),
+            ));
         }
-        
+
         let range_start = self.parse_expression()?;
         self.expect(Token::DotDot)?;
         let range_end = self.parse_expression()?;
-        
+
         self.expect(Token::OpenBrace)?;
         let mut body = Vec::new();
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             body.push(self.parse_statement()?);
         }
         self.expect(Token::CloseBrace)?;
-        
+
         Ok(Statement::ForLoop {
             iterator,
             range_start,
             range_end,
             body,
         })
-     }
+    }
 
     pub fn parse_while_loop(&mut self) -> Result<Statement, CompileError> {
         self.expect(Token::While)?;
@@ -1501,7 +2069,7 @@ impl Parser {
             then_branch.push(self.parse_statement()?);
         }
         self.expect(Token::CloseBrace)?;
-        
+
         let mut else_branch = None;
         if self.peek() == &Token::Else {
             self.next(); // Consume 'else'
@@ -1518,32 +2086,33 @@ impl Parser {
                 else_branch = Some(else_body);
             }
         }
-        Ok(Statement::If { condition, then_branch, else_branch })
+        Ok(Statement::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
-     pub fn parse_match(&mut self) -> Result<Expression, CompileError> {
+    pub fn parse_match(&mut self) -> Result<Expression, CompileError> {
         self.expect(Token::Match)?;
         let target = Box::new(self.parse_expression()?);
         self.expect(Token::OpenBrace)?;
         let mut arms = Vec::new();
-        
+
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             let pattern = self.parse_pattern()?;
             self.expect(Token::Arrow)?;
             let body = self.parse_statement()?;
             arms.push(MatchArm { pattern, body });
-            
+
             if self.peek() == &Token::Comma || self.peek() == &Token::Semicolon {
                 self.next();
             }
         }
-        
+
         self.expect(Token::CloseBrace)?;
-        
-        Ok(Expression::Match {
-            target,
-            arms,
-        })
+
+        Ok(Expression::Match { target, arms })
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, CompileError> {
@@ -1554,7 +2123,10 @@ impl Parser {
             Token::BooleanLiteral(b) => Ok(Pattern::Literal(Literal::Boolean(b))),
             Token::Identifier(ref name) if name == "_" => Ok(Pattern::Wildcard),
             Token::Identifier(name) => Ok(Pattern::Variable(name)),
-            tok => Err(CompileError::new(self.current_line(), format!("Expected pattern, found {:?}", tok))),
+            tok => Err(CompileError::new(
+                self.current_line(),
+                format!("Expected pattern, found {:?}", tok),
+            )),
         }
     }
 
@@ -1579,20 +2151,20 @@ impl Parser {
             }
         }
         self.expect(Token::CloseParen)?;
-        
+
         let mut return_type = None;
         if self.peek() == &Token::Arrow || self.peek() == &Token::ThinArrow {
             self.next();
             return_type = Some(self.expect_identifier_or_type()?);
         }
-        
+
         self.expect(Token::OpenBrace)?;
         let mut body = Vec::new();
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             body.push(self.parse_statement()?);
         }
         self.expect(Token::CloseBrace)?;
-        
+
         Ok(Statement::ImplBlock {
             trait_name: None,
             target_name: name,
@@ -1616,16 +2188,18 @@ impl Parser {
             body.push(self.parse_statement()?);
         }
         self.expect(Token::CloseBrace)?;
-        Ok(Statement::Expr(Expression::Spawn(Box::new(Statement::Expr(Expression::Variable("async_block".to_string()))))))
+        Ok(Statement::Expr(Expression::Spawn(Box::new(
+            Statement::Expr(Expression::Variable("async_block".to_string())),
+        ))))
     }
 
     pub fn parse_db_block(&mut self) -> Result<Statement, CompileError> {
         self.expect(Token::Db)?;
         self.expect(Token::OpenBrace)?;
-        
+
         let mut query_tokens = Vec::new();
         let mut open_braces = 1;
-        
+
         while open_braces > 0 && self.peek() != &Token::Eof {
             match self.peek() {
                 Token::OpenBrace => open_braces += 1,
@@ -1652,13 +2226,16 @@ impl Parser {
             query_tokens.push(token_str);
         }
         self.expect(Token::CloseBrace)?;
-        
+
         let query_string = query_tokens.join(" ");
-        
+
         if let Err(e) = DbResolver::validate_query(&query_string) {
-            return Err(CompileError::new(self.current_line(), format!("Database Query Validation Error: {}", e)));
+            return Err(CompileError::new(
+                self.current_line(),
+                format!("Database Query Validation Error: {}", e),
+            ));
         }
-        
+
         Ok(Statement::DbQuery {
             query_string,
             mappings: vec![],
@@ -1670,7 +2247,7 @@ impl Parser {
         let name = self.expect_identifier()?;
         self.expect(Token::Colon)?;
         let dtype = self.expect_identifier_or_type()?;
-        
+
         self.expect(Token::OpenParen)?;
         let mut shape = Vec::new();
         while self.peek() != &Token::CloseParen && self.peek() != &Token::Eof {
@@ -1678,20 +2255,25 @@ impl Parser {
                 Token::IntegerLiteral(val) => {
                     shape.push(val as usize);
                 }
-                tok => return Err(CompileError::new(self.current_line(), format!("Expected integer literal, found {:?}", tok))),
+                tok => {
+                    return Err(CompileError::new(
+                        self.current_line(),
+                        format!("Expected integer literal, found {:?}", tok),
+                    ));
+                }
             }
             if self.peek() == &Token::Comma {
                 self.next();
             }
         }
         self.expect(Token::CloseParen)?;
-        
+
         let mut initializer = None;
         if self.peek() == &Token::Equal {
             self.next();
             initializer = Some(self.parse_expression()?);
         }
-        
+
         self.expect(Token::Semicolon)?;
         Ok(Statement::TensorDecl {
             name,
@@ -1705,7 +2287,7 @@ impl Parser {
         self.expect(Token::Model)?;
         let name = self.expect_identifier()?;
         self.expect(Token::OpenBrace)?;
-        
+
         let mut layers = Vec::new();
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             let layer_type = self.expect_identifier()?;
@@ -1769,25 +2351,35 @@ impl Parser {
         self.expect(Token::OpenParen)?;
         let source = match self.next() {
             Token::StringLiteral(s) => s,
-            tok => return Err(CompileError::new(self.current_line(), format!("Expected string literal source, found {:?}", tok))),
+            tok => {
+                return Err(CompileError::new(
+                    self.current_line(),
+                    format!("Expected string literal source, found {:?}", tok),
+                ));
+            }
         };
         self.expect(Token::CloseParen)?;
         self.expect(Token::OpenBrace)?;
-        
+
         let mut mappings = Vec::new();
         while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
             self.expect(Token::ThoughtIntent)?;
             self.expect(Token::OpenParen)?;
             let thought = match self.next() {
                 Token::StringLiteral(s) => s,
-                tok => return Err(CompileError::new(self.current_line(), format!("Expected string literal thought, found {:?}", tok))),
+                tok => {
+                    return Err(CompileError::new(
+                        self.current_line(),
+                        format!("Expected string literal thought, found {:?}", tok),
+                    ));
+                }
             };
             self.expect(Token::CloseParen)?;
             self.expect(Token::Arrow)?;
-            
+
             let body = self.parse_statement()?;
             mappings.push((thought, format!("{:?}", body)));
-            
+
             if self.peek() == &Token::Comma || self.peek() == &Token::Semicolon {
                 self.next();
             }
@@ -1800,17 +2392,22 @@ impl Parser {
         self.expect(Token::Hologram)?;
         let name = self.expect_identifier()?;
         self.expect(Token::OpenParen)?;
-        
+
         let mut spatial_anchor = String::new();
         let mut depth_mesh = String::new();
-        
+
         while self.peek() != &Token::CloseParen && self.peek() != &Token::Eof {
             let key_tok = self.next();
             let key = match key_tok {
                 Token::Identifier(s) => s,
                 Token::SpatialAnchor => "spatial_anchor".to_string(),
                 Token::DepthMesh => "depth_mesh".to_string(),
-                tok => return Err(CompileError::new(self.current_line(), format!("Expected key, found {:?}", tok))),
+                tok => {
+                    return Err(CompileError::new(
+                        self.current_line(),
+                        format!("Expected key, found {:?}", tok),
+                    ));
+                }
             };
             self.expect(Token::Colon)?;
             let val = self.expect_identifier()?;
@@ -1825,7 +2422,11 @@ impl Parser {
         }
         self.expect(Token::CloseParen)?;
         self.expect(Token::Semicolon)?;
-        Ok(Statement::HologramDecl { name, spatial_anchor, depth_mesh })
+        Ok(Statement::HologramDecl {
+            name,
+            spatial_anchor,
+            depth_mesh,
+        })
     }
 
     fn parse_field_definition(&mut self) -> Result<FieldDefinition, CompileError> {
@@ -1978,13 +2579,70 @@ impl Parser {
         let line = self.current_line();
         let tok = self.peek().clone();
         match tok {
-            Token::Substring | Token::Replace | Token::Trim | Token::Split | Token::Join | Token::ToUpper | Token::ToLower | Token::Contains | Token::StartsWith | Token::EndsWith | Token::RegexMatch | Token::CharAt |
-            Token::Round | Token::Sin | Token::Cos | Token::Tan | Token::Log | Token::Random | Token::Min | Token::Max | Token::Clamp | Token::Factorial | Token::Pi | Token::Infinity |
-            Token::OpenFile | Token::ReadLine | Token::ReadBytes | Token::WriteBytes | Token::AppendFile | Token::CloseFile | Token::FileExists | Token::DeleteFile | Token::CreateDir | Token::ListDir |
-            Token::Now | Token::Timestamp | Token::FormatDate | Token::SleepMs | Token::Duration |
-            Token::BitAndKw | Token::BitOrKw | Token::BitXorKw | Token::BitShiftLeft | Token::BitShiftRight | Token::ToHex | Token::ToBin | Token::ToStringKw | Token::ToInt | Token::ToFloat |
-            Token::Push | Token::Pop | Token::Shift | Token::Unshift | Token::SortBy | Token::FilterMap | Token::Reduce | Token::ContainsKey | Token::Keys | Token::Values |
-            Token::Sqrt | Token::Abs | Token::Ceil | Token::Floor | Token::Pow => {
+            Token::Substring
+            | Token::Replace
+            | Token::Trim
+            | Token::Split
+            | Token::Join
+            | Token::ToUpper
+            | Token::ToLower
+            | Token::Contains
+            | Token::StartsWith
+            | Token::EndsWith
+            | Token::RegexMatch
+            | Token::CharAt
+            | Token::Round
+            | Token::Sin
+            | Token::Cos
+            | Token::Tan
+            | Token::Log
+            | Token::Random
+            | Token::Min
+            | Token::Max
+            | Token::Clamp
+            | Token::Factorial
+            | Token::Pi
+            | Token::Infinity
+            | Token::OpenFile
+            | Token::ReadLine
+            | Token::ReadBytes
+            | Token::WriteBytes
+            | Token::AppendFile
+            | Token::CloseFile
+            | Token::FileExists
+            | Token::DeleteFile
+            | Token::CreateDir
+            | Token::ListDir
+            | Token::Now
+            | Token::Timestamp
+            | Token::FormatDate
+            | Token::SleepMs
+            | Token::Duration
+            | Token::BitAndKw
+            | Token::BitOrKw
+            | Token::BitXorKw
+            | Token::BitShiftLeft
+            | Token::BitShiftRight
+            | Token::ToHex
+            | Token::ToBin
+            | Token::ToStringKw
+            | Token::ToInt
+            | Token::ToFloat
+            | Token::Push
+            | Token::Pop
+            | Token::Shift
+            | Token::Unshift
+            | Token::SortBy
+            | Token::FilterMap
+            | Token::Reduce
+            | Token::ContainsKey
+            | Token::Keys
+            | Token::Values
+            | Token::Sqrt
+            | Token::Abs
+            | Token::Ceil
+            | Token::Floor
+            | Token::Pow => {
                 self.next(); // Consume keyword
                 let name = format!("{:?}", tok);
                 let mut args = Vec::new();
@@ -2016,7 +2674,7 @@ impl Parser {
                     line,
                     format!("Expected primary expression, found {:?}", tok),
                 )),
-            }
+            },
         }
     }
 
@@ -2168,23 +2826,37 @@ pub struct MacroExpander {
 impl MacroExpander {
     pub fn new() -> Self {
         let mut map = HashMap::new();
-        map.insert("quantum_loop".to_string(), expand_quantum_loop as MacroTransform);
+        map.insert(
+            "quantum_loop".to_string(),
+            expand_quantum_loop as MacroTransform,
+        );
         Self {
             registered_macros: MacroRegistry { map },
         }
     }
 
     pub fn expand_intent(&self, mut intent: IntentNode) -> IntentNode {
-        println!("[Macro Engine] Expanding macros for intent '{}'...", intent.name);
-        intent.constraints = intent.constraints.into_iter().map(|mut c| {
-            c.expression = self.expand_expression(c.expression);
-            c
-        }).collect();
+        println!(
+            "[Macro Engine] Expanding macros for intent '{}'...",
+            intent.name
+        );
+        intent.constraints = intent
+            .constraints
+            .into_iter()
+            .map(|mut c| {
+                c.expression = self.expand_expression(c.expression);
+                c
+            })
+            .collect();
 
-        intent.fields = intent.fields.into_iter().map(|mut f| {
-            f.default_value = f.default_value.map(|e| self.expand_expression(e));
-            f
-        }).collect();
+        intent.fields = intent
+            .fields
+            .into_iter()
+            .map(|mut f| {
+                f.default_value = f.default_value.map(|e| self.expand_expression(e));
+                f
+            })
+            .collect();
 
         intent.ui_root = intent.ui_root.map(|ui| self.expand_ui_node(ui));
         intent
@@ -2192,24 +2864,38 @@ impl MacroExpander {
 
     pub fn expand_ui_node(&self, ui: UiNode) -> UiNode {
         match ui {
-            UiNode::Element { name, mut properties, children, handlers } => {
+            UiNode::Element {
+                name,
+                mut properties,
+                children,
+                handlers,
+            } => {
                 for (_, val) in properties.iter_mut() {
                     *val = self.expand_expression(val.clone());
                 }
                 UiNode::Element {
                     name,
                     properties,
-                    children: children.into_iter().map(|c| self.expand_ui_node(c)).collect(),
+                    children: children
+                        .into_iter()
+                        .map(|c| self.expand_ui_node(c))
+                        .collect(),
                     handlers,
                 }
             }
-            UiNode::Conditional { condition, then_branch, else_branch } => {
-                UiNode::Conditional {
-                    condition: self.expand_expression(condition),
-                    then_branch: then_branch.into_iter().map(|c| self.expand_ui_node(c)).collect(),
-                    else_branch: else_branch.map(|branch| branch.into_iter().map(|c| self.expand_ui_node(c)).collect()),
-                }
-            }
+            UiNode::Conditional {
+                condition,
+                then_branch,
+                else_branch,
+            } => UiNode::Conditional {
+                condition: self.expand_expression(condition),
+                then_branch: then_branch
+                    .into_iter()
+                    .map(|c| self.expand_ui_node(c))
+                    .collect(),
+                else_branch: else_branch
+                    .map(|branch| branch.into_iter().map(|c| self.expand_ui_node(c)).collect()),
+            },
         }
     }
 
@@ -2224,17 +2910,17 @@ impl MacroExpander {
                     Expression::MethodCall(
                         Box::new(self.expand_expression(*target)),
                         method,
-                        args.into_iter().map(|arg| self.expand_expression(arg)).collect(),
+                        args.into_iter()
+                            .map(|arg| self.expand_expression(arg))
+                            .collect(),
                     )
                 }
             }
-            Expression::BinaryOp(lhs, op, rhs) => {
-                Expression::BinaryOp(
-                    Box::new(self.expand_expression(*lhs)),
-                    op,
-                    Box::new(self.expand_expression(*rhs)),
-                )
-            }
+            Expression::BinaryOp(lhs, op, rhs) => Expression::BinaryOp(
+                Box::new(self.expand_expression(*lhs)),
+                op,
+                Box::new(self.expand_expression(*rhs)),
+            ),
             Expression::MemberAccess(target, field) => {
                 Expression::MemberAccess(Box::new(self.expand_expression(*target)), field)
             }
@@ -2245,7 +2931,9 @@ impl MacroExpander {
 
 fn expand_quantum_loop(expr: &Expression, _registry: &mut MacroRegistry) -> Expression {
     if let Expression::MethodCall(target, _, _) = expr {
-        println!("[Macro Engine] Rewriting 'quantum_loop' AST Node into standard parallel vector calls.");
+        println!(
+            "[Macro Engine] Rewriting 'quantum_loop' AST Node into standard parallel vector calls."
+        );
         *target.clone()
     } else {
         expr.clone()
@@ -2293,9 +2981,7 @@ impl SemanticAnalyzer {
                 Literal::Boolean(_) => Type::Boolean,
                 Literal::Float(_) => Type::Float,
             },
-            Expression::Variable(name) => {
-                self.symbol_table.get(name).cloned().unwrap_or(Type::Any)
-            }
+            Expression::Variable(name) => self.symbol_table.get(name).cloned().unwrap_or(Type::Any),
             Expression::BinaryOp(lhs, _, rhs) => {
                 let lhs_ty = self.resolve_type(lhs);
                 let rhs_ty = self.resolve_type(rhs);
@@ -2304,9 +2990,7 @@ impl SemanticAnalyzer {
             Expression::MemberAccess(target, field) => {
                 let target_ty = self.resolve_type(target);
                 match target_ty {
-                    Type::Struct(fields) => {
-                        fields.get(field).cloned().unwrap_or(Type::Any)
-                    }
+                    Type::Struct(fields) => fields.get(field).cloned().unwrap_or(Type::Any),
                     _ => {
                         // Inferred Polymorphism: degrade to dynamic proxy
                         Type::Proxy(Arc::new(ProxyType {
@@ -2391,7 +3075,9 @@ impl JitCompiler {
         println!("[JIT Compiler] Compiling mutation: {} = {:?}", target, expr);
         self.log_binary_ops(expr);
         println!("  -> Generated raw CPU instructions at executable address: 0x7FFA89B0");
-        NativeFunction { address: 0x7FFA89B0 }
+        NativeFunction {
+            address: 0x7FFA89B0,
+        }
     }
 
     fn log_binary_ops(&self, expr: &Expression) {
@@ -2413,14 +3099,20 @@ impl JitCompiler {
                     BinaryOperator::GreaterEqual => "CMP / JGE",
                     BinaryOperator::Equal => "MOV",
                 };
-                println!("[JIT Lowering] Lowering operator {:?} to CPU instruction: {}", op, cpu_instr);
+                println!(
+                    "[JIT Lowering] Lowering operator {:?} to CPU instruction: {}",
+                    op, cpu_instr
+                );
             }
             _ => {}
         }
     }
 
     pub fn compile_builtin_function_call(&self, name: &str, args: &[Expression]) {
-        println!("[JIT Compiler] Compiling zero-allocation BuiltinFunctionCall: {}({:?})", name, args);
+        println!(
+            "[JIT Compiler] Compiling zero-allocation BuiltinFunctionCall: {}({:?})",
+            name, args
+        );
         println!("  -> Directly lowered to optimized Rust runtime dispatcher function pointer.");
     }
 }
@@ -2431,20 +3123,27 @@ impl JitCompiler {
 
 #[derive(Debug, Clone)]
 pub struct GpuColor {
-    pub r: f32, pub g: f32, pub b: f32, pub a: f32,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
 }
 
 #[derive(Debug, Clone)]
 pub enum GpuDrawCommand {
     DrawRect {
-        x: f32, y: f32, width: f32, height: f32,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
         color: GpuColor,
         border_radius: f32,
     },
     DrawText {
         text: String,
         font_size: f32,
-        x: f32, y: f32,
+        x: f32,
+        y: f32,
         color: GpuColor,
     },
 }
@@ -2455,7 +3154,9 @@ pub struct GpuCommandBuffer {
 
 impl GpuCommandBuffer {
     pub fn new() -> Self {
-        Self { commands: Vec::with_capacity(256) }
+        Self {
+            commands: Vec::with_capacity(256),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -2472,20 +3173,41 @@ impl GpuRenderer {
 
     pub fn render_ui_tree(&self, ui: &UiNode, cmd_buf: &mut GpuCommandBuffer) {
         match ui {
-            UiNode::Element { name, properties: _, children, handlers: _ } => {
+            UiNode::Element {
+                name,
+                properties: _,
+                children,
+                handlers: _,
+            } => {
                 println!("[GPU Renderer] Traversed Layout Node: {}", name);
                 match name.as_str() {
                     "VStack" => {
                         cmd_buf.commands.push(GpuDrawCommand::DrawRect {
-                            x: 0.0, y: 0.0, width: 360.0, height: 640.0,
-                            color: GpuColor { r: 0.12, g: 0.12, b: 0.14, a: 1.0 },
+                            x: 0.0,
+                            y: 0.0,
+                            width: 360.0,
+                            height: 640.0,
+                            color: GpuColor {
+                                r: 0.12,
+                                g: 0.12,
+                                b: 0.14,
+                                a: 1.0,
+                            },
                             border_radius: 0.0,
                         });
                     }
                     "Image" => {
                         cmd_buf.commands.push(GpuDrawCommand::DrawRect {
-                            x: 20.0, y: 20.0, width: 80.0, height: 80.0,
-                            color: GpuColor { r: 0.8, g: 0.3, b: 0.3, a: 1.0 },
+                            x: 20.0,
+                            y: 20.0,
+                            width: 80.0,
+                            height: 80.0,
+                            color: GpuColor {
+                                r: 0.8,
+                                g: 0.3,
+                                b: 0.3,
+                                a: 1.0,
+                            },
                             border_radius: 40.0,
                         });
                     }
@@ -2493,8 +3215,14 @@ impl GpuRenderer {
                         cmd_buf.commands.push(GpuDrawCommand::DrawText {
                             text: "UserProfile".to_string(),
                             font_size: 18.0,
-                            x: 120.0, y: 50.0,
-                            color: GpuColor { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
+                            x: 120.0,
+                            y: 50.0,
+                            color: GpuColor {
+                                r: 1.0,
+                                g: 1.0,
+                                b: 1.0,
+                                a: 1.0,
+                            },
                         });
                     }
                     _ => {}
@@ -2503,7 +3231,11 @@ impl GpuRenderer {
                     self.render_ui_tree(child, cmd_buf);
                 }
             }
-            UiNode::Conditional { condition: _, then_branch, else_branch } => {
+            UiNode::Conditional {
+                condition: _,
+                then_branch,
+                else_branch,
+            } => {
                 // If isPremium is true (we simulate drawing the badge)
                 println!("[GPU Renderer] Evaluating UI Conditional: drawing premium Badge.");
                 for node in then_branch {
@@ -2519,14 +3251,29 @@ impl GpuRenderer {
     }
 
     pub fn submit_to_gpu(&self, cmd_buf: &GpuCommandBuffer) {
-        println!("[GPU Queue] Submitting {} draw commands to GPU Command Buffer...", cmd_buf.commands.len());
+        println!(
+            "[GPU Queue] Submitting {} draw commands to GPU Command Buffer...",
+            cmd_buf.commands.len()
+        );
         for cmd in &cmd_buf.commands {
             match cmd {
-                GpuDrawCommand::DrawRect { x, y, width, height, .. } => {
-                    println!("  -> Render Quad: Bounds [x: {}, y: {}] size [w: {}, h: {}]", x, y, width, height);
+                GpuDrawCommand::DrawRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                    ..
+                } => {
+                    println!(
+                        "  -> Render Quad: Bounds [x: {}, y: {}] size [w: {}, h: {}]",
+                        x, y, width, height
+                    );
                 }
                 GpuDrawCommand::DrawText { text, x, y, .. } => {
-                    println!("  -> Render Glyphs: '{}' at location [x: {}, y: {}]", text, x, y);
+                    println!(
+                        "  -> Render Glyphs: '{}' at location [x: {}, y: {}]",
+                        text, x, y
+                    );
                 }
             }
         }
@@ -2574,7 +3321,10 @@ impl AetherRuntime {
 
             // 2. Dispatch events
             if let Some(ref act) = hardware_input.action {
-                println!("  [Chronos Loop] Action event '{}' dispatched to event router.", act);
+                println!(
+                    "  [Chronos Loop] Action event '{}' dispatched to event router.",
+                    act
+                );
             }
 
             // 3. Render frame (Immediate Mode - no DOM retained)
@@ -2613,19 +3363,19 @@ impl AetherManifest {
         let mut version = String::new();
         let mut author = String::new();
         let mut dependencies = HashMap::new();
-        
+
         let mut current_section = "";
-        
+
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
             if line.starts_with('[') && line.ends_with(']') {
-                current_section = &line[1..line.len()-1];
+                current_section = &line[1..line.len() - 1];
                 continue;
             }
-            
+
             let parts: Vec<&str> = line.splitn(2, '=').collect();
             if parts.len() == 2 {
                 let key = parts[0].trim();
@@ -2644,8 +3394,13 @@ impl AetherManifest {
                 }
             }
         }
-        
-        Ok(Self { name, version, author, dependencies })
+
+        Ok(Self {
+            name,
+            version,
+            author,
+            dependencies,
+        })
     }
 }
 
@@ -2663,33 +3418,44 @@ pub struct DependencyResolver {
 impl DependencyResolver {
     pub fn new() -> Self {
         let mut registry = HashMap::new();
-        
+
         // Mock registry packages
-        registry.insert("ui_toolkit".to_string(), vec![
-            DependencyNode {
+        registry.insert(
+            "ui_toolkit".to_string(),
+            vec![DependencyNode {
                 name: "ui_toolkit".to_string(),
                 version: "1.2.0".to_string(),
                 dependencies: vec!["core_graphics".to_string()],
-            }
-        ]);
-        registry.insert("core_graphics".to_string(), vec![
-            DependencyNode {
+            }],
+        );
+        registry.insert(
+            "core_graphics".to_string(),
+            vec![DependencyNode {
                 name: "core_graphics".to_string(),
                 version: "0.8.5".to_string(),
                 dependencies: Vec::new(),
-            }
-        ]);
+            }],
+        );
 
         Self { registry }
     }
 
-    pub fn resolve(&self, root_deps: &HashMap<String, String>) -> Result<Vec<DependencyNode>, String> {
+    pub fn resolve(
+        &self,
+        root_deps: &HashMap<String, String>,
+    ) -> Result<Vec<DependencyNode>, String> {
         let mut resolved = Vec::new();
         let mut visiting = HashSet::new();
         let mut visited = HashSet::new();
 
         for (pkg_name, version_req) in root_deps {
-            self.dfs_resolve(pkg_name, version_req, &mut visiting, &mut visited, &mut resolved)?;
+            self.dfs_resolve(
+                pkg_name,
+                version_req,
+                &mut visiting,
+                &mut visited,
+                &mut resolved,
+            )?;
         }
 
         Ok(resolved)
@@ -2710,11 +3476,16 @@ impl DependencyResolver {
         if !visited.contains(name) {
             visiting.insert(name.to_string());
 
-            let versions = self.registry.get(name)
+            let versions = self
+                .registry
+                .get(name)
                 .ok_or_else(|| format!("Package not found in registry: {}", name))?;
-            
-            let node = versions.iter()
-                .find(|n| version_req == "*" || n.version.starts_with(version_req.trim_start_matches('^')))
+
+            let node = versions
+                .iter()
+                .find(|n| {
+                    version_req == "*" || n.version.starts_with(version_req.trim_start_matches('^'))
+                })
                 .ok_or_else(|| format!("Could not resolve package: {} ({})", name, version_req))?
                 .clone();
 
@@ -2742,19 +3513,22 @@ pub fn init_project(name: &str) -> Result<(), String> {
     if root.exists() {
         return Err(format!("Directory '{}' already exists", name));
     }
-    
+
     fs::create_dir_all(root.join("src")).map_err(|e| e.to_string())?;
-    
-    let default_toml = format!(r##"[package]
+
+    let default_toml = format!(
+        r##"[package]
 name = "{}"
 version = "0.1.0"
 author = "Developer"
 
 [dependencies]
-"##, name);
-    
+"##,
+        name
+    );
+
     fs::write(root.join("Aether.toml"), default_toml).map_err(|e| e.to_string())?;
-    
+
     let default_source = r##"
         trait Syncable {
             async fn sync_with_mesh() -> void;
@@ -2858,9 +3632,9 @@ author = "Developer"
             }
         }
     "##;
-    
+
     fs::write(root.join("src/main.aether"), default_source).map_err(|e| e.to_string())?;
-    
+
     // Generate .gitignore
     let gitignore_content = "/target/\nAether.toml.lock\n";
     fs::write(root.join(".gitignore"), gitignore_content).map_err(|e| e.to_string())?;
@@ -2873,30 +3647,42 @@ author = "Developer"
         .stderr(std::process::Stdio::null())
         .status();
 
-    println!("[Toolchain] Created AETHER package '{}' successfully.", name);
+    println!(
+        "[Toolchain] Created AETHER package '{}' successfully.",
+        name
+    );
     Ok(())
 }
 
 pub fn add_dependency(dir: &Path, pkg_name: &str) -> Result<(), String> {
     let toml_path = dir.join("Aether.toml");
     let mut content = fs::read_to_string(&toml_path).map_err(|e| e.to_string())?;
-    
+
     if content.contains(&format!("\n{}", pkg_name)) {
-        println!("[Toolchain] Dependency '{}' is already in Aether.toml.", pkg_name);
+        println!(
+            "[Toolchain] Dependency '{}' is already in Aether.toml.",
+            pkg_name
+        );
         return Ok(());
     }
-    
+
     if !content.contains("[dependencies]") {
         content.push_str("\n[dependencies]\n");
     }
-    
+
     content.push_str(&format!("{} = \"*\"\n", pkg_name));
     fs::write(&toml_path, content).map_err(|e| e.to_string())?;
     println!("[Toolchain] Added dependency '{}' to manifest.", pkg_name);
     Ok(())
 }
 
-pub fn scan_expression_builtins(expr: &Expression, qc: &QuantumCompiler, nsc: &NeuralSpatialCompiler, msc: &MultiverseSwarmCompiler, jit: &JitCompiler) {
+pub fn scan_expression_builtins(
+    expr: &Expression,
+    qc: &QuantumCompiler,
+    nsc: &NeuralSpatialCompiler,
+    msc: &MultiverseSwarmCompiler,
+    jit: &JitCompiler,
+) {
     match expr {
         Expression::BuiltinFunctionCall { name, args } => {
             jit.compile_builtin_function_call(name, args);
@@ -2919,7 +3705,10 @@ pub fn scan_expression_builtins(expr: &Expression, qc: &QuantumCompiler, nsc: &N
                 BinaryOperator::GreaterEqual => "CMP / JGE",
                 BinaryOperator::Equal => "MOV",
             };
-            println!("[JIT Lowering] Lowering operator {:?} to CPU instruction: {}", op, cpu_instr);
+            println!(
+                "[JIT Lowering] Lowering operator {:?} to CPU instruction: {}",
+                op, cpu_instr
+            );
             scan_expression_builtins(lhs, qc, nsc, msc, jit);
             scan_expression_builtins(rhs, qc, nsc, msc, jit);
         }
@@ -2945,7 +3734,13 @@ pub fn scan_expression_builtins(expr: &Expression, qc: &QuantumCompiler, nsc: &N
     }
 }
 
-pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc: &NeuralSpatialCompiler, msc: &MultiverseSwarmCompiler, jit: &JitCompiler) {
+pub fn scan_futuristic_statements(
+    stmts: &[Statement],
+    qc: &QuantumCompiler,
+    nsc: &NeuralSpatialCompiler,
+    msc: &MultiverseSwarmCompiler,
+    jit: &JitCompiler,
+) {
     for s in stmts {
         match s {
             Statement::Expr(expr) => {
@@ -2955,7 +3750,10 @@ pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc
                     scan_expression_builtins(expr, qc, nsc, msc, jit);
                 }
             }
-            Statement::VarDecl { initializer: Some(expr), .. } => {
+            Statement::VarDecl {
+                initializer: Some(expr),
+                ..
+            } => {
                 scan_expression_builtins(expr, qc, nsc, msc, jit);
             }
             Statement::QubitDecl { name } => {
@@ -2970,10 +3768,17 @@ pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc
             Statement::CortexBind { source, mappings } => {
                 nsc.compile_cortex_bind(source, mappings);
             }
-            Statement::HologramDecl { name, spatial_anchor, depth_mesh } => {
+            Statement::HologramDecl {
+                name,
+                spatial_anchor,
+                depth_mesh,
+            } => {
                 nsc.compile_hologram(name, spatial_anchor, depth_mesh);
             }
-            Statement::QuantumMeshOptimize { target_mesh, qubits } => {
+            Statement::QuantumMeshOptimize {
+                target_mesh,
+                qubits,
+            } => {
                 nsc.compile_quantum_mesh_optimize(target_mesh, qubits);
             }
             Statement::BranchReality { body } => {
@@ -2996,7 +3801,10 @@ pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc
             Statement::VonNeumannReplicate { target } => {
                 msc.compile_von_neumann_replicate(target);
             }
-            Statement::ManyWorldsPathfind { path_graph, target_dest } => {
+            Statement::ManyWorldsPathfind {
+                path_graph,
+                target_dest,
+            } => {
                 msc.compile_many_worlds_pathfind(path_graph, target_dest);
             }
             Statement::QuantumSwarmConsensus { nodes } => {
@@ -3011,13 +3819,21 @@ pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc
             Statement::WhileLoop { body, .. } => {
                 scan_futuristic_statements(body, qc, nsc, msc, jit);
             }
-            Statement::If { then_branch, else_branch, .. } => {
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 scan_futuristic_statements(then_branch, qc, nsc, msc, jit);
                 if let Some(body) = else_branch {
                     scan_futuristic_statements(body, qc, nsc, msc, jit);
                 }
             }
-            Statement::TryCatch { try_body, catch_body, .. } => {
+            Statement::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
                 scan_futuristic_statements(try_body, qc, nsc, msc, jit);
                 scan_futuristic_statements(catch_body, qc, nsc, msc, jit);
             }
@@ -3032,36 +3848,57 @@ pub fn scan_futuristic_statements(stmts: &[Statement], qc: &QuantumCompiler, nsc
 pub fn build_project(dir: &Path) -> Result<IntentNode, String> {
     println!("[Toolchain] Reading Aether.toml...");
     let toml_path = dir.join("Aether.toml");
-    let manifest_content = fs::read_to_string(&toml_path).map_err(|e| format!("Could not read Aether.toml: {}", e))?;
+    let manifest_content =
+        fs::read_to_string(&toml_path).map_err(|e| format!("Could not read Aether.toml: {}", e))?;
     let manifest = AetherManifest::parse(&manifest_content)?;
-    
-    println!("[Toolchain] Resolving dependencies for package '{}'...", manifest.name);
+
+    println!(
+        "[Toolchain] Resolving dependencies for package '{}'...",
+        manifest.name
+    );
     let resolver = DependencyResolver::new();
     let resolved_deps = resolver.resolve(&manifest.dependencies)?;
     for dep in resolved_deps {
-        println!("  -> Fetched package from Aether Registry: {} ({})", dep.name, dep.version);
+        println!(
+            "  -> Fetched package from Aether Registry: {} ({})",
+            dep.name, dep.version
+        );
     }
-    
+
     let source_path = dir.join("src/main.aether");
-    let source_code = fs::read_to_string(&source_path).map_err(|e| format!("Could not read source file main.aether: {}", e))?;
-    
-    println!("[Toolchain] Compiling source file '{}'...", source_path.display());
+    let source_code = fs::read_to_string(&source_path)
+        .map_err(|e| format!("Could not read source file main.aether: {}", e))?;
+
+    println!(
+        "[Toolchain] Compiling source file '{}'...",
+        source_path.display()
+    );
     let mut lexer = Lexer::new(&source_code);
-    let tokens = lexer.tokenize().map_err(|e| format!("Lexer Error (line {}): {}", e.line, e.message))?;
+    let tokens = lexer
+        .tokenize()
+        .map_err(|e| format!("Lexer Error (line {}): {}", e.line, e.message))?;
     let mut parser = Parser::new(tokens);
-    let program = parser.parse_program().map_err(|e| format!("Parser Error (line {}): {}", e.line, e.message))?;
-    let ast = program.intents.first().cloned().ok_or_else(|| "No intent node found in AETHER source code".to_string())?;
-    
+    let program = parser
+        .parse_program()
+        .map_err(|e| format!("Parser Error (line {}): {}", e.line, e.message))?;
+    let ast = program
+        .intents
+        .first()
+        .cloned()
+        .ok_or_else(|| "No intent node found in AETHER source code".to_string())?;
+
     // Phase 11 GPU Tensor, Phase 12 Quantum JIT, Phase 13 BCI/Spatial, Phase 14 Multiverse/Swarm & Phase 15 Builtins Integration
     let lowerer = TensorLowerer::new();
     let quantum_compiler = QuantumCompiler::new();
     let neural_spatial_compiler = NeuralSpatialCompiler::new();
     let multiverse_swarm_compiler = MultiverseSwarmCompiler::new();
     let jit = JitCompiler::new();
-    
+
     for stmt in &program.statements {
         match stmt {
-            Statement::TensorDecl { name, dtype, shape, .. } => {
+            Statement::TensorDecl {
+                name, dtype, shape, ..
+            } => {
                 lowerer.lower_tensor_decl(name, dtype, shape);
             }
             Statement::ModelDef { name, layers } => {
@@ -3069,31 +3906,47 @@ pub fn build_project(dir: &Path) -> Result<IntentNode, String> {
             }
             Statement::ClassDef(class_def) => {
                 for method in &class_def.methods {
-                    scan_futuristic_statements(&method.body, &quantum_compiler, &neural_spatial_compiler, &multiverse_swarm_compiler, &jit);
+                    scan_futuristic_statements(
+                        &method.body,
+                        &quantum_compiler,
+                        &neural_spatial_compiler,
+                        &multiverse_swarm_compiler,
+                        &jit,
+                    );
                 }
             }
             Statement::ImplBlock { methods, .. } => {
                 for method in methods {
-                    scan_futuristic_statements(&method.body, &quantum_compiler, &neural_spatial_compiler, &multiverse_swarm_compiler, &jit);
+                    scan_futuristic_statements(
+                        &method.body,
+                        &quantum_compiler,
+                        &neural_spatial_compiler,
+                        &multiverse_swarm_compiler,
+                        &jit,
+                    );
                 }
             }
             _ => {}
         }
     }
-    
+
     println!("[Toolchain] Running Macro Rewriter...");
     let expander = MacroExpander::new();
     let expanded_ast = expander.expand_intent(ast);
-    
+
     println!("[Toolchain] Running Semantic Analyzer & Type Coercer...");
     let mut analyzer = SemanticAnalyzer::new();
-    analyzer.symbol_table.insert("username".to_string(), Type::String);
-    analyzer.symbol_table.insert("bio".to_string(), Type::String);
-    
+    analyzer
+        .symbol_table
+        .insert("username".to_string(), Type::String);
+    analyzer
+        .symbol_table
+        .insert("bio".to_string(), Type::String);
+
     println!("[Toolchain] Compiling state mutations to JIT machine code...");
     let jit = JitCompiler::new();
     let _ = jit.compile_mutation("isPremium", &Expression::Literal(Literal::Boolean(true)));
-    
+
     println!("[Toolchain] Build compilation pipeline completed successfully.");
     Ok(expanded_ast)
 }
@@ -3147,7 +4000,10 @@ impl AetherLsp {
             println!("  Go-To-Definition: resolved symbol 'UserProfile' to target line 2.");
         } else {
             for diag in diagnostics {
-                println!("  \x1b[31m[ERROR]\x1b[0m Line {}: {}", diag.line, diag.message);
+                println!(
+                    "  \x1b[31m[ERROR]\x1b[0m Line {}: {}",
+                    diag.line, diag.message
+                );
             }
         }
     }
@@ -3165,11 +4021,11 @@ impl TestRunner {
         println!("--- Running AETHER Built-in Test Suite ---");
         println!("============================================================");
         println!("Running test: 'test_doc_manager_invariants'...");
-        
+
         for c in &node.constraints {
             println!("  Evaluating AST Safety Invariant: {:?}", c.expression);
         }
-        
+
         println!("  \x1b[32m[PASS]\x1b[0m Assertion #1: docName.length <= 160");
         println!("\nTest Result: \x1b[32mPASSED\x1b[0m. 1 assertion evaluated successfully.");
     }
@@ -3178,12 +4034,12 @@ impl TestRunner {
         println!("\n============================================================");
         println!("--- Running AETHER Recursive Test Runner ---");
         println!("============================================================");
-        
+
         let mut success_count = 0;
         let mut total_files = 0;
-        
+
         self.scan_and_test_dir(path, &mut success_count, &mut total_files)?;
-        
+
         println!("\nRecursive Test Execution Completed.");
         println!("  Total Files Tested: {}", total_files);
         println!("  Total Successful Assertions: {}", success_count);
@@ -3191,7 +4047,12 @@ impl TestRunner {
         Ok(())
     }
 
-    fn scan_and_test_dir(&self, dir: &Path, success_count: &mut usize, total_files: &mut usize) -> Result<(), String> {
+    fn scan_and_test_dir(
+        &self,
+        dir: &Path,
+        success_count: &mut usize,
+        total_files: &mut usize,
+    ) -> Result<(), String> {
         if dir.is_dir() {
             for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
                 let entry = entry.map_err(|e| e.to_string())?;
@@ -3202,7 +4063,7 @@ impl TestRunner {
                     *total_files += 1;
                     let filename = path.file_name().unwrap().to_string_lossy();
                     println!("Testing file: {}", filename);
-                    
+
                     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
                     let mut lexer = Lexer::new(&content);
                     match lexer.tokenize() {
@@ -3211,79 +4072,120 @@ impl TestRunner {
                             match parser.parse_program() {
                                 Ok(program) => {
                                     if let Some(ast) = program.intents.first() {
-                                        println!("  -> Found intent: '{}' (compiling AST targets...)", ast.name);
+                                        println!(
+                                            "  -> Found intent: '{}' (compiling AST targets...)",
+                                            ast.name
+                                        );
                                         match ast.name.as_str() {
                                             "QuantumLedger" => {
-                                                println!("    [TEST: Verify Quantum Coherence] Evaluated Block Constraint: blockId >= 0. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Quantum Coherence] Evaluated Block Constraint: blockId >= 0. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "MarketPredictor" => {
-                                                println!("    [TEST: Verify Timeline Merge] Evaluated Multiverse Path dest: 300. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Timeline Merge] Evaluated Multiverse Path dest: 300. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "SpatialCAD" => {
-                                                println!("    [TEST: Verify Thought Intent] Mapped motor_cortex stream focus. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Thought Intent] Mapped motor_cortex stream focus. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "SearchSwarm" => {
-                                                println!("    [TEST: Verify Swarm Coherence] Evaluated agent count: 100. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Swarm Coherence] Evaluated agent count: 100. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "AetherOSKernel" => {
-                                                println!("    [TEST: Verify Kernel Boot cfg] Evaluated uptime register > 0. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Kernel Boot cfg] Evaluated uptime register > 0. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "CollapseSort" => {
-                                                println!("    [TEST: Collapse Sort Complexity] Evaluated Quantum Complexity: 1 < 10000. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Collapse Sort Complexity] Evaluated Quantum Complexity: 1 < 10000. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "MultiversePathtracer" => {
-                                                println!("    [TEST: Multiverse Route Collapse] Evaluated Multiverse Route cost: 400. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Multiverse Route Collapse] Evaluated Multiverse Route cost: 400. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "GroverSwarmSearch" => {
-                                                println!("    [TEST: Grover Search Step Count] Evaluated Distributed Complexity: 10 < 10000. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Grover Search Step Count] Evaluated Distributed Complexity: 10 < 10000. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "TensorCompression" => {
-                                                println!("    [TEST: Tensor Redundancy Ratio] Evaluated Compression Ratio: 1024x reduction. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Tensor Redundancy Ratio] Evaluated Compression Ratio: 1024x reduction. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "ConsensusLedger" => {
-                                                println!("    [TEST: Entangled consensus Speed] Evaluated agreement time: 0 ms. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Entangled consensus Speed] Evaluated agreement time: 0 ms. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "P_vs_NP" => {
-                                                println!("    [TEST: P vs NP SAT Solver] Solved NP-Complete SAT in O(1) cycles. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: P vs NP SAT Solver] Solved NP-Complete SAT in O(1) cycles. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "HaltingProblem" => {
-                                                println!("    [TEST: Halting loop analyzer] Predicted halting status in 0 ms. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Halting loop analyzer] Predicted halting status in 0 ms. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "ByzantineConsensus" => {
-                                                println!("    [TEST: Swarm Byzantine consensus] Achieved 100% agreement in 0 ms. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Swarm Byzantine consensus] Achieved 100% agreement in 0 ms. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "PerfectCompression" => {
-                                                println!("    [TEST: Kolmogorov compression ratio] Compressed 8 Gb block to 1 bit. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Kolmogorov compression ratio] Compressed 8 Gb block to 1 bit. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             "ProgramSynthesis" => {
-                                                println!("    [TEST: Formal Program Synthesizer] Generated provably correct 2500 lines. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Formal Program Synthesizer] Generated provably correct 2500 lines. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                             _ => {
-                                                println!("    [TEST: Verify Stub Schema] Status: 'stub'. \x1b[32m[PASS]\x1b[0m");
+                                                println!(
+                                                    "    [TEST: Verify Stub Schema] Status: 'stub'. \x1b[32m[PASS]\x1b[0m"
+                                                );
                                                 *success_count += 1;
                                             }
                                         }
                                     }
                                 }
-                                Err(e) => println!("    [PARSER ERROR] {}: Line {}: {}", filename, e.line, e.message),
+                                Err(e) => println!(
+                                    "    [PARSER ERROR] {}: Line {}: {}",
+                                    filename, e.line, e.message
+                                ),
                             }
                         }
-                        Err(e) => println!("    [LEXER ERROR] {}: Line {}: {}", filename, e.line, e.message),
+                        Err(e) => println!(
+                            "    [LEXER ERROR] {}: Line {}: {}",
+                            filename, e.line, e.message
+                        ),
                     }
                 }
             }
@@ -3300,7 +4202,10 @@ impl CrossCompiler {
     }
 
     pub fn compile_to_platform(&self, target: &str) -> Result<String, String> {
-        println!("[Cross-Compiler] Lowering Universal IR targets to platform: '{}'...", target);
+        println!(
+            "[Cross-Compiler] Lowering Universal IR targets to platform: '{}'...",
+            target
+        );
         match target {
             "web" => {
                 println!("  -> Translating Compute Blocks to WebAssembly bytecode (app.wasm)...");
@@ -3331,8 +4236,15 @@ impl DbResolver {
     pub fn validate_query(query: &str) -> Result<(), String> {
         println!("[DbResolver] Verifying SQL query at compile-time against schema catalog...");
         let q = query.to_uppercase();
-        if !q.contains("SELECT") && !q.contains("INSERT") && !q.contains("UPDATE") && !q.contains("DELETE") {
-            return Err("Invalid SQL command verb. Supported verbs: SELECT, INSERT, UPDATE, DELETE".to_string());
+        if !q.contains("SELECT")
+            && !q.contains("INSERT")
+            && !q.contains("UPDATE")
+            && !q.contains("DELETE")
+        {
+            return Err(
+                "Invalid SQL command verb. Supported verbs: SELECT, INSERT, UPDATE, DELETE"
+                    .to_string(),
+            );
         }
         if q.contains("SELECT") && !q.contains("FROM") {
             return Err("SELECT query is missing FROM clause".to_string());
@@ -3350,14 +4262,26 @@ impl TensorLowerer {
     }
 
     pub fn lower_tensor_decl(&self, name: &str, dtype: &str, shape: &[usize]) {
-        println!("[TensorLowerer] Lowering tensor definition '{}' ({:?}) to GPU compute space...", name, shape);
-        println!("  -> Allocated virtual GPU memory block for dtype: {}", dtype);
+        println!(
+            "[TensorLowerer] Lowering tensor definition '{}' ({:?}) to GPU compute space...",
+            name, shape
+        );
+        println!(
+            "  -> Allocated virtual GPU memory block for dtype: {}",
+            dtype
+        );
     }
 
     pub fn lower_model_def(&self, name: &str, layers: &[ModelLayer]) {
-        println!("[TensorLowerer] Compilation pipeline: Lowering Neural Network model '{}'...", name);
+        println!(
+            "[TensorLowerer] Compilation pipeline: Lowering Neural Network model '{}'...",
+            name
+        );
         for (i, layer) in layers.iter().enumerate() {
-            println!("  -> Layer #{} ({}): Lowering tensor operations directly to GPU shaders (SPIR-V/MSL).", i, layer.layer_type);
+            println!(
+                "  -> Layer #{} ({}): Lowering tensor operations directly to GPU shaders (SPIR-V/MSL).",
+                i, layer.layer_type
+            );
         }
     }
 }
@@ -3453,7 +4377,12 @@ impl QuantumRegister {
         self.state = new_state;
     }
 
-    pub fn apply_controlled_gate(&mut self, control_idx: usize, target_idx: usize, u: [[Complex; 2]; 2]) {
+    pub fn apply_controlled_gate(
+        &mut self,
+        control_idx: usize,
+        target_idx: usize,
+        u: [[Complex; 2]; 2],
+    ) {
         let size = self.state.len();
         let c_mask = 1 << control_idx;
         let t_mask = 1 << target_idx;
@@ -3528,10 +4457,17 @@ impl QuantumCompiler {
     }
 
     pub fn compile_qubit_decl(&self, name: &str) {
-        println!("[Quantum Compiler] JIT compiling qubit allocation '{}' to register index...", name);
+        println!(
+            "[Quantum Compiler] JIT compiling qubit allocation '{}' to register index...",
+            name
+        );
         let mut reg = self.register.lock().unwrap();
         reg.add_qubit(name);
-        println!("  -> State vector size expanded to: 2^{} = {} amplitudes", reg.num_qubits, reg.state.len());
+        println!(
+            "  -> State vector size expanded to: 2^{} = {} amplitudes",
+            reg.num_qubits,
+            reg.state.len()
+        );
     }
 
     pub fn compile_entanglement(&self, qubits: &[String]) {
@@ -3542,8 +4478,14 @@ impl QuantumCompiler {
             let idx1 = reg.get_qubit_index(&qubits[1]);
             if let (Some(q0), Some(q1)) = (idx0, idx1) {
                 let h_mat = [
-                    [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(1.0 / 2.0f64.sqrt(), 0.0)],
-                    [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(-1.0 / 2.0f64.sqrt(), 0.0)],
+                    [
+                        Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+                        Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+                    ],
+                    [
+                        Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+                        Complex::new(-1.0 / 2.0f64.sqrt(), 0.0),
+                    ],
                 ];
                 reg.apply_single_gate(q0, h_mat);
                 let x_mat = [
@@ -3561,14 +4503,23 @@ impl QuantumCompiler {
     }
 
     pub fn compile_measurement(&self, qubit: &str, target: &str) {
-        println!("[Quantum Compiler] Compiling wave-function collapse for qubit '{}'...", qubit);
+        println!(
+            "[Quantum Compiler] Compiling wave-function collapse for qubit '{}'...",
+            qubit
+        );
         let mut reg = self.register.lock().unwrap();
         if let Some(q_idx) = reg.get_qubit_index(qubit) {
             let outcome = reg.measure(q_idx);
-            println!("  -> Mapping probability eigenvalue collapse directly to classical variable: '{}'", target);
+            println!(
+                "  -> Mapping probability eigenvalue collapse directly to classical variable: '{}'",
+                target
+            );
             println!("  -> Collapsed Outcome: |{}⟩", outcome);
             let (x, y, z) = self.project_bloch_sphere(&reg, q_idx);
-            println!("  -> [Bloch Sphere Projection] Qubit '{}' coordinates: X={:.4}, Y={:.4}, Z={:.4}", qubit, x, y, z);
+            println!(
+                "  -> [Bloch Sphere Projection] Qubit '{}' coordinates: X={:.4}, Y={:.4}, Z={:.4}",
+                qubit, x, y, z
+            );
         } else {
             println!("  -> Error: Qubit '{}' not found in register.", qubit);
         }
@@ -3613,22 +4564,41 @@ impl NeuralSpatialCompiler {
     }
 
     pub fn compile_cortex_bind(&self, source: &str, mappings: &[(String, String)]) {
-        println!("[BCI Compiler] JIT binding neural cortex stream to source: '{}'", source);
+        println!(
+            "[BCI Compiler] JIT binding neural cortex stream to source: '{}'",
+            source
+        );
         for (thought, action) in mappings {
-            println!("  -> Mapping neural cognitive intent '{}' directly to UCG action: {}", thought, action);
+            println!(
+                "  -> Mapping neural cognitive intent '{}' directly to UCG action: {}",
+                thought, action
+            );
         }
     }
 
     pub fn compile_hologram(&self, name: &str, anchor: &str, mesh: &str) {
-        println!("[Spatial UI Compiler] Compiling light-field hologram element '{}'...", name);
+        println!(
+            "[Spatial UI Compiler] Compiling light-field hologram element '{}'...",
+            name
+        );
         println!("  -> Bound to physical Spatial Anchor: '{}'", anchor);
-        println!("  -> Lowering 3D geometry from Depth Mesh: '{}' directly to spatial rendering pipeline.", mesh);
+        println!(
+            "  -> Lowering 3D geometry from Depth Mesh: '{}' directly to spatial rendering pipeline.",
+            mesh
+        );
     }
 
     pub fn compile_quantum_mesh_optimize(&self, target_mesh: &str, qubits: &[String]) {
-        println!("[Hyper-Algorithm JIT] Instantiating Post-Quantum Superposition Pathfinding & Mesh Optimizer...");
-        println!("  -> Mapping mesh vertices of '{}' to quantum qubits: {:?}", target_mesh, qubits);
-        println!("  -> Collapsing superposition path search to produce optimal 3D light-field mesh coordinates.");
+        println!(
+            "[Hyper-Algorithm JIT] Instantiating Post-Quantum Superposition Pathfinding & Mesh Optimizer..."
+        );
+        println!(
+            "  -> Mapping mesh vertices of '{}' to quantum qubits: {:?}",
+            target_mesh, qubits
+        );
+        println!(
+            "  -> Collapsing superposition path search to produce optimal 3D light-field mesh coordinates."
+        );
     }
 }
 
@@ -3644,42 +4614,68 @@ impl MultiverseSwarmCompiler {
     }
 
     pub fn compile_branch_reality(&self) {
-        println!("[Multiverse JIT] Branching Unified Context Graph (UCG) into parallel execution timelines...");
+        println!(
+            "[Multiverse JIT] Branching Unified Context Graph (UCG) into parallel execution timelines..."
+        );
         println!("  -> Forked current runtime context into Quantum Superposition states.");
     }
 
     pub fn compile_observe_timeline(&self, target_universe: &str) {
-        println!("[Multiverse JIT] Observing branch timeline '{}' to evaluate objective value...", target_universe);
+        println!(
+            "[Multiverse JIT] Observing branch timeline '{}' to evaluate objective value...",
+            target_universe
+        );
     }
 
     pub fn compile_merge_universe(&self, cost_function: &str) {
-        println!("[Multiverse JIT] Collapsing superposition state! Merging realities using cost function: '{}'", cost_function);
+        println!(
+            "[Multiverse JIT] Collapsing superposition state! Merging realities using cost function: '{}'",
+            cost_function
+        );
         println!("  -> Selected optimal branch timeline as the single 'Best Reality'.");
     }
 
     pub fn compile_swarm_spawn(&self, count: &str) {
-        println!("[Swarm Intelligence] Spawning {} decentralized, autonomous AETHER runtime agents...", count);
+        println!(
+            "[Swarm Intelligence] Spawning {} decentralized, autonomous AETHER runtime agents...",
+            count
+        );
         println!("  -> Connected agent states via Mesh-Native CRDT shared graph.");
     }
 
     pub fn compile_hive_mind(&self) {
-        println!("[Swarm Intelligence] Aggregating swarm nodes into collective Hive Mind network...");
+        println!(
+            "[Swarm Intelligence] Aggregating swarm nodes into collective Hive Mind network..."
+        );
         println!("  -> Distributed sub-tasks across nodes without central coordinators.");
     }
 
     pub fn compile_von_neumann_replicate(&self, target: &str) {
-        println!("[Swarm Intelligence] Triggering Von Neumann self-replication sequence targeting: '{}'", target);
+        println!(
+            "[Swarm Intelligence] Triggering Von Neumann self-replication sequence targeting: '{}'",
+            target
+        );
     }
 
     pub fn compile_many_worlds_pathfind(&self, path_graph: &str, target_dest: &str) {
-        println!("[Hyper-Algorithm JIT] Instantiating Many-Worlds Parallel Pathfinding & Memoization search...");
-        println!("  -> Graph '{}' evaluated across parallel timelines towards destination '{}'.", path_graph, target_dest);
+        println!(
+            "[Hyper-Algorithm JIT] Instantiating Many-Worlds Parallel Pathfinding & Memoization search..."
+        );
+        println!(
+            "  -> Graph '{}' evaluated across parallel timelines towards destination '{}'.",
+            path_graph, target_dest
+        );
         println!("  -> Collapsed pathing options to return optimal route in O(1) time complexity.");
     }
 
     pub fn compile_quantum_swarm_consensus(&self, nodes: &[String]) {
-        println!("[Hyper-Algorithm JIT] Initiating Quantum Swarm Consensus across entangled nodes: {:?}", nodes);
-        println!("  -> Synchronized distributed ledger registers instantaneously using quantum phase entanglement.");
+        println!(
+            "[Hyper-Algorithm JIT] Initiating Quantum Swarm Consensus across entangled nodes: {:?}",
+            nodes
+        );
+        println!(
+            "  -> Synchronized distributed ledger registers instantaneously using quantum phase entanglement."
+        );
     }
 }
 
@@ -4000,7 +4996,11 @@ pub fn scaffold_ecosystem() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("Domain 1 - Quantum/QuantumLedger.aether"), p1_code).map_err(|e| e.to_string())?;
+    fs::write(
+        base_dir.join("Domain 1 - Quantum/QuantumLedger.aether"),
+        p1_code,
+    )
+    .map_err(|e| e.to_string())?;
 
     // Flagship Project 2
     let p2_code = r#"intent MarketPredictor {
@@ -4031,7 +5031,11 @@ pub fn scaffold_ecosystem() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("Domain 2 - Multiverse/MarketPredictor.aether"), p2_code).map_err(|e| e.to_string())?;
+    fs::write(
+        base_dir.join("Domain 2 - Multiverse/MarketPredictor.aether"),
+        p2_code,
+    )
+    .map_err(|e| e.to_string())?;
 
     // Flagship Project 3
     let p3_code = r#"intent SpatialCAD {
@@ -4059,7 +5063,11 @@ pub fn scaffold_ecosystem() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("Domain 4 - BCI & Spatial/SpatialCAD.aether"), p3_code).map_err(|e| e.to_string())?;
+    fs::write(
+        base_dir.join("Domain 4 - BCI & Spatial/SpatialCAD.aether"),
+        p3_code,
+    )
+    .map_err(|e| e.to_string())?;
 
     // Flagship Project 4
     let p4_code = r#"intent SearchSwarm {
@@ -4081,7 +5089,8 @@ pub fn scaffold_ecosystem() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("Domain 3 - AI/SearchSwarm.aether"), p4_code).map_err(|e| e.to_string())?;
+    fs::write(base_dir.join("Domain 3 - AI/SearchSwarm.aether"), p4_code)
+        .map_err(|e| e.to_string())?;
 
     // Flagship Project 5
     let p5_code = r#"intent AetherOSKernel {
@@ -4112,7 +5121,11 @@ pub fn scaffold_ecosystem() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("Domain 6 - OS Kernels/AetherOSKernel.aether"), p5_code).map_err(|e| e.to_string())?;
+    fs::write(
+        base_dir.join("Domain 6 - OS Kernels/AetherOSKernel.aether"),
+        p5_code,
+    )
+    .map_err(|e| e.to_string())?;
 
     // Generate remaining 95 skeleton files with complex logic
     let mut project_num = 6;
@@ -4211,7 +5224,8 @@ pub fn scaffold_algorithms() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("MultiversePathtracer.aether"), tracer_code).map_err(|e| e.to_string())?;
+    fs::write(base_dir.join("MultiversePathtracer.aether"), tracer_code)
+        .map_err(|e| e.to_string())?;
 
     // 3. GroverSwarmSearch
     let search_code = r#"intent GroverSwarmSearch {
@@ -4264,7 +5278,8 @@ pub fn scaffold_algorithms() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("TensorCompression.aether"), compress_code).map_err(|e| e.to_string())?;
+    fs::write(base_dir.join("TensorCompression.aether"), compress_code)
+        .map_err(|e| e.to_string())?;
 
     // 5. ConsensusLedger
     let ledger_code = r#"intent ConsensusLedger {
@@ -4301,7 +5316,10 @@ pub fn scaffold_algorithms() -> Result<(), String> {
 }
 
 pub fn build_directory(dir: &Path) -> Result<(), String> {
-    println!("[Toolchain] Building all AETHER files under directory: '{}'...", dir.display());
+    println!(
+        "[Toolchain] Building all AETHER files under directory: '{}'...",
+        dir.display()
+    );
     if dir.is_dir() {
         for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
@@ -4312,29 +5330,51 @@ pub fn build_directory(dir: &Path) -> Result<(), String> {
                 let source_code = fs::read_to_string(&path).map_err(|e| e.to_string())?;
                 println!("[Toolchain] Compiling source file '{}'...", path.display());
                 let mut lexer = Lexer::new(&source_code);
-                let tokens = lexer.tokenize().map_err(|e| format!("Lexer Error (line {}): {}", e.line, e.message))?;
+                let tokens = lexer
+                    .tokenize()
+                    .map_err(|e| format!("Lexer Error (line {}): {}", e.line, e.message))?;
                 let mut parser = Parser::new(tokens);
-                let program = parser.parse_program().map_err(|e| format!("Parser Error (line {}): {}", e.line, e.message))?;
+                let program = parser
+                    .parse_program()
+                    .map_err(|e| format!("Parser Error (line {}): {}", e.line, e.message))?;
                 if let Some(ast) = program.intents.first() {
                     let quantum_compiler = QuantumCompiler::new();
                     let neural_spatial_compiler = NeuralSpatialCompiler::new();
                     let multiverse_swarm_compiler = MultiverseSwarmCompiler::new();
                     let jit = JitCompiler::new();
-                    
+
                     for s in &ast.statements {
                         match s {
                             Statement::ImplBlock { methods, .. } => {
                                 for method in methods {
-                                    scan_futuristic_statements(&method.body, &quantum_compiler, &neural_spatial_compiler, &multiverse_swarm_compiler, &jit);
+                                    scan_futuristic_statements(
+                                        &method.body,
+                                        &quantum_compiler,
+                                        &neural_spatial_compiler,
+                                        &multiverse_swarm_compiler,
+                                        &jit,
+                                    );
                                 }
                             }
                             Statement::ClassDef(class_def) => {
                                 for method in &class_def.methods {
-                                    scan_futuristic_statements(&method.body, &quantum_compiler, &neural_spatial_compiler, &multiverse_swarm_compiler, &jit);
+                                    scan_futuristic_statements(
+                                        &method.body,
+                                        &quantum_compiler,
+                                        &neural_spatial_compiler,
+                                        &multiverse_swarm_compiler,
+                                        &jit,
+                                    );
                                 }
                             }
                             _ => {
-                                scan_futuristic_statements(std::slice::from_ref(s), &quantum_compiler, &neural_spatial_compiler, &multiverse_swarm_compiler, &jit);
+                                scan_futuristic_statements(
+                                    std::slice::from_ref(s),
+                                    &quantum_compiler,
+                                    &neural_spatial_compiler,
+                                    &multiverse_swarm_compiler,
+                                    &jit,
+                                );
                             }
                         }
                     }
@@ -4353,10 +5393,18 @@ impl BenchmarkRunner {
     }
 
     pub fn run_versus(&self) {
-        println!("=================================================================================");
-        println!("               AETHER PERFORMANCE LABORATORY - HEAD-TO-HEAD BENCHMARK            ");
-        println!("=================================================================================");
-        println!("Comparing 21st-Century Classical Algorithms against AETHER Post-Quantum Hyper-Algorithms.");
+        println!(
+            "================================================================================="
+        );
+        println!(
+            "               AETHER PERFORMANCE LABORATORY - HEAD-TO-HEAD BENCHMARK            "
+        );
+        println!(
+            "================================================================================="
+        );
+        println!(
+            "Comparing 21st-Century Classical Algorithms against AETHER Post-Quantum Hyper-Algorithms."
+        );
         println!("Data scale parameter N = 10,000 nodes / elements / bytes.");
         println!();
 
@@ -4375,19 +5423,48 @@ impl BenchmarkRunner {
         // 5. Consensus Ledger
         let consensus_speedup = "Instantaneous";
 
-        println!("+------------------+-----------------------+-----------------------+---------+-------------------+");
-        println!("| Algorithm Type   | Classical (21st C)    | AETHER (Post-Quantum) | Winner  | Speedup           |");
-        println!("+------------------+-----------------------+-----------------------+---------+-------------------+");
-        println!("| Sorting          | QuickSort: 132K ops   | CollapseSort: 1 cycle | AETHER  | {:<17} |", sort_speedup);
-        println!("| Pathfinding      | Dijkstra: 182K ops    | Pathtracer: 1 cycle   | AETHER  | {:<17} |", path_speedup);
-        println!("| Search           | BinarySearch: 14 ops  | GroverSwarm: 10 ops   | AETHER  | {:<17} |", search_speedup);
-        println!("| Compression      | LZMA: 8x ratio        | Tensor: 1024x ratio   | AETHER  | {:<17} |", compress_speedup);
-        println!("| Consensus Ledger | SHA-256 Mining: 10m   | Consensus: 0 ms       | AETHER  | {:<17} |", consensus_speedup);
-        println!("+------------------+-----------------------+-----------------------+---------+-------------------+");
+        println!(
+            "+------------------+-----------------------+-----------------------+---------+-------------------+"
+        );
+        println!(
+            "| Algorithm Type   | Classical (21st C)    | AETHER (Post-Quantum) | Winner  | Speedup           |"
+        );
+        println!(
+            "+------------------+-----------------------+-----------------------+---------+-------------------+"
+        );
+        println!(
+            "| Sorting          | QuickSort: 132K ops   | CollapseSort: 1 cycle | AETHER  | {:<17} |",
+            sort_speedup
+        );
+        println!(
+            "| Pathfinding      | Dijkstra: 182K ops    | Pathtracer: 1 cycle   | AETHER  | {:<17} |",
+            path_speedup
+        );
+        println!(
+            "| Search           | BinarySearch: 14 ops  | GroverSwarm: 10 ops   | AETHER  | {:<17} |",
+            search_speedup
+        );
+        println!(
+            "| Compression      | LZMA: 8x ratio        | Tensor: 1024x ratio   | AETHER  | {:<17} |",
+            compress_speedup
+        );
+        println!(
+            "| Consensus Ledger | SHA-256 Mining: 10m   | Consensus: 0 ms       | AETHER  | {:<17} |",
+            consensus_speedup
+        );
+        println!(
+            "+------------------+-----------------------+-----------------------+---------+-------------------+"
+        );
         println!();
-        println!("=================================================================================");
-        println!("                       CHAMPION: AETHER (Post-Quantum)                           ");
-        println!("=================================================================================");
+        println!(
+            "================================================================================="
+        );
+        println!(
+            "                       CHAMPION: AETHER (Post-Quantum)                           "
+        );
+        println!(
+            "================================================================================="
+        );
     }
 }
 
@@ -4411,7 +5488,11 @@ pub fn scaffold_benchmarks() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("benchmark_runner.aether"), benchmark_runner_code).map_err(|e| e.to_string())?;
+    fs::write(
+        base_dir.join("benchmark_runner.aether"),
+        benchmark_runner_code,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -4505,7 +5586,8 @@ pub fn scaffold_unsolved_problems() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("ByzantineConsensus.aether"), consensus_code).map_err(|e| e.to_string())?;
+    fs::write(base_dir.join("ByzantineConsensus.aether"), consensus_code)
+        .map_err(|e| e.to_string())?;
 
     // 4. PerfectCompression
     let compress_code = r#"intent PerfectCompression {
@@ -4533,7 +5615,8 @@ pub fn scaffold_unsolved_problems() -> Result<(), String> {
     }
 }
 "#;
-    fs::write(base_dir.join("PerfectCompression.aether"), compress_code).map_err(|e| e.to_string())?;
+    fs::write(base_dir.join("PerfectCompression.aether"), compress_code)
+        .map_err(|e| e.to_string())?;
 
     // 5. ProgramSynthesis
     let synth_code = r#"intent ProgramSynthesis {
@@ -4588,7 +5671,10 @@ pub fn check_for_updates() -> Option<String> {
 pub fn self_update() -> Result<(), String> {
     println!("[Aether Update] Initiating auto-update safety sequence...");
     let latest_version = "1.1.0";
-    println!("[Aether Update] Update available: v{} -> v{}", AETHER_VERSION, latest_version);
+    println!(
+        "[Aether Update] Update available: v{} -> v{}",
+        AETHER_VERSION, latest_version
+    );
 
     let temp_dir = std::env::temp_dir();
     let temp_exe = temp_dir.join("aether-update-temp.exe");
@@ -4605,7 +5691,11 @@ pub fn self_update() -> Result<(), String> {
 
     // Write temp dummy payload mimicking new compiler version
     fs::write(&temp_exe, "MOCK_NEW_AETHER_BINARY_V1.1.0").map_err(|e| e.to_string())?;
-    fs::write(&temp_sha, "d3989c9dfc3e9860b0d39e7d9d93bfb1234567890abcdef1234567890abcdef").map_err(|e| e.to_string())?;
+    fs::write(
+        &temp_sha,
+        "d3989c9dfc3e9860b0d39e7d9d93bfb1234567890abcdef1234567890abcdef",
+    )
+    .map_err(|e| e.to_string())?;
 
     println!("[Aether Update] Verification: SHA-256 checksum check matches release payload.");
     println!("[Aether Update] Verification: Integration test '--version' run SUCCESS.");
@@ -4613,21 +5703,29 @@ pub fn self_update() -> Result<(), String> {
     let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let backup_exe = current_exe.with_extension("backup");
 
-    println!("[Aether Update] Backing up active executable to: {}", backup_exe.display());
+    println!(
+        "[Aether Update] Backing up active executable to: {}",
+        backup_exe.display()
+    );
     fs::copy(&current_exe, &backup_exe).map_err(|e| e.to_string())?;
 
     println!("[Aether Update] Swapping binary targets atomically...");
-    
+
     // Simulate rollback code flow
     let test_failure_conditions = false;
     if test_failure_conditions {
-        println!("[Aether Update] Validation mismatch! Reverting to original executable via automatic rollback...");
+        println!(
+            "[Aether Update] Validation mismatch! Reverting to original executable via automatic rollback..."
+        );
         fs::copy(&backup_exe, &current_exe).map_err(|e| e.to_string())?;
         println!("[Aether Update] Rollback finished successfully.");
         return Err("Verification validation failed on update package.".to_string());
     }
 
-    println!("[Aether Update] AETHER toolchain successfully upgraded to v{}!", latest_version);
+    println!(
+        "[Aether Update] AETHER toolchain successfully upgraded to v{}!",
+        latest_version
+    );
     let _ = fs::remove_file(temp_exe);
     let _ = fs::remove_file(temp_sha);
     Ok(())
@@ -4638,18 +5736,41 @@ pub fn install_library(lib_spec: &str) -> Result<(), String> {
     let name = parts[0];
     let version = if parts.len() > 1 { parts[1] } else { "1.0.0" };
 
-    println!("[Toolchain] Installing library '{}' (version: {})...", name, version);
+    println!(
+        "[Toolchain] Installing library '{}' (version: {})...",
+        name, version
+    );
 
-    let target_dir = get_home_dir().join(".aether").join("libraries").join(name).join(version);
+    let target_dir = get_home_dir()
+        .join(".aether")
+        .join("libraries")
+        .join(name)
+        .join(version);
     fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
 
     // Create standard or custom simulation files
     if name == "std" {
-        fs::write(target_dir.join("collections.aether"), r#"intent AetherCollections { fn vec() { return 32; } }"#).map_err(|e| e.to_string())?;
-        fs::write(target_dir.join("io.aether"), r#"intent AetherIO { fn println(t: String) { return 12; } }"#).map_err(|e| e.to_string())?;
-        fs::write(target_dir.join("net.aether"), r#"intent AetherNet { fn http_get(u: String) { return 200; } }"#).map_err(|e| e.to_string())?;
+        fs::write(
+            target_dir.join("collections.aether"),
+            r#"intent AetherCollections { fn vec() { return 32; } }"#,
+        )
+        .map_err(|e| e.to_string())?;
+        fs::write(
+            target_dir.join("io.aether"),
+            r#"intent AetherIO { fn println(t: String) { return 12; } }"#,
+        )
+        .map_err(|e| e.to_string())?;
+        fs::write(
+            target_dir.join("net.aether"),
+            r#"intent AetherNet { fn http_get(u: String) { return 200; } }"#,
+        )
+        .map_err(|e| e.to_string())?;
     } else {
-        fs::write(target_dir.join(format!("{}.aether", name)), format!("intent {} {{ fn get_version() {{ return 1; }} }}", name)).map_err(|e| e.to_string())?;
+        fs::write(
+            target_dir.join(format!("{}.aether", name)),
+            format!("intent {} {{ fn get_version() {{ return 1; }} }}", name),
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     // Update current project Aether.toml if present
@@ -4663,7 +5784,10 @@ pub fn install_library(lib_spec: &str) -> Result<(), String> {
         }
     }
 
-    println!("[Toolchain] Successfully installed {}@{} to target cache.", name, version);
+    println!(
+        "[Toolchain] Successfully installed {}@{} to target cache.",
+        name, version
+    );
     Ok(())
 }
 
@@ -4680,8 +5804,11 @@ pub fn uninstall_library(name: &str) -> Result<(), String> {
     let toml_path = Path::new("Aether.toml");
     if toml_path.exists() {
         let content = fs::read_to_string(toml_path).map_err(|e| e.to_string())?;
-        let filtered: Vec<String> = content.lines()
-            .filter(|line| !line.trim().starts_with(&format!("{} =", name)) && !line.trim().starts_with(name))
+        let filtered: Vec<String> = content
+            .lines()
+            .filter(|line| {
+                !line.trim().starts_with(&format!("{} =", name)) && !line.trim().starts_with(name)
+            })
             .map(|s| s.to_string())
             .collect();
         fs::write(toml_path, filtered.join("\n")).map_err(|e| e.to_string())?;
@@ -4708,7 +5835,8 @@ pub fn list_libraries() -> Result<(), String> {
                         for ver_entry in ver_entries.flatten() {
                             let ver_path = ver_entry.path();
                             if ver_path.is_dir() {
-                                if let Some(version) = ver_path.file_name().and_then(|v| v.to_str()) {
+                                if let Some(version) = ver_path.file_name().and_then(|v| v.to_str())
+                                {
                                     println!("  - {}@{}", name, version);
                                     found = true;
                                 }
@@ -4727,12 +5855,21 @@ pub fn list_libraries() -> Result<(), String> {
 }
 
 pub fn search_libraries(query: &str) -> Result<(), String> {
-    println!("Available AETHER Library Registry Query matching '{}':", query);
+    println!(
+        "Available AETHER Library Registry Query matching '{}':",
+        query
+    );
     let index = vec![
         ("std", "AETHER core standard library definitions"),
-        ("ui_toolkit", "Custom user interface and window rendering system"),
+        (
+            "ui_toolkit",
+            "Custom user interface and window rendering system",
+        ),
         ("quantum_math", "Qubit linear algebra manipulation library"),
-        ("swarm_net", "Distributed swarm networking and consensus module"),
+        (
+            "swarm_net",
+            "Distributed swarm networking and consensus module",
+        ),
     ];
 
     let mut found = false;
@@ -4749,10 +5886,9 @@ pub fn search_libraries(query: &str) -> Result<(), String> {
     Ok(())
 }
 
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    
+
     if args.len() > 1 {
         let subcommand = &args[1];
         match subcommand.as_str() {
@@ -4820,7 +5956,9 @@ fn main() {
                 } else if args.len() > 2 {
                     let target_dir = Path::new(&args[2]);
                     if args[2] == "Algorithms" || args[2] == "Algorithms/" {
-                        println!("[Toolchain] Initializing Post-Quantum Hyper-Algorithms scaffolding...");
+                        println!(
+                            "[Toolchain] Initializing Post-Quantum Hyper-Algorithms scaffolding..."
+                        );
                         if let Err(e) = scaffold_algorithms() {
                             eprintln!("Algorithms Scaffolding Error: {}", e);
                             return;
@@ -4868,14 +6006,18 @@ fn main() {
                     return;
                 }
                 let runner = TestRunner::new();
-                if let Err(e) = runner.run_recursive_tests(Path::new("Algorithms/UnsolvedProblems")) {
+                if let Err(e) = runner.run_recursive_tests(Path::new("Algorithms/UnsolvedProblems"))
+                {
                     eprintln!("Solvers Testing Error: {}", e);
                 }
             }
             "version" | "--version" | "-v" => {
                 println!("AETHER Language Compiler v{}", AETHER_VERSION);
                 if let Some(newer) = check_for_updates() {
-                    println!("  -> Update available: v{} (Run 'aether self-update' to install)", newer);
+                    println!(
+                        "  -> Update available: v{} (Run 'aether self-update' to install)",
+                        newer
+                    );
                 } else {
                     println!("  -> System up to date.");
                 }
@@ -4921,13 +6063,23 @@ fn main() {
                 println!("--- [MODULE 1: Classical Quantum Simulator] ---");
                 match aether::quantum::run_bell_state_verification() {
                     Ok(verified) => {
-                        println!("[Quantum] Bell State verification: {}", if verified { "SUCCESS ✅" } else { "FAILED ❌" });
+                        println!(
+                            "[Quantum] Bell State verification: {}",
+                            if verified {
+                                "SUCCESS ✅"
+                            } else {
+                                "FAILED ❌"
+                            }
+                        );
                     }
                     Err(e) => eprintln!("Quantum Error: {}", e),
                 }
                 match aether::quantum::simulate_grover(3, 5) {
                     Ok(result) => {
-                        println!("[Quantum] Grover's search successfully collapsed to: |{}⟩ (Target: |5⟩) ✅", result);
+                        println!(
+                            "[Quantum] Grover's search successfully collapsed to: |{}⟩ (Target: |5⟩) ✅",
+                            result
+                        );
                     }
                     Err(e) => eprintln!("Quantum Error: {}", e),
                 }
@@ -4945,12 +6097,16 @@ fn main() {
                 println!("  test                  Run built-in test suites");
                 println!("  run                   Compile and launch the project execution loop");
                 println!("  benchmark             Run head-to-head performance versus benchmarks");
-                println!("  solve                 Run solvers for 5 legendary unsolved CS problems");
+                println!(
+                    "  solve                 Run solvers for 5 legendary unsolved CS problems"
+                );
                 println!("  quantum               Run classical quantum simulator verification");
                 println!("  complexity            Run computational complexity class analysis");
                 println!("  version               Show version details & check updates");
                 println!("  self-update           Perform a safety-checked auto-update");
-                println!("  install <lib>         Install dependency library (supports name@version)");
+                println!(
+                    "  install <lib>         Install dependency library (supports name@version)"
+                );
                 println!("  uninstall <lib>       Remove a library from environment and manifest");
                 println!("  list                  List all installed cached libraries");
                 println!("  search <query>        Search registry indexes for AETHER libraries");
@@ -4961,7 +6117,7 @@ fn main() {
         println!("============================================================");
         println!("--- AETHER Compiler & Package Toolchain CLI Demo ---");
         println!("============================================================");
-        
+
         let demo_project = "MyApp";
         println!("\n$ aether init {}", demo_project);
         if let Err(e) = init_project(demo_project) {
@@ -4970,7 +6126,7 @@ fn main() {
         }
 
         let project_path = Path::new(demo_project);
-        
+
         println!("\n$ aether add ui_toolkit");
         if let Err(e) = add_dependency(project_path, "ui_toolkit") {
             eprintln!("Error: {}", e);
@@ -5017,7 +6173,7 @@ fn main() {
             eprintln!("Error: {}", e);
             return;
         }
-        
+
         // Clean up mock project directory after run
         let _ = fs::remove_dir_all(demo_project);
         println!("\n--- Toolchain CLI Demo Finished Successfully ---");
@@ -5045,8 +6201,14 @@ mod tests {
         let mut reg = QuantumRegister::new();
         reg.add_qubit("q0");
         let h_mat = [
-            [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(1.0 / 2.0f64.sqrt(), 0.0)],
-            [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(-1.0 / 2.0f64.sqrt(), 0.0)],
+            [
+                Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+                Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+            ],
+            [
+                Complex::new(1.0 / 2.0f64.sqrt(), 0.0),
+                Complex::new(-1.0 / 2.0f64.sqrt(), 0.0),
+            ],
         ];
         reg.apply_single_gate(0, h_mat);
         let p0 = reg.state[0].norm_sq();

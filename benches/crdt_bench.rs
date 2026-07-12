@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use aether::crdt::{GCounter, GSet, PNCounter, ORSet};
+use aether::crdt::{GCounter, GSet, ORSet};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn benchmark_gcounter_merge(c: &mut Criterion) {
     let mut a = GCounter::new("node_a");
@@ -47,5 +47,10 @@ fn benchmark_orset_merge(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_gcounter_merge, benchmark_gset_merge, benchmark_orset_merge);
+criterion_group!(
+    benches,
+    benchmark_gcounter_merge,
+    benchmark_gset_merge,
+    benchmark_orset_merge
+);
 criterion_main!(benches);

@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion};
 use aether::quantum::{Gates, QuantumRegister};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn benchmark_bell_state(c: &mut Criterion) {
     c.bench_function("apply_bell_state_gates", |b| {

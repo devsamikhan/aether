@@ -25,7 +25,10 @@ impl<T: Hash + Eq + Clone> ORSet<T> {
     pub fn add(&mut self, item: T) {
         self.seq += 1;
         let tag = format!("{}-{}", self.node_id, self.seq);
-        self.elements.entry(item).or_insert_with(HashSet::new).insert(tag);
+        self.elements
+            .entry(item)
+            .or_insert_with(HashSet::new)
+            .insert(tag);
     }
 
     /// Remove an item by moving all of its active tags to the tombstones.
@@ -65,7 +68,10 @@ impl<T: Hash + Eq + Clone> ORSet<T> {
 
         // Union elements and tags
         for (item, tags) in &other.elements {
-            let entry = self.elements.entry(item.clone()).or_insert_with(HashSet::new);
+            let entry = self
+                .elements
+                .entry(item.clone())
+                .or_insert_with(HashSet::new);
             for tag in tags {
                 entry.insert(tag.clone());
             }

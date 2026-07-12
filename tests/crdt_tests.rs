@@ -1,4 +1,4 @@
-use aether::crdt::{GCounter, GSet, PNCounter, ORSet, DistributedSystem};
+use aether::crdt::{DistributedSystem, GCounter, GSet, ORSet, PNCounter};
 
 // =========================================================================
 // 1. PROPERTY-BASED CRDT MATHEMATICAL TESTS (Commutativity, Associativity, Idempotency)
@@ -185,7 +185,7 @@ fn test_distributed_convergence_gcounter() {
     }
 
     assert!(cluster.verify_convergence());
-    
+
     // Value should be correct and identical across all
     let val = cluster.nodes.values().next().unwrap().value();
     assert_eq!(val, 500);
@@ -204,7 +204,7 @@ fn test_distributed_convergence_orset() {
     // Node 0 adds, Node 1 adds, Node 0 syncs to 2, Node 2 removes
     cluster.update("node_0", |s| s.add("hello"));
     cluster.update("node_1", |s| s.add("world"));
-    
+
     // Sync node 0 to node 2
     cluster.sync("node_0", "node_2");
     assert!(cluster.nodes.get("node_2").unwrap().contains(&"hello"));

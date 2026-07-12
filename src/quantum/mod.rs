@@ -99,7 +99,11 @@ impl QuantumRegister {
     }
 
     /// Apply a single-qubit unitary gate.
-    pub fn apply_single_gate(&mut self, target: usize, u: [[Complex; 2]; 2]) -> Result<(), QuantumError> {
+    pub fn apply_single_gate(
+        &mut self,
+        target: usize,
+        u: [[Complex; 2]; 2],
+    ) -> Result<(), QuantumError> {
         if target >= self.num_qubits {
             return Err(QuantumError::IndexOutOfBounds(target, self.num_qubits));
         }
