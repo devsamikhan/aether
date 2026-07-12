@@ -3366,27 +3366,238 @@ impl TensorLowerer {
 // 14. Quantum JIT Compiler & Simulator (Phase 12)
 // =========================================================================
 
-pub struct QuantumCompiler;
+#[derive(Debug, Copy, Clone)]
+pub struct Complex {
+    pub re: f64,
+    pub im: f64,
+}
+
+impl Complex {
+    pub fn new(re: f64, im: f64) -> Self {
+        Self { re, im }
+    }
+    pub fn zero() -> Self {
+        Self { re: 0.0, im: 0.0 }
+    }
+    pub fn one() -> Self {
+        Self { re: 1.0, im: 0.0 }
+    }
+    pub fn add(self, other: Self) -> Self {
+        Self {
+            re: self.re + other.re,
+            im: self.im + other.im,
+        }
+    }
+    pub fn sub(self, other: Self) -> Self {
+        Self {
+            re: self.re - other.re,
+            im: self.im - other.im,
+        }
+    }
+    pub fn mul(self, other: Self) -> Self {
+        Self {
+            re: self.re * other.re - self.im * other.im,
+            im: self.re * other.im + self.im * other.re,
+        }
+    }
+    pub fn norm_sq(self) -> f64 {
+        self.re * self.re + self.im * self.im
+    }
+}
+
+pub struct QuantumRegister {
+    pub num_qubits: usize,
+    pub state: Vec<Complex>,
+    pub names: Vec<String>,
+}
+
+impl QuantumRegister {
+    pub fn new() -> Self {
+        Self {
+            num_qubits: 0,
+            state: vec![Complex::one()],
+            names: Vec::new(),
+        }
+    }
+
+    pub fn add_qubit(&mut self, name: &str) {
+        self.num_qubits += 1;
+        self.names.push(name.to_string());
+        let current_size = self.state.len();
+        let mut new_state = vec![Complex::zero(); current_size * 2];
+        for i in 0..current_size {
+            new_state[i] = self.state[i];
+        }
+        self.state = new_state;
+    }
+
+    pub fn get_qubit_index(&self, name: &str) -> Option<usize> {
+        self.names.iter().position(|n| n == name)
+    }
+
+    pub fn apply_single_gate(&mut self, target_idx: usize, u: [[Complex; 2]; 2]) {
+        let size = self.state.len();
+        let mask = 1 << target_idx;
+        let mut new_state = self.state.clone();
+
+        for i in 0..size {
+            if (i & mask) == 0 {
+                let i0 = i;
+                let i1 = i | mask;
+                let a0 = self.state[i0];
+                let a1 = self.state[i1];
+                new_state[i0] = u[0][0].mul(a0).add(u[0][1].mul(a1));
+                new_state[i1] = u[1][0].mul(a0).add(u[1][1].mul(a1));
+            }
+        }
+        self.state = new_state;
+    }
+
+    pub fn apply_controlled_gate(&mut self, control_idx: usize, target_idx: usize, u: [[Complex; 2]; 2]) {
+        let size = self.state.len();
+        let c_mask = 1 << control_idx;
+        let t_mask = 1 << target_idx;
+        let mut new_state = self.state.clone();
+
+        for i in 0..size {
+            if (i & c_mask) != 0 && (i & t_mask) == 0 {
+                let i0 = i;
+                let i1 = i | t_mask;
+                let a0 = self.state[i0];
+                let a1 = self.state[i1];
+                new_state[i0] = u[0][0].mul(a0).add(u[0][1].mul(a1));
+                new_state[i1] = u[1][0].mul(a0).add(u[1][1].mul(a1));
+            }
+        }
+        self.state = new_state;
+    }
+
+    pub fn measure(&mut self, qubit_idx: usize) -> usize {
+        let size = self.state.len();
+        let mask = 1 << qubit_idx;
+        let mut p0 = 0.0;
+
+        for i in 0..size {
+            if (i & mask) == 0 {
+                p0 += self.state[i].norm_sq();
+            }
+        }
+
+        let seed = (p0 * 100000.0) as u64;
+        let mut r = 0.45;
+        if seed > 0 {
+            r = ((seed % 100) as f64) / 100.0;
+        }
+
+        let outcome = if r < p0 { 0 } else { 1 };
+
+        for i in 0..size {
+            if outcome == 0 {
+                if (i & mask) != 0 {
+                    self.state[i] = Complex::zero();
+                }
+            } else {
+                if (i & mask) == 0 {
+                    self.state[i] = Complex::zero();
+                }
+            }
+        }
+
+        let p_outcome = if outcome == 0 { p0 } else { 1.0 - p0 };
+        if p_outcome > 0.0 {
+            let norm = p_outcome.sqrt();
+            for i in 0..size {
+                self.state[i].re /= norm;
+                self.state[i].im /= norm;
+            }
+        }
+
+        outcome
+    }
+}
+
+pub struct QuantumCompiler {
+    pub register: std::sync::Mutex<QuantumRegister>,
+}
 
 impl QuantumCompiler {
     pub fn new() -> Self {
-        Self
+        Self {
+            register: std::sync::Mutex::new(QuantumRegister::new()),
+        }
     }
 
     pub fn compile_qubit_decl(&self, name: &str) {
         println!("[Quantum Compiler] JIT compiling qubit allocation '{}' to register index...", name);
+        let mut reg = self.register.lock().unwrap();
+        reg.add_qubit(name);
+        println!("  -> State vector size expanded to: 2^{} = {} amplitudes", reg.num_qubits, reg.state.len());
     }
 
     pub fn compile_entanglement(&self, qubits: &[String]) {
         println!("[Quantum Compiler] Entangling qubits: {:?}", qubits);
-        println!("  -> Generated Bell State Superposition Matrix:");
-        println!("     |Ψ⁺⟩ = 1/√2 (|00⟩ + |11⟩)");
-        println!("  -> Synced phase coherence across registers.");
+        let mut reg = self.register.lock().unwrap();
+        if qubits.len() >= 2 {
+            let idx0 = reg.get_qubit_index(&qubits[0]);
+            let idx1 = reg.get_qubit_index(&qubits[1]);
+            if let (Some(q0), Some(q1)) = (idx0, idx1) {
+                let h_mat = [
+                    [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(1.0 / 2.0f64.sqrt(), 0.0)],
+                    [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(-1.0 / 2.0f64.sqrt(), 0.0)],
+                ];
+                reg.apply_single_gate(q0, h_mat);
+                let x_mat = [
+                    [Complex::zero(), Complex::one()],
+                    [Complex::one(), Complex::zero()],
+                ];
+                reg.apply_controlled_gate(q0, q1, x_mat);
+                println!("  -> Generated Bell State Superposition Matrix:");
+                println!("     |Ψ⁺⟩ = 1/√2 (|00⟩ + |11⟩)");
+                println!("  -> Synced phase coherence across registers.");
+            } else {
+                println!("  -> Error: One or more qubits not found in register.");
+            }
+        }
     }
 
     pub fn compile_measurement(&self, qubit: &str, target: &str) {
         println!("[Quantum Compiler] Compiling wave-function collapse for qubit '{}'...", qubit);
-        println!("  -> Mapping probability eigenvalue collapse directly to classical variable: '{}'", target);
+        let mut reg = self.register.lock().unwrap();
+        if let Some(q_idx) = reg.get_qubit_index(qubit) {
+            let outcome = reg.measure(q_idx);
+            println!("  -> Mapping probability eigenvalue collapse directly to classical variable: '{}'", target);
+            println!("  -> Collapsed Outcome: |{}⟩", outcome);
+            let (x, y, z) = self.project_bloch_sphere(&reg, q_idx);
+            println!("  -> [Bloch Sphere Projection] Qubit '{}' coordinates: X={:.4}, Y={:.4}, Z={:.4}", qubit, x, y, z);
+        } else {
+            println!("  -> Error: Qubit '{}' not found in register.", qubit);
+        }
+    }
+
+    pub fn project_bloch_sphere(&self, reg: &QuantumRegister, qubit_idx: usize) -> (f64, f64, f64) {
+        let size = reg.state.len();
+        let mask = 1 << qubit_idx;
+        let mut rho_00 = 0.0;
+        let mut rho_11 = 0.0;
+        let mut rho_01 = Complex::zero();
+
+        for i in 0..size {
+            if (i & mask) == 0 {
+                let i0 = i;
+                let i1 = i | mask;
+                rho_00 += reg.state[i0].norm_sq();
+                rho_11 += reg.state[i1].norm_sq();
+                let a0 = reg.state[i0];
+                let a1 = reg.state[i1];
+                let a0_conj = Complex::new(a0.re, -a0.im);
+                rho_01 = rho_01.add(a0_conj.mul(a1));
+            }
+        }
+
+        let x = 2.0 * rho_01.re;
+        let y = 2.0 * rho_01.im;
+        let z = rho_00 - rho_11;
+        (x, y, z)
     }
 }
 
@@ -4789,5 +5000,37 @@ fn main() {
         // Clean up mock project directory after run
         let _ = fs::remove_dir_all(demo_project);
         println!("\n--- Toolchain CLI Demo Finished Successfully ---");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_complex_operations() {
+        let c1 = Complex::new(1.0, 2.0);
+        let c2 = Complex::new(3.0, -4.0);
+        let sum = c1.add(c2);
+        assert_eq!(sum.re, 4.0);
+        assert_eq!(sum.im, -2.0);
+        let prod = c1.mul(c2);
+        assert_eq!(prod.re, 11.0);
+        assert_eq!(prod.im, 2.0);
+    }
+
+    #[test]
+    fn test_quantum_hadamard() {
+        let mut reg = QuantumRegister::new();
+        reg.add_qubit("q0");
+        let h_mat = [
+            [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(1.0 / 2.0f64.sqrt(), 0.0)],
+            [Complex::new(1.0 / 2.0f64.sqrt(), 0.0), Complex::new(-1.0 / 2.0f64.sqrt(), 0.0)],
+        ];
+        reg.apply_single_gate(0, h_mat);
+        let p0 = reg.state[0].norm_sq();
+        let p1 = reg.state[1].norm_sq();
+        assert!((p0 - 0.5).abs() < 1e-9);
+        assert!((p1 - 0.5).abs() < 1e-9);
     }
 }

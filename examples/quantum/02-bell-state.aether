@@ -1,0 +1,10 @@
+intent BellStateGen {
+    fn run() {
+        qubit q1;
+        qubit q2;
+        entangle(q1, q2);
+        measure(q1) => res1;
+        measure(q2) => res2;
+        return (res1, res2);
+    }
+}

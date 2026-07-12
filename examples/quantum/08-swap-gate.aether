@@ -1,0 +1,10 @@
+intent QubitSwap {
+    fn run() {
+        qubit q1;
+        qubit q2;
+        x(q1);
+        swap(q1, q2);
+        measure(q2) => res;
+        return res;
+    }
+}

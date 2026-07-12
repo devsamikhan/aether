@@ -1,0 +1,10 @@
+intent HybridQaoa {
+    fn run(classical_cost: Float) {
+        qubit q1;
+        qubit q2;
+        qaoa_optimize(q1, q2, classical_cost);
+        measure(q1) => res1;
+        measure(q2) => res2;
+        return (res1, res2);
+    }
+}

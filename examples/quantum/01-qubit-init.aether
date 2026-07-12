@@ -1,0 +1,7 @@
+intent QubitInit {
+    fn run() {
+        qubit q1;
+        measure(q1) => res;
+        return res;
+    }
+}

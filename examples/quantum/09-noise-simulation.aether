@@ -1,0 +1,9 @@
+intent NoiseSim {
+    @noise_model(decoherence=0.01, gate_error=0.001)
+    fn run() {
+        qubit q;
+        hadamard(q);
+        measure(q) => outcome;
+        return outcome;
+    }
+}

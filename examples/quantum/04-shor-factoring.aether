@@ -1,0 +1,11 @@
+intent ShorFactor {
+    fn factorize(target: Int) {
+        qubit q1;
+        qubit q2;
+        qubit q3;
+        quantum_phase_estimation(q1, q2, q3);
+        measure(q1) => p1;
+        measure(q2) => p2;
+        return (p1, p2);
+    }
+}

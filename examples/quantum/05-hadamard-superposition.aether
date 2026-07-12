@@ -1,0 +1,8 @@
+intent HadamardSuperpose {
+    fn run() {
+        qubit q;
+        hadamard(q);
+        measure(q) => outcome;
+        return outcome;
+    }
+}

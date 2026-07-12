@@ -1,0 +1,12 @@
+intent GroverSearch {
+    fn run() {
+        qubit q1;
+        qubit q2;
+        superpose(q1);
+        superpose(q2);
+        oracle_match(q1, q2, 3);
+        measure(q1) => outcome1;
+        measure(q2) => outcome2;
+        return (outcome1, outcome2);
+    }
+}

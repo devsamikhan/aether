@@ -1,0 +1,8 @@
+intent PauliNot {
+    fn run() {
+        qubit q;
+        x(q);
+        measure(q) => outcome;
+        return outcome;
+    }
+}

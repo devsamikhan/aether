@@ -1,0 +1,10 @@
+intent CnotLogic {
+    fn run() {
+        qubit control;
+        qubit target;
+        x(control);
+        cnot(control, target);
+        measure(target) => outcome;
+        return outcome;
+    }
+}
