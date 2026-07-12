@@ -4917,6 +4917,25 @@ fn main() {
                     eprintln!("Usage: aether search <query>");
                 }
             }
+            "quantum" => {
+                println!("--- [MODULE 1: Classical Quantum Simulator] ---");
+                match aether::quantum::run_bell_state_verification() {
+                    Ok(verified) => {
+                        println!("[Quantum] Bell State verification: {}", if verified { "SUCCESS ✅" } else { "FAILED ❌" });
+                    }
+                    Err(e) => eprintln!("Quantum Error: {}", e),
+                }
+                match aether::quantum::simulate_grover(3, 5) {
+                    Ok(result) => {
+                        println!("[Quantum] Grover's search successfully collapsed to: |{}⟩ (Target: |5⟩) ✅", result);
+                    }
+                    Err(e) => eprintln!("Quantum Error: {}", e),
+                }
+            }
+            "complexity" => {
+                println!("--- [MODULE 2: Computational Complexity Analyzer] ---");
+                aether::complexity::ComplexityAnalyzer::print_speedup_comparison();
+            }
             _ => {
                 println!("AETHER Compiler Toolchain CLI");
                 println!("Subcommands:");
@@ -4927,6 +4946,8 @@ fn main() {
                 println!("  run                   Compile and launch the project execution loop");
                 println!("  benchmark             Run head-to-head performance versus benchmarks");
                 println!("  solve                 Run solvers for 5 legendary unsolved CS problems");
+                println!("  quantum               Run classical quantum simulator verification");
+                println!("  complexity            Run computational complexity class analysis");
                 println!("  version               Show version details & check updates");
                 println!("  self-update           Perform a safety-checked auto-update");
                 println!("  install <lib>         Install dependency library (supports name@version)");
