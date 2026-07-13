@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-
 // =========================================================================
 // 1. AST Data Structures
 // =========================================================================
@@ -162,6 +161,15 @@ pub enum Statement {
         catch_body: Vec<Statement>,
     },
     Defer(Box<Statement>),
+    ModuleDecl {
+        name: String,
+        body: Option<Vec<Statement>>,
+    },
+    UseDecl {
+        path: Vec<String>,
+        rename: Option<String>,
+        is_wildcard: bool,
+    },
 
     // Phase 11 Extensions
     DbQuery {
@@ -874,6 +882,7 @@ impl<'a> Lexer<'a> {
                         "type" => Token::Type,
                         "alias" => Token::Alias,
                         "namespace" => Token::Namespace,
+                        "mod" => Token::Module,
                         "module" => Token::Module,
                         "use" => Token::Use,
                         "import" => Token::Import,
@@ -974,7 +983,7 @@ impl<'a> Lexer<'a> {
                         "bitnot" => Token::BitNot,
                         "shiftl" => Token::ShiftL,
                         "shiftr" => Token::ShiftR,
-                        "mod" => Token::Mod,
+                        "modulo" => Token::Mod,
                         "pow" => Token::Pow,
                         "sqrt" => Token::Sqrt,
                         "abs" => Token::Abs,
@@ -1258,6 +1267,14 @@ impl Parser {
         }
     }
 
+    fn peek_next(&self) -> &Token {
+        if self.position + 1 < self.tokens.len() {
+            &self.tokens[self.position + 1].0
+        } else {
+            &Token::Eof
+        }
+    }
+
     fn current_line(&self) -> usize {
         if self.position < self.tokens.len() {
             self.tokens[self.position].1
@@ -1446,6 +1463,8 @@ impl Parser {
                 self.expect(Token::CloseBrace)?;
                 Ok(Statement::Block { statements })
             }
+            Token::Module => self.parse_mod_declaration(),
+            Token::Use => self.parse_use_declaration(),
             Token::Class => self.parse_class(),
             Token::For => self.parse_for_loop(),
             Token::While => self.parse_while_loop(),
@@ -1811,6 +1830,65 @@ impl Parser {
                 }
             }
         }
+    }
+
+    pub fn parse_mod_declaration(&mut self) -> Result<Statement, CompileError> {
+        self.expect(Token::Module)?;
+        let name = self.expect_identifier()?;
+
+        let body = if self.peek() == &Token::OpenBrace {
+            self.next(); // Consume '{'
+            let mut stmts = Vec::new();
+            while self.peek() != &Token::CloseBrace && self.peek() != &Token::Eof {
+                stmts.push(self.parse_statement()?);
+            }
+            self.expect(Token::CloseBrace)?;
+            Some(stmts)
+        } else {
+            if self.peek() == &Token::Semicolon {
+                self.next();
+            }
+            None
+        };
+
+        Ok(Statement::ModuleDecl { name, body })
+    }
+
+    pub fn parse_use_declaration(&mut self) -> Result<Statement, CompileError> {
+        self.expect(Token::Use)?;
+
+        let mut path = Vec::new();
+        path.push(self.expect_identifier()?);
+
+        while self.peek() == &Token::Colon && self.peek_next() == &Token::Colon {
+            self.next(); // Consume first ':'
+            self.next(); // Consume second ':'
+            if self.peek() == &Token::Star {
+                self.next();
+                return Ok(Statement::UseDecl {
+                    path,
+                    rename: None,
+                    is_wildcard: true,
+                });
+            }
+            path.push(self.expect_identifier()?);
+        }
+
+        let mut rename = None;
+        if self.peek() == &Token::As {
+            self.next(); // Consume 'as'
+            rename = Some(self.expect_identifier()?);
+        }
+
+        if self.peek() == &Token::Semicolon {
+            self.next();
+        }
+
+        Ok(Statement::UseDecl {
+            path,
+            rename,
+            is_wildcard: false,
+        })
     }
 
     pub fn parse_class(&mut self) -> Result<Statement, CompileError> {

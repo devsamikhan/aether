@@ -214,13 +214,13 @@ These are long-term research directions, not current capabilities:
 
 ## Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
+- [User Guide](docs/user-guide/getting-started.md)
+- [Language Reference](docs/reference/syntax.md)
+- [Standard Library Documentation](docs/stdlib/collections.md)
+- [Compiler Internals](docs/internals/architecture.md)
 - [Language Specification](SPECIFICATION.md)
-- [Syntax Reference](docs/syntax-reference.md)
-- [CRDT Theory](docs/crdt-theory.md)
-- [Quantum Primitives](docs/quantum-computing.md)
 - [Whitepaper](WHITEPAPER.md)
-- [Architecture](docs/architecture.md)
+- [Architecture Overview](docs/architecture.md)
 - [Intent Philosophy](docs/intent-philosophy.md)
 - [Keyword Reference](docs/keyword-reference.md)
 

@@ -1,0 +1,7 @@
+intent SwarmDemo {
+    fn run() {
+        swarm_spawn(10) {
+            // Swarm code
+        }
+    }
+}\n

@@ -1,0 +1,5 @@
+intent HelloWorld {
+    fn main() {
+        println("Hello, AETHER!");
+    }
+}\n

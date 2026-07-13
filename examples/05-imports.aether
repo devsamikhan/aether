@@ -1,0 +1,6 @@
+use my_utils::log;
+intent ImportDemo {
+    fn run() {
+        log();
+    }
+}\n

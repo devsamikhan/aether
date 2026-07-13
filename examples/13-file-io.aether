@@ -1,0 +1,5 @@
+intent FileDemo {
+    fn run() {
+        // std::io file operations
+    }
+}\n

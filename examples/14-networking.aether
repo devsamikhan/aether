@@ -1,0 +1,5 @@
+intent NetDemo {
+    fn run() {
+        // std::net utilities
+    }
+}\n

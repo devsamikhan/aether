@@ -7,6 +7,9 @@
     clippy::single_match
 )]
 
-pub mod quantum;
 pub mod complexity;
 pub mod crdt;
+pub mod error;
+pub mod module;
+pub mod quantum;
+pub mod types;

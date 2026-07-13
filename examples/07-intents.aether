@@ -1,0 +1,5 @@
+intent SchemaDemo {
+    schema {
+        name: String = "aether";
+    }
+}\n

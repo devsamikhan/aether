@@ -1,0 +1,5 @@
+intent SetDemo {
+    fn run() {
+        // GSet simulated
+    }
+}\n

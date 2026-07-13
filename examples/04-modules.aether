@@ -1,0 +1,5 @@
+module my_utils {
+    fn log() {
+        println("Utility log");
+    }
+}\n

@@ -1,0 +1,6 @@
+intent TypeDemo {
+    schema {
+        count: Int = 10;
+        active: Bool = true;
+    }
+}\n

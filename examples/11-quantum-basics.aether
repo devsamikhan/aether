@@ -1,0 +1,7 @@
+intent QuantumDemo {
+    fn run() {
+        qubit q;
+        superpose(q);
+        measure(q) => val;
+    }
+}\n
