@@ -1,5 +1,5 @@
 use aether::crdt::{GCounter, GSet, ORSet};
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 fn benchmark_gcounter_merge(c: &mut Criterion) {
     let mut a = GCounter::new("node_a");

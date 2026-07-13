@@ -1,4 +1,4 @@
-use super::unify::{Substitution, apply_subst, unify};
+use super::unify::{apply_subst, unify, Substitution};
 use super::{Type, TypeEnv};
 use std::collections::HashMap;
 

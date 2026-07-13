@@ -229,34 +229,51 @@ These are long-term research directions, not current capabilities:
 ## Installation
 
 ### Prerequisites
-- Rust 1.70+ (for building from source)
-- Git
-- Supported platforms: Windows, macOS, Linux
+- **Rust 1.70 or later** - [Install from rustup.rs](https://rustup.rs/)
+- **Git** - For cloning the repository
+- **Supported platforms:** Windows, macOS, Linux
 
 ### Quick Install
 
 **macOS/Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/install.sh | bash
+source ~/.bashrc  # or ~/.zshrc
+aether --version
 ```
 
 **Windows (PowerShell):**
 ```powershell
 iwr -useb https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/install-windows.ps1 | iex
+# Restart terminal
+aether --version
 ```
 
 ### Build from Source
+
 ```bash
 git clone https://github.com/devsamikhan/aether.git
 cd aether
 cargo build --release
+./target/release/aether --version
 ```
 
-### Known Limitations
-- Quantum features are simulated, not executed on real hardware.
-- Multiverse/BCI features are conceptual only.
-- Performance characteristics differ from final production targets.
-- Breaking changes expected before v1.0.
+### Troubleshooting
+
+**Error: "command not found"**
+- Ensure AETHER is in your PATH: `export PATH="$HOME/.aether/bin:$PATH"`
+- Restart your terminal
+
+**Error: "permission denied"**
+- Make binary executable: `chmod +x ~/.aether/bin/aether`
+
+**Error: Build fails**
+- Update Rust: `rustup update`
+- Clean build: `cargo clean && cargo build --release`
+
+**Error: Tests fail**
+- Check dependencies: `cargo update`
+- Run specific test: `cargo test --test crdt_tests`
 
 ---
 
