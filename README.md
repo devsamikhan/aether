@@ -246,7 +246,12 @@ source ~/.bashrc  # or ~/.zshrc
 aether --version
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell - Graphical Setup Manager):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/aether-installer-gui.ps1 -OutFile aether-installer.ps1; powershell -ExecutionPolicy Bypass -File aether-installer.ps1; Remove-Item aether-installer.ps1
+```
+
+**Windows (PowerShell - Silent CLI):**
 ```powershell
 iwr -useb https://raw.githubusercontent.com/devsamikhan/aether/main/scripts/install-windows.ps1 | iex
 # Restart terminal
