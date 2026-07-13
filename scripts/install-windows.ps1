@@ -5,7 +5,7 @@ param (
     [switch]$Quiet
 )
 
-$Version = "1.0.0"
+$Version = "0.2.0"
 $InstallDir = "$env:USERPROFILE\.aether"
 $BinDir = "$InstallDir\bin"
 $LibDir = "$InstallDir\libraries"

@@ -1,6 +1,6 @@
 [package]
 name = "aether"
-version = "1.0.0"
+version = "0.2.0"
 authors = ["AETHER Core Team <core-team@aether-lang.org>"]
 edition = "2024"
 description = "A post-quantum, intent-driven, self-healing programming language toolchain compiled in Rust."

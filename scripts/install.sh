@@ -2,7 +2,7 @@
 # install.sh - Universal macOS / Linux installer for AETHER
 set -e
 
-VERSION="1.0.0"
+VERSION="0.2.0"
 INSTALL_DIR="$HOME/.aether"
 BIN_DIR="$INSTALL_DIR/bin"
 LIB_DIR="$INSTALL_DIR/libraries"

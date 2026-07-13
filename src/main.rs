@@ -5729,7 +5729,7 @@ pub fn scaffold_unsolved_problems() -> Result<(), String> {
     Ok(())
 }
 
-pub const AETHER_VERSION: &str = "1.0.0";
+pub const AETHER_VERSION: &str = "0.2.0";
 pub const GITHUB_REPO: &str = "devsamikhan/aether";
 
 pub fn get_home_dir() -> PathBuf {
@@ -5812,7 +5812,7 @@ pub fn self_update() -> Result<(), String> {
 pub fn install_library(lib_spec: &str) -> Result<(), String> {
     let parts: Vec<&str> = lib_spec.split('@').collect();
     let name = parts[0];
-    let version = if parts.len() > 1 { parts[1] } else { "1.0.0" };
+    let version = if parts.len() > 1 { parts[1] } else { "0.2.0" };
 
     println!(
         "[Toolchain] Installing library '{}' (version: {})...",
