@@ -2,7 +2,7 @@
 
 [STATUS: ACTIVE DEVELOPMENT / EXPERIMENTAL RESEARCH]
 
-[Build: Passing] [License: MIT] [Version: 0.1.0] [Language: Rust]
+[Build: Passing] [License: MIT] [Version: 0.2.0] [Language: Rust]
 
 > A research-oriented programming language exploring intent-driven abstractions 
 > and future computing paradigms. Currently in active development.
@@ -176,18 +176,18 @@ These are long-term research directions, not current capabilities:
 
 ## Roadmap
 
-### Version 0.1 (Current)
+### Version 0.1
 - [x] Lexer
 - [x] Parser
 - [x] CLI
 - [x] CRDT Library
 - [x] Basic test suite
 
-### Version 0.2 (Next)
-- [ ] Full type checker
-- [ ] Module system
-- [ ] Better error messages
-- [ ] Improved documentation
+### Version 0.2 (Current)
+- [x] Full type checker
+- [x] Module system
+- [x] Better error messages
+- [x] Improved documentation
 
 ### Version 0.3
 - [ ] Enhanced package manager
