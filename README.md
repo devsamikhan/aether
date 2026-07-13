@@ -1,5 +1,9 @@
 # AETHER
 
+<p align="center">
+  <img src="logo/aether-logo.svg" alt="AETHER Logo" width="200" height="200"/>
+</p>
+
 [STATUS: ACTIVE DEVELOPMENT / EXPERIMENTAL RESEARCH]
 
 [Build: Passing] [License: MIT] [Version: 0.2.0] [Language: Rust]
