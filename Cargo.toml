@@ -1,6 +1,6 @@
 [package]
 name = "aether"
-version = "0.2.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["Sami Ullah Khan <devsamikhan@example.com>"]
 description = "AETHER: A research-oriented programming language exploring intent-driven abstractions"

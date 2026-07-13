@@ -6,7 +6,7 @@
 
 [STATUS: ACTIVE DEVELOPMENT / EXPERIMENTAL RESEARCH]
 
-[Build: Passing] [License: MIT] [Version: 0.2.0] [Language: Rust]
+[Build: Passing] [License: MIT] [Version: 1.1.0] [Language: Rust]
 
 > A research-oriented programming language exploring intent-driven abstractions 
 > and future computing paradigms. Currently in active development.
