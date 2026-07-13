@@ -1,53 +1,54 @@
-# AETHER Strategic Roadmap
+# AETHER Development Roadmap
 
-This document outlines the development plan for Project AETHER from v1.0.0 onwards.
+This document outlines the version milestones and research directions for the AETHER programming language.
+
+## Milestone 1: Version 0.1 (Current Status)
+- Status: Completed
+- Focus: Build foundational parsing and JIT simulation frameworks.
+- Deliverables:
+  - Lexical analyzer and parser for intent declarations and expressions.
+  - Command-line toolchain (`init`, `build`, `test`, `benchmark` commands).
+  - Production-ready `crdt` library implementing state-based semilattices (GCounter, GSet, PNCounter, ORSet).
+  - Standing unit test suite.
+
+## Milestone 2: Version 0.2 (Next Phase)
+- Status: Planned
+- Focus: Type verification and developer tools.
+- Deliverables:
+  - Full static type checker for variable mutations and schemas.
+  - Multi-file module import system.
+  - Detailed compile-time error reporting with line and column spans.
+
+## Milestone 3: Version 0.3
+- Status: Planned
+- Focus: Developer Experience (DX) tooling.
+- Deliverables:
+  - Integrated package installer and solver.
+  - Automatic code formatter.
+  - Language Server Protocol (LSP) implementation for IDE completions.
+
+## Milestone 4: Version 0.4
+- Status: Planned
+- Focus: Real Execution Backends.
+- Deliverables:
+  - LLVM compiler backend integration.
+  - Native machine code generation (executables for Windows, macOS, Linux).
+  - In-memory execution profiling.
+
+## Milestone 5: Version 1.0
+- Status: Long-Term Goal
+- Focus: Production Release.
+- Deliverables:
+  - Standardized stable language specification.
+  - Complete, optimized standard library coverage.
+  - Production-ready compiler toolchain.
 
 ---
 
-## 📅 Roadmap Overview
+## Long-Term Research Directions
 
-```mermaid
-gantt
-    title AETHER Release Timeline (2026-2027)
-    dateFormat  YYYY-MM-DD
-    section Core Fixes
-    Phase 25 (Immediate Fixes)       :active, p25, 2026-07-12, 14d
-    section Strengthening
-    Phase 26 (Foundation)            : p26, after p25, 14d
-    section Feature Work
-    Phase 27 (Feature Completion)    : p27, after p26, 30d
-    section Growth
-    Phase 28 (Ecosystem Growth)      : p28, after p27, 60d
-    section Advanced
-    Phase 29 (Advanced Features)     : p29, after p28, 60d
-    section Optimization
-    Phase 30 (Scale & Optimize)      : p30, after p29, 180d
-```
-
----
-
-## 🚀 Phase Deliverables
-
-### Phase 25: Critical Fixes (Week 1-2)
-- **Immediate Focus**: Integrate line/column spans in compiler error reports. Add basic panic handling.
-- **Deliverables**: Updated parsing errors with offset tokens.
-
-### Phase 26: Foundation Strengthening (Week 3-4)
-- **Immediate Focus**: Parallelize JIT compiler evaluations using multi-threaded execution pools.
-- **Deliverables**: Thread-safe UCG (Unified Context Graph) allocations.
-
-### Phase 27: Feature Completion (Month 2)
-- **Immediate Focus**: Qiskit/OpenQASM bridge implementation for physical QPU backend routing.
-- **Deliverables**: Native gate output formatting to OpenQASM files.
-
-### Phase 28: Ecosystem Growth (Month 3-4)
-- **Immediate Focus**: Expand `libraries/std/` to include formal HTTP server implementations and SQLite bindings.
-- **Deliverables**: `std/http.aether` and `std/db.aether` files.
-
-### Phase 29: Advanced Features (Month 5-6)
-- **Immediate Focus**: Real EEG device SDK bindings (e.g. OpenBCI headset streams).
-- **Deliverables**: Dynamic library loading for hardware communication.
-
-### Phase 30: Scale & Optimize (Month 7-12)
-- **Immediate Focus**: Build a self-hosting AETHER compiler that compiles itself down to target system assembly files without depending on Cargo/Rust.
-- **Deliverables**: Native machine code output compiler backends.
+These areas represent conceptual explorations for future computing architectures:
+- **Quantum Hardware Integration**: Translating simulated quantum primitive gate sequences to physical QPU instruction standards (such as OpenQASM).
+- **Physical Swarm Runtime**: Running CRDT state-based convergence across real multi-node network clusters.
+- **Brain-Computer Interface**: Mapping cognitive signal streams (EEG inputs) to language primitives under a formal hardware abstraction layer.
+- **Autonomous Self-Healing**: Real JIT recovery of fault states using dynamic runtime patch generation.
