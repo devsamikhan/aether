@@ -122,6 +122,9 @@ All structures are verified under integration tests to satisfy join-semilattice 
 - `time` - Operations on timestamps.
 - `system` - OS environment checks.
 
+### Python Interoperability
+Python Interoperability: AETHER can interface with the Python ecosystem via FFI, allowing access to libraries like NumPy and Pandas. For more details, see the [Python Interoperability Guide](file:///c:/Users/Latif%20Ullah%20Khan/Documents/Project%20AETHER/docs/interop/python.md).
+
 ---
 
 ## Experimental Features
@@ -192,6 +195,7 @@ These are long-term research directions, not current capabilities:
 - [x] Module system
 - [x] Better error messages
 - [x] Improved documentation
+- [x] Python Interoperability (FFI-based)
 
 ### Version 0.3
 - [ ] Enhanced package manager

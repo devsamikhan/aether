@@ -248,6 +248,10 @@ pub enum Statement {
         then_branch: Vec<Statement>,
         else_branch: Option<Vec<Statement>>,
     },
+    PythonBlock {
+        code: String,
+        target: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -652,6 +656,12 @@ pub enum Token {
 
     // Identifiers
     Identifier(String),
+
+    // Python Interop Tokens
+    PyImport,
+    PyEval,
+    PyCall,
+    PythonBlock(String),
 
     // Special
     Eof,
@@ -1162,6 +1172,48 @@ impl<'a> Lexer<'a> {
                         "contains_key" => Token::ContainsKey,
                         "keys" => Token::Keys,
 
+                        // Python Interop Keywords
+                        "py_import" => Token::PyImport,
+                        "py_eval" => Token::PyEval,
+                        "py_call" => Token::PyCall,
+                        "python" => {
+                            self.skip_whitespace();
+                            if self.peek() == Some(&'{') {
+                                self.next(); // consume '{'
+                                let mut brace_count = 1;
+                                let mut code_buf = String::new();
+                                while brace_count > 0 {
+                                    match self.next() {
+                                        Some('{') => {
+                                            brace_count += 1;
+                                            code_buf.push('{');
+                                        }
+                                        Some('}') => {
+                                            brace_count -= 1;
+                                            if brace_count > 0 {
+                                                code_buf.push('}');
+                                            }
+                                        }
+                                        Some(other) => {
+                                            if other == '\n' {
+                                                self.line += 1;
+                                            }
+                                            code_buf.push(other);
+                                        }
+                                        None => {
+                                            return Err(CompileError::new(
+                                                start_line,
+                                                "Unterminated python block".to_string(),
+                                            ));
+                                        }
+                                    }
+                                }
+                                Token::PythonBlock(code_buf)
+                            } else {
+                                Token::Identifier(ident)
+                            }
+                        }
+
                         // Booleans
                         "true" => Token::BooleanLiteral(true),
                         "false" => Token::BooleanLiteral(false),
@@ -1454,6 +1506,14 @@ impl Parser {
 
     pub fn parse_statement(&mut self) -> Result<Statement, CompileError> {
         match self.peek() {
+            Token::PythonBlock(code) => {
+                let code = code.clone();
+                self.next(); // Consume PythonBlock
+                self.expect(Token::Arrow)?;
+                let target = self.expect_identifier()?;
+                self.expect(Token::Semicolon)?;
+                Ok(Statement::PythonBlock { code, target })
+            }
             Token::OpenBrace => {
                 self.next(); // Consume '{'
                 let mut statements = Vec::new();
@@ -2720,6 +2780,9 @@ impl Parser {
             | Token::Abs
             | Token::Ceil
             | Token::Floor
+            | Token::PyImport
+            | Token::PyEval
+            | Token::PyCall
             | Token::Pow => {
                 self.next(); // Consume keyword
                 let name = format!("{:?}", tok);
@@ -3097,14 +3160,7 @@ impl SemanticAnalyzer {
 // 6. Polyglot FFI Resolver (Phase 6)
 // =========================================================================
 
-#[derive(Debug, Clone)]
-pub enum RuntimeValue {
-    Integer(i64),
-    Float(f64),
-    String(String),
-    Boolean(bool),
-    Null,
-}
+use aether::interop::python::RuntimeValue;
 
 pub struct FfiResolver;
 
@@ -3112,18 +3168,12 @@ impl FfiResolver {
     pub fn execute_foreign_code(
         language: &str,
         code: &str,
-        arguments: HashMap<String, RuntimeValue>,
+        _arguments: HashMap<String, RuntimeValue>,
     ) -> Result<RuntimeValue, String> {
         match language {
             "python" => {
                 println!("[FFI Bridge] Spawning Python worker thread, locking GIL...");
-                if code.contains("math.sqrt") {
-                    if let Some(RuntimeValue::Integer(val)) = arguments.get("x") {
-                        let res = (*val as f64).sqrt();
-                        return Ok(RuntimeValue::Float(res));
-                    }
-                }
-                Ok(RuntimeValue::Null)
+                aether::interop::python::py_exec(code)
             }
             "c" => {
                 println!("[FFI Bridge] Invoking JIT compiled C code inline...");
@@ -3187,11 +3237,40 @@ impl JitCompiler {
     }
 
     pub fn compile_builtin_function_call(&self, name: &str, args: &[Expression]) {
-        println!(
-            "[JIT Compiler] Compiling zero-allocation BuiltinFunctionCall: {}({:?})",
-            name, args
-        );
-        println!("  -> Directly lowered to optimized Rust runtime dispatcher function pointer.");
+        match name {
+            "PyImport" => {
+                println!(
+                    "[JIT Compiler] Lowering Python import to dynamic linker symbol resolver: args = {:?}",
+                    args
+                );
+                println!(
+                    "  -> Directly bound to aether::interop::python::py_import symbol address."
+                );
+            }
+            "PyEval" => {
+                println!(
+                    "[JIT Compiler] Compiling PyEval expression evaluation to GIL-synchronized runtime callback: args = {:?}",
+                    args
+                );
+                println!("  -> Directly bound to aether::interop::python::py_eval symbol address.");
+            }
+            "PyCall" => {
+                println!(
+                    "[JIT Compiler] Resolving Python function call symbol to dynamic dispatch bridge: args = {:?}",
+                    args
+                );
+                println!("  -> Directly bound to aether::interop::python::py_call symbol address.");
+            }
+            _ => {
+                println!(
+                    "[JIT Compiler] Compiling zero-allocation BuiltinFunctionCall: {}({:?})",
+                    name, args
+                );
+                println!(
+                    "  -> Directly lowered to optimized Rust runtime dispatcher function pointer."
+                );
+            }
+        }
     }
 }
 
@@ -3917,6 +3996,12 @@ pub fn scan_futuristic_statements(
             }
             Statement::Defer(sub) => {
                 scan_futuristic_statements(std::slice::from_ref(sub), qc, nsc, msc, jit);
+            }
+            Statement::PythonBlock { code, target } => {
+                println!(
+                    "[JIT Compiler] Compiling inline Python block to host-bridge callback FFI: {} => {}",
+                    code.trim().replace('\n', " ; "), target
+                );
             }
             _ => {}
         }

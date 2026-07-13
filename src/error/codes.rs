@@ -21,6 +21,10 @@ pub enum ErrorCode {
     ModuleNotFound,     // E0300
     CircularDependency, // E0301
     ImportNotFound,     // E0302
+
+    // Python Interop errors (E0400-E0499)
+    PythonInteropError, // E0400
+    PythonImportFailed, // E0401
 }
 
 impl ErrorCode {
@@ -40,6 +44,8 @@ impl ErrorCode {
             ErrorCode::ModuleNotFound => "E0300",
             ErrorCode::CircularDependency => "E0301",
             ErrorCode::ImportNotFound => "E0302",
+            ErrorCode::PythonInteropError => "E0400",
+            ErrorCode::PythonImportFailed => "E0401",
         }
     }
 }

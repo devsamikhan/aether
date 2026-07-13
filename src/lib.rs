@@ -10,6 +10,7 @@
 pub mod complexity;
 pub mod crdt;
 pub mod error;
+pub mod interop;
 pub mod module;
 pub mod quantum;
 pub mod types;
