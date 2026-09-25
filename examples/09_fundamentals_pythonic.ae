@@ -1,0 +1,133 @@
+"""
+==================================================================
+           AETHER LANGUAGE 2.0: FUNDAMENTALS SHOWCASE
+   Python-level Simplicity & Ergonomics with Native C-Speed
+==================================================================
+"""
+
+# ----------------------------------------------------------------
+# 1. COMMENTS (Python & C-style)
+# ----------------------------------------------------------------
+# This is a Python-style single line comment
+// This is a C-style single line comment
+/*
+  This is a multi-line block comment
+  useful for long documentation blocks.
+*/
+
+println("=== Aether Language Fundamentals Demo ===")
+
+# ----------------------------------------------------------------
+# 2. VARIABLES & ZERO-CEREMONY ASSIGNMENT
+# ----------------------------------------------------------------
+# No need for mandatory keywords! Dynamic, flexible, and Pythonic:
+name = "Aether Language"
+version = 2
+speed_ratio = 10.5
+is_fast = True
+nothing = None
+
+println("Language:", name, "| Version:", version, "| Fast:", is_fast)
+
+# Re-assignment and mutation
+version += 1
+println("Updated Version:", version)
+
+# ----------------------------------------------------------------
+# 3. DATA TYPES
+# ----------------------------------------------------------------
+# Strings (single, double, or triple-quoted docstrings)
+single_quoted = 'Hello from single quotes'
+double_quoted = "Hello from double quotes"
+docstring = """
+Multi-line string
+with indentation and formatting!
+"""
+
+# String Concatenation & Repetition
+greeting = "Hello" + " " + "World!"
+score_msg = "Points: " + 100        # Mixed concat (String + Int)
+reverse_msg = 200 + " OK"           # Mixed concat (Int + String)
+celebrate = "Hurray! " * 3          # String repetition
+
+println(greeting)
+println(score_msg)
+println(reverse_msg)
+println(celebrate)
+
+# Numbers (64-bit Integer & 64-bit Float)
+integer_val = 42
+float_val = 3.14159
+println("Int:", integer_val, "| Float:", float_val)
+
+# Booleans (Both True/False and true/false supported)
+flag_a = True
+flag_b = false
+println("Booleans:", flag_a, flag_b)
+
+# None / Nil (Both None and nil supported)
+empty_val = None
+println("None value:", empty_val)
+
+# ----------------------------------------------------------------
+# 4. OPERATORS
+# ----------------------------------------------------------------
+# Arithmetic: +, -, *, /, %, ^, **
+a = 20
+b = 6
+println("a + b =", a + b)
+println("a - b =", a - b)
+println("a * b =", a * b)
+println("a / b =", a / b)
+println("a % b =", a % b)
+println("2 ** 8 =", 2 ** 8)
+
+# Assignment operators: =, +=, -=, *=, /=, %=
+counter = 100
+counter += 50
+counter -= 20
+counter *= 2
+counter /= 4
+counter %= 15
+println("Counter after operations:", counter)
+
+# Comparison: ==, !=, <, <=, >, >=
+println("10 == 10:", 10 == 10)
+println("10 != 5:",  10 != 5)
+println("5 < 10:",   5 < 10)
+println("10 >= 10:", 10 >= 10)
+
+# Logical: and, or, not (also &&, ||, !)
+println("True and False:", True and False)
+println("True or False:",  True or False)
+println("not False:",      not False)
+
+# ----------------------------------------------------------------
+# 5. TYPE CONVERSION & TYPE CHECKING
+# ----------------------------------------------------------------
+num_str = "12345"
+converted_int = int(num_str)
+converted_float = float("99.9")
+converted_str = str(42)
+truthy_val = bool("Active")
+falsy_val = bool(0)
+
+println("int('12345') =", converted_int, "Type:", type(converted_int))
+println("float('99.9') =", converted_float, "Type:", type(converted_float))
+println("str(42) =", converted_str, "Type:", type(converted_str))
+println("bool('Active') =", truthy_val)
+println("bool(0) =", falsy_val)
+
+# ----------------------------------------------------------------
+# 6. LOCAL VARIABLES IN FUNCTIONS
+# ----------------------------------------------------------------
+fn calculate_stats(base_score, bonus):
+    multiplier = 2
+    total = (base_score + bonus) * multiplier
+    total += 10
+    total %= 500
+    return total
+
+result = calculate_stats(100, 25)
+println("Function calculated result:", result)
+println("=== Fundamentals demo complete! ===")

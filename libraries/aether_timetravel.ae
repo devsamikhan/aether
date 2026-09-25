@@ -1,0 +1,42 @@
+# ==============================================================================
+# AetherTimeTravel — Omniscient Time-Reversible VM & Execution History Replay
+# Reversible Execution Journaling, State Rewind, Checkpointing & Branching
+# ==============================================================================
+
+class TimeMachine:
+    def __init__(self, session_id=nil):
+        if session_id != nil:
+            self.id = session_id
+        else:
+            self.id = __native_timetravel.create_session()
+
+    def record(self, var_name, value):
+        return __native_timetravel.record(self.id, str(var_name), value)
+
+    def checkpoint(self, name):
+        return __native_timetravel.checkpoint(self.id, str(name))
+
+    def restore(self, name):
+        return __native_timetravel.restore(self.id, str(name))
+
+    def rewind(self, steps=1):
+        return __native_timetravel.rewind(self.id, int(steps))
+
+    def branch(self, name):
+        return __native_timetravel.branch(self.id, str(name))
+
+    def state(self):
+        return __native_timetravel.get_state(self.id)
+
+    def diff(self, cp_a, cp_b):
+        return __native_timetravel.diff(self.id, str(cp_a), str(cp_b))
+
+    def history(self):
+        return __native_timetravel.history(self.id)
+
+    def __getitem__(self, key):
+        let st = self.state()
+        return st[key]
+
+    def __setitem__(self, key, value):
+        self.record(key, value)

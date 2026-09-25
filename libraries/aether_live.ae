@@ -1,0 +1,22 @@
+# ==============================================================================
+# AetherLive / AetherHotReload — Zero-Downtime Live Code Swapping
+# Erlang BEAM-Grade In-Place Bytecode Swapping & Hot State Preservation
+# ==============================================================================
+
+class LiveReloader:
+    def __init__(self):
+        pass
+
+    def reload(self, source_code, preserve_state=true):
+        return __native_hotreload.reload(str(source_code), bool(preserve_state))
+
+    def reload_file(self, file_path, preserve_state=true):
+        return __native_hotreload.reload_file(str(file_path), bool(preserve_state))
+
+    def version(self):
+        return __native_hotreload.version()
+
+    def history(self):
+        return __native_hotreload.history()
+
+let live = LiveReloader()

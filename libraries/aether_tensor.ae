@@ -1,0 +1,111 @@
+# ==============================================================================
+# AetherTensor — High-Performance N-Dimensional Tensor & Matrix Engine
+# ==============================================================================
+
+class Tensor:
+    def __init__(self, raw_or_data, shape=nil):
+        if shape != nil:
+            self.handle = __native_matrix.from_array(raw_or_data, shape)
+        elif type(raw_or_data) == "map":
+            self.handle = raw_or_data
+        elif type(raw_or_data) == "array":
+            self.handle = __native_matrix.from_array(raw_or_data)
+        else:
+            self.handle = raw_or_data
+        self._is_variable = false
+
+    def zeros(shape):
+        return Tensor(__native_matrix.zeros(shape))
+
+    def ones(shape):
+        return Tensor(__native_matrix.ones(shape))
+
+    def eye(n):
+        return Tensor(__native_matrix.eye(n))
+
+    def random(shape, min_val=0.0, max_val=1.0):
+        return Tensor(__native_matrix.random(shape, min_val, max_val))
+
+    def shape(self):
+        return self.handle["shape"]
+
+    def size(self):
+        return self.handle["size"]
+
+    def matmul(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.matmul(self.handle, other_h))
+
+    def transpose(self):
+        return Tensor(__native_matrix.transpose(self.handle))
+
+    def reshape(self, new_shape):
+        return Tensor(__native_matrix.reshape(self.handle, new_shape))
+
+    def sum(self):
+        return __native_matrix.sum(self.handle)
+
+    def mean(self):
+        return __native_matrix.mean(self.handle)
+
+    def relu(self):
+        return Tensor(__native_matrix.relu(self.handle))
+
+    def sigmoid(self):
+        return Tensor(__native_matrix.sigmoid(self.handle))
+
+    def softmax(self):
+        return Tensor(__native_matrix.softmax(self.handle))
+
+    def to_list(self):
+        return __native_matrix.to_list(self.handle)
+
+    def __add__(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.add(self.handle, other_h))
+
+    def __sub__(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.sub(self.handle, other_h))
+
+    def __mul__(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.mul(self.handle, other_h))
+
+    def zeros_like(self):
+        return Tensor(__native_matrix.zeros_like(self.handle))
+
+    def ones_like(self):
+        return Tensor(__native_matrix.ones_like(self.handle))
+
+    def gt_mask(self, threshold=0.0):
+        return Tensor(__native_matrix.gt_mask(self.handle, threshold))
+
+    def reduce_sum_to(self, target_shape):
+        return Tensor(__native_matrix.reduce_sum_to(self.handle, target_shape))
+
+    def clip(self, min_val, max_val):
+        return Tensor(__native_matrix.clip(self.handle, min_val, max_val))
+
+    def __div__(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.div(self.handle, other_h))
+
+    def __truediv__(self, other):
+        let other_h = other
+        if type(other) == "instance":
+            other_h = other.handle
+        return Tensor(__native_matrix.div(self.handle, other_h))
+
+    def __str__(self):
+        return __native_matrix.to_string(self.handle)

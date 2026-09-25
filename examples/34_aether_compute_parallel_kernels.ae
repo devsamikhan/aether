@@ -1,0 +1,87 @@
+# ==============================================================================
+# Example 34: AetherCompute & AetherSIMD — Software GPU & Multi-Core Engine
+# High-Throughput Compute Shaders & Multi-Core Workgroup Parallelism
+# ==============================================================================
+
+from aether_compute import Buffer, ComputePipeline, hardware_info, vec_add, vec_fma, matmul, conv2d, parallel_sum, parallel_max
+
+print("=== 1. Hardware Inspection ===")
+let hw = hardware_info()
+print("Compute Device: " + str(hw["device_type"]))
+print("CPU Logical Cores: " + str(hw["cpu_cores"]))
+print("Max Workgroup Size: " + str(hw["max_workgroup_size"]))
+print("Subgroup SIMD Width: " + str(hw["subgroup_simd_width"]))
+print("Unified Memory Architecture: " + str(hw["memory_unified"]))
+
+print("\n=== 2. High-Throughput Vector Parallelism (5,000 items) ===")
+let n = 5000
+let arr_a = []
+let arr_b = []
+let arr_c = []
+let i = 0
+while i < n:
+    arr_a.append(i * 1.5)
+    arr_b.append(i * 2.0)
+    arr_c.append(50.0)
+    i = i + 1
+
+let buf_a = Buffer.from_array(arr_a)
+let buf_b = Buffer.from_array(arr_b)
+let buf_c = Buffer.from_array(arr_c)
+
+# Fused Multiply-Add: out[i] = a[i] * b[i] + c[i]
+let fma_out = vec_fma(buf_a, buf_b, buf_c)
+let fma_res = fma_out.to_list()
+print("FMA Output count: " + str(len(fma_res)))
+print("FMA Item[0] (0*0 + 50): " + str(fma_res[0]))
+print("FMA Item[10] (15 * 20 + 50): " + str(fma_res[10]))
+print("FMA Item[100] (150 * 200 + 50): " + str(fma_res[100]))
+
+print("\n=== 3. Parallel Reductions Across Workgroups ===")
+let total_sum = parallel_sum(fma_out)
+let maximum_val = parallel_max(fma_out)
+print("Parallel Sum across cores: " + str(total_sum))
+print("Parallel Max across cores: " + str(maximum_val))
+
+print("\n=== 4. 2D Image Convolution Shader (Sharpen Kernel) ===")
+let img_w = 6
+let img_h = 6
+let img_raw = [
+    0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+    0.0, 10.0, 10.0, 10.0, 10.0,  0.0,
+    0.0, 10.0, 50.0, 50.0, 10.0,  0.0,
+    0.0, 10.0, 50.0, 50.0, 10.0,  0.0,
+    0.0, 10.0, 10.0, 10.0, 10.0,  0.0,
+    0.0,  0.0,  0.0,  0.0,  0.0,  0.0
+]
+let img_buf = Buffer([img_w, img_h, 1], img_raw)
+
+# 3x3 Edge / Sharpen Kernel:
+# [ [ 0, -1,  0],
+#   [-1,  5, -1],
+#   [ 0, -1,  0] ]
+let sharpen_weights = [
+    0.0, -1.0,  0.0,
+   -1.0,  5.0, -1.0,
+    0.0, -1.0,  0.0
+]
+let kernel_buf = Buffer([3, 3, 1], sharpen_weights)
+
+let conv_filtered = conv2d(img_buf, kernel_buf, img_w, img_h, 3, 3)
+let filtered_data = conv_filtered.to_list()
+print("2D Convolution Completed across workgroups.")
+print("Filtered Image (Shape: " + str(conv_filtered.shape()) + "):")
+print("Filtered Center Pixel: " + str(filtered_data[2 * img_w + 2]))
+
+print("\n=== 5. Multi-Core Matrix Multiplication Shader ===")
+# MatMul: A [2x3] * B [3x2] -> C [2x2]
+let mat_a = Buffer([3, 2, 1], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+let mat_b = Buffer([2, 3, 1], [7.0, 8.0, 9.0, 1.0, 2.0, 3.0])
+
+let mat_c = matmul(mat_a, mat_b, 2, 3, 2)
+let c_list = mat_c.to_list()
+print("Matrix Multiply Result C [2x2]:")
+print("Row 0: [" + str(c_list[0]) + ", " + str(c_list[1]) + "] (Expected: [31.0, 19.0])")
+print("Row 1: [" + str(c_list[2]) + ", " + str(c_list[3]) + "] (Expected: [85.0, 55.0])")
+
+print("\n[SUCCESS] AetherCompute Software GPU & SIMD Engine Verified!")

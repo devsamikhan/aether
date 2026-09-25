@@ -1,0 +1,226 @@
+# ----------------------------------------------------
+# Project AETHER - Object-Oriented Programming (OOP)
+# ----------------------------------------------------
+
+print("========================================")
+print("     Project AETHER: OOP Showcase       ")
+print("========================================")
+
+# 1. Classes, Objects, & Constructors (__init__)
+print("\n--- 1. Classes, Objects, & Constructors ---")
+
+class Drone:
+    def __init__(self, model, battery=100, altitude=0):
+        self.model = model
+        self.battery = battery
+        self.altitude = altitude
+
+    def fly(self, meters):
+        if self.battery >= 10:
+            self.altitude += meters
+            self.battery -= 10
+            print(self.model, "climbed to", self.altitude, "meters. Battery at", str(self.battery) + "%")
+        else:
+            print("Low battery! Cannot fly", self.model)
+
+    def land(self):
+        self.altitude = 0
+        print(self.model, "landed safely.")
+
+d1 = Drone("Aether-X1")
+d2 = Drone("Hawk-Pro", battery=15)
+d1.fly(50)
+d1.fly(30)
+d1.land()
+d2.fly(10)
+d2.fly(10) # should trigger low battery
+
+# 2. Attributes & Class Variables
+print("\n--- 2. Instance Attributes & Class Variables ---")
+
+class Robot:
+    manufacturer = "Aether Dynamics"
+    active_robots = 0
+
+    def __init__(self, name):
+        self.name = name
+
+r1 = Robot("Atlas")
+r2 = Robot("Titan")
+print("Manufacturer (Class-level):", Robot.manufacturer)
+print("r1.manufacturer:", r1.manufacturer)
+print("r2.manufacturer:", r2.manufacturer)
+
+Robot.manufacturer = "Aether Systems Inc."
+print("Updated Class-level:", Robot.manufacturer)
+print("r1 sees updated:", r1.manufacturer)
+
+# 3. Inheritance & super() Delegation
+print("\n--- 3. Inheritance & super() Delegation ---")
+
+class Employee:
+    def __init__(self, name, salary):
+        self.name = name
+        self.salary = salary
+
+    def get_details(self):
+        return self.name + " earns $" + str(self.salary)
+
+    def work(self):
+        return self.name + " is writing high-performance code."
+
+class LeadArchitect(Employee):
+    def __init__(self, name, salary, equity_shares):
+        super().__init__(name, salary)
+        self.equity_shares = equity_shares
+
+    def get_details(self):
+        base_info = super().get_details()
+        return base_info + " with " + str(self.equity_shares) + " equity shares"
+
+    def work(self):
+        return self.name + " is designing distributed microkernels."
+
+emp = Employee("Bob", 85000)
+lead = LeadArchitect("Alice", 160000, 5000)
+print(emp.get_details(), "->", emp.work())
+print(lead.get_details(), "->", lead.work())
+
+# 4. Encapsulation (Getters & Setters)
+print("\n--- 4. Encapsulation (Getters & Setters) ---")
+
+class BankAccount:
+    def __init__(self, account_holder, initial_deposit=0):
+        self.holder = account_holder
+        self._balance = initial_deposit
+
+    def get_balance(self):
+        return self._balance
+
+    def deposit(self, amount):
+        if amount > 0:
+            self._balance += amount
+            print("Deposited $" + str(amount) + ". Balance: $" + str(self._balance))
+            return True
+        print("Invalid deposit amount:", amount)
+        return False
+
+    def withdraw(self, amount):
+        if amount > 0 and amount <= self._balance:
+            self._balance -= amount
+            print("Withdrew $" + str(amount) + ". Remaining: $" + str(self._balance))
+            return True
+        print("Declined: Insufficient funds or invalid amount (" + str(amount) + ")")
+        return False
+
+acc = BankAccount("Sami Khan", 1000)
+acc.deposit(500)
+acc.withdraw(300)
+acc.withdraw(2000)
+print("Final Encapsulated Balance:", acc.get_balance())
+
+# 5. Abstraction (pass methods) & Polymorphism
+print("\n--- 5. Abstraction & Polymorphism ---")
+
+class GeometricShape:
+    def area(self):
+        pass
+
+    def name(self):
+        return "Unknown shape"
+
+class Circle(GeometricShape):
+    def __init__(self, radius):
+        self.radius = radius
+
+    def name(self):
+        return "Circle"
+
+    def area(self):
+        # 3.14159 * r^2
+        return 3.14159 * self.radius * self.radius
+
+class Rectangle(GeometricShape):
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+    def name(self):
+        return "Rectangle"
+
+    def area(self):
+        return self.width * self.height
+
+shapes = [Circle(5), Rectangle(4, 6), Circle(2.5)]
+print("Iterating polymorphically over shapes:")
+for shape in shapes:
+    print(" -", shape.name(), "with area:", shape.area())
+
+# 6. Magic Methods: Operator Overloading & Custom Containers
+print("\n--- 6. Magic Methods & Operator Overloading ---")
+
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return Vector2D(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other):
+        return Vector2D(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, scalar):
+        return Vector2D(self.x * scalar, self.y * scalar)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    def __str__(self):
+        return "Vector2D(" + str(self.x) + ", " + str(self.y) + ")"
+
+    def __getitem__(self, idx):
+        if idx == 0:
+            return self.x
+        elif idx == 1:
+            return self.y
+        return nil
+
+v1 = Vector2D(10, 20)
+v2 = Vector2D(5, 8)
+v_sum = v1 + v2
+v_diff = v1 - v2
+v_scaled = v1 * 3
+is_equal = (v_sum == Vector2D(15, 28))
+
+print("v1:", v1)
+print("v2:", v2)
+print("v1 + v2:", v_sum)
+print("v1 - v2:", v_diff)
+print("v1 * 3:", v_scaled)
+print("v_sum == Vector2D(15, 28) ->", is_equal)
+print("Indexing vector: v1[0] =", v1[0], "| v1[1] =", v1[1])
+
+# Custom Container with __len__, __getitem__, __setitem__
+class DataMatrix:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, idx):
+        return self.rows[idx]
+
+    def __setitem__(self, idx, val):
+        self.rows[idx] = val
+
+matrix = DataMatrix(["Row Alpha", "Row Beta", "Row Gamma"])
+print("Matrix length via len(matrix):", len(matrix))
+print("matrix[1] before:", matrix[1])
+matrix[1] = "Row Beta (Modified)"
+print("matrix[1] after:", matrix[1])
+
+print("\n========================================")
+print("   OOP Showcase Completed Successfully! ")
+print("========================================")

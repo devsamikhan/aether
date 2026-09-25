@@ -1,0 +1,90 @@
+# ==============================================================================
+# AETHER Showcase 23: AetherVector N-Dimensional Semantic Search & Embeddings
+# ==============================================================================
+
+from aether_vector import VectorStore, cosine_similarity, euclidean_distance, normalize
+
+println("==================================================================")
+println("   AETHER 2.0: AetherVector Native Vector & Semantic Engine")
+println("==================================================================")
+
+# 1. Mathematical Vector Operations
+println("\n[1] Testing Mathematical Vector Primitives...")
+let v_ai = [0.95, 0.20, 0.10, 0.05]
+let v_sys = [0.10, 0.15, 0.90, 0.85]
+let v_web = [0.20, 0.90, 0.30, 0.15]
+
+let sim_ai_sys = cosine_similarity(v_ai, v_sys)
+let sim_ai_web = cosine_similarity(v_ai, v_web)
+let dist_ai_sys = euclidean_distance(v_ai, v_sys)
+
+println("  • Cosine Sim (AI vs Systems): " + str(Math.round(sim_ai_sys, 4)) + " (Low similarity)")
+println("  • Cosine Sim (AI vs Web):     " + str(Math.round(sim_ai_web, 4)))
+println("  • Euclidean Dist (AI vs Sys): " + str(Math.round(dist_ai_sys, 4)))
+
+let norm_ai = normalize(v_ai)
+println("  • Normalized v_ai:            " + str(norm_ai))
+
+# 2. VectorStore Creation and Document Embedding Indexing
+println("\n[2] Indexing Knowledge Base into VectorStore...")
+let store = VectorStore("cosine")
+
+store.add("doc_1", [0.92, 0.25, 0.15, 0.05], {
+    "title": "Deep Neural Network Backpropagation",
+    "category": "ai",
+    "year": 2026
+})
+
+store.add("doc_2", [0.88, 0.30, 0.20, 0.10], {
+    "title": "Transformer Attention Mechanisms",
+    "category": "ai",
+    "year": 2025
+})
+
+store.add("doc_3", [0.15, 0.10, 0.95, 0.80], {
+    "title": "M:N Work-Stealing Fiber Concurrency",
+    "category": "systems",
+    "year": 2026
+})
+
+store.add("doc_4", [0.10, 0.20, 0.85, 0.92], {
+    "title": "CRDT Distributed State Convergence",
+    "category": "systems",
+    "year": 2024
+})
+
+store.add("doc_5", [0.25, 0.92, 0.35, 0.20], {
+    "title": "RFC 6455 Real-Time WebSocket Streaming",
+    "category": "networking",
+    "year": 2026
+})
+
+println("  • Successfully indexed " + str(store.count()) + " semantic vector documents.")
+
+# 3. Semantic Top-K Similarity Search
+println("\n[3] Querying: 'Machine Learning Gradient Descent' (Embedding ~ [0.90, 0.20, 0.10, 0.05])...")
+let query_ml = [0.90, 0.20, 0.10, 0.05]
+let top_matches = store.search(query_ml, 3, "cosine")
+
+println("  • Top 3 Semantic Matches:")
+let i = 0
+while i < len(top_matches):
+    let match_item = top_matches[i]
+    let meta = match_item["metadata"]
+    println("    " + str(i + 1) + ". [" + match_item["id"] + "] " + meta["title"] + " (Score: " + str(Math.round(match_item["score"], 4)) + ", Category: " + meta["category"] + ")")
+    i = i + 1
+
+# 4. Filtered Semantic Search by Category Metadata
+println("\n[4] Querying: 'Distributed High-Performance' with Category Filter ('systems')...")
+let query_sys = [0.12, 0.18, 0.92, 0.88]
+let filtered_matches = store.search(query_sys, 2, "cosine", "category", "systems")
+
+let j = 0
+while j < len(filtered_matches):
+    let m = filtered_matches[j]
+    println("    " + str(j + 1) + ". [" + m["id"] + "] " + m["metadata"]["title"] + " (Score: " + str(Math.round(m["score"], 4)) + ")")
+    j = j + 1
+
+println("\n==================================================================")
+println("   AetherVector Showcase Completed Successfully!")
+println("==================================================================")

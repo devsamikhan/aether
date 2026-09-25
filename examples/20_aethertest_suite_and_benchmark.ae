@@ -1,0 +1,122 @@
+# ==============================================================================
+# AETHER Showcase 20: AetherTest Test Runner, Assertions & Micro-Benchmarks
+# ==============================================================================
+
+from aether_test import TestSuite, benchmark, assert_eq, assert_ne, assert_true, assert_false, assert_almost_eq, assert_raises
+from aether_tensor import Tensor
+
+println("==================================================================")
+println("   AETHER 2.0: AetherTest Native Harness & Benchmark Suite")
+println("==================================================================")
+
+# ------------------------------------------------------------------------------
+# 1. Running Unit Test Suite 1: Core Fundamentals & Assertions
+# ------------------------------------------------------------------------------
+suite1 = TestSuite("Aether Fundamentals & Logic Verification")
+
+fn test_primitive_arithmetic():
+    assert_eq(2 + 2, 4, "Basic integer addition")
+    assert_ne(10, 20, "Inequality check")
+    assert_almost_eq(1.0 / 3.0, 0.333333, 0.0001, "Floating point division tolerance")
+
+fn test_boolean_predicates():
+    assert_true(len([1, 2, 3]) == 3, "Array length check")
+    assert_false("apple" == "orange", "String equality check")
+
+fn test_exception_guards():
+    fn raise_zero_div():
+        let x = 10 / 0
+
+    fn raise_custom():
+        raise "ValidationFailure: field 'email' is required"
+
+    assert_raises(raise_custom, "ValidationFailure")
+
+suite1.test("Primitive Arithmetic", test_primitive_arithmetic)
+suite1.test("Boolean Predicates", test_boolean_predicates)
+suite1.test("Exception Guards", test_exception_guards)
+
+results1 = suite1.run()
+
+# ------------------------------------------------------------------------------
+# 2. Running Unit Test Suite 2: High-Performance Tensor Validation
+# ------------------------------------------------------------------------------
+suite2 = TestSuite("AetherTensor Linear Algebra Verification")
+
+fn test_matrix_multiplication():
+    let a = Tensor([[1.0, 2.0], [3.0, 4.0]])
+    let i = Tensor.eye(2)
+    let res = a.matmul(i)
+    assert_eq(res.to_list(), [[1.0, 2.0], [3.0, 4.0]], "Identity multiplication")
+
+fn test_activations_and_broadcast():
+    let t = Tensor([-10.0, 0.0, 15.0])
+    let relu_out = t.relu()
+    assert_eq(relu_out.to_list(), [0.0, 0.0, 15.0], "ReLU clipping")
+
+    let scaled = relu_out * 2.0
+    assert_eq(scaled.to_list(), [0.0, 0.0, 30.0], "Scalar multiplication")
+
+suite2.test("Matrix Multiplication & Identity", test_matrix_multiplication)
+suite2.test("Activations & Broadcasting", test_activations_and_broadcast)
+
+results2 = suite2.run()
+
+# ------------------------------------------------------------------------------
+# 3. High-Resolution Micro-Benchmarking Harness
+# ------------------------------------------------------------------------------
+println("==================================================================")
+println("   AETHER 2.0: High-Resolution Micro-Benchmarking Suite")
+println("==================================================================")
+
+# Benchmark 1: Fibonacci Iterative Loop
+fn bench_fib_iter():
+    let a = 0
+    let b = 1
+    let n = 0
+    while n < 30:
+        let temp = a + b
+        a = b
+        b = temp
+        n += 1
+    return a
+
+benchmark("Iterative Fibonacci (N=30)", bench_fib_iter, 500)
+
+# Benchmark 2: Map / Dictionary Key Lookup
+bench_map = {
+    "user_id": 10042,
+    "username": "superadmin",
+    "tier": "enterprise",
+    "region": "us-east-1",
+    "quota": 100000
+}
+
+fn bench_dict_access():
+    let u = bench_map["username"]
+    let t = bench_map["tier"]
+    let q = bench_map["quota"]
+    return q
+
+benchmark("Hash Map Property Resolution", bench_dict_access, 1000)
+
+# Benchmark 3: Tensor 2x2 Matrix Multiplication
+m_a = Tensor([[1.5, 2.5], [3.5, 4.5]])
+m_b = Tensor([[0.5, 1.5], [2.5, 3.5]])
+
+fn bench_tensor_matmul():
+    let c = m_a.matmul(m_b)
+    return c
+
+benchmark("Native Tensor MatMul (2x2)", bench_tensor_matmul, 500)
+
+# Benchmark 4: String Interpolation & Join
+fn bench_string_ops():
+    let s = "Aether" + "::" + "Compiler" + "::" + "Bytecode" + "::" + "VM"
+    return s
+
+benchmark("String Chaining & Concatenation", bench_string_ops, 1000)
+
+println("\n==================================================================")
+println("   AetherTest Showcase Complete! Test Suites & Benchmarks Passed.")
+println("==================================================================")

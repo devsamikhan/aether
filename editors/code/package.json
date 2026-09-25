@@ -1,0 +1,57 @@
+{
+  "name": "aether-lang",
+  "displayName": "AETHER 2.0 Language Support",
+  "description": "Official Language Support, Syntax Highlighting, Snippets & LSP for the AETHER Programming Language",
+  "version": "2.0.0",
+  "publisher": "aether-lang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "aether",
+    "quantum",
+    "intent",
+    "tensor",
+    "crdt",
+    "systems"
+  ],
+  "icon": "logo.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "aether",
+        "aliases": [
+          "AETHER",
+          "aether"
+        ],
+        "extensions": [
+          ".ae",
+          ".aether"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "aether",
+        "scopeName": "source.aether",
+        "path": "./syntaxes/aether.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "aether",
+        "path": "./snippets/aether.json"
+      }
+    ]
+  },
+  "activationEvents": [
+    "onLanguage:aether"
+  ],
+  "main": "./client/out/extension.js"
+}

@@ -1,0 +1,6 @@
+[package]
+name = "aether_main"
+version = "0.1.0"
+author = "Developer"
+
+[dependencies]

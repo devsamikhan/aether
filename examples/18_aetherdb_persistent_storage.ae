@@ -1,0 +1,103 @@
+# ==============================================================================
+# AETHER Showcase 18: AetherDB Embedded Document & Key-Value Storage Engine
+# ==============================================================================
+
+from aether_db import Database
+
+println("==================================================================")
+println("   AETHER 2.0: AetherDB Document Engine & WAL Journaling Showcase")
+println("==================================================================")
+
+# 1. Initialize In-Memory Database
+println("\n[1] Initializing in-memory database instance...")
+db = Database(":memory:")
+users = db.collection("users")
+orders = db.collection("orders")
+
+# 2. Document Insertions
+println("\n[2] Inserting customer profiles...")
+u1 = users.insert({
+    "name": "Sarah Connor",
+    "role": "lead_engineer",
+    "tier": "enterprise",
+    "credits": 2500,
+    "skills": ["rust", "distributed_systems", "aether"]
+})
+u2 = users.insert({
+    "name": "John Doe",
+    "role": "data_scientist",
+    "tier": "standard",
+    "credits": 450,
+    "skills": ["python", "machine_learning"]
+})
+u3 = users.insert({
+    "name": "Alex Mercer",
+    "role": "security_analyst",
+    "tier": "enterprise",
+    "credits": 3100,
+    "skills": ["cryptography", "zero_knowledge", "rust"]
+})
+
+println("  -> Sarah Connor ID: " + str(u1["_id"]) + " (Credits: " + str(u1["credits"]) + ")")
+println("  -> John Doe ID:     " + str(u2["_id"]) + " (Credits: " + str(u2["credits"]) + ")")
+println("  -> Alex Mercer ID:  " + str(u3["_id"]) + " (Credits: " + str(u3["credits"]) + ")")
+println("  Total users in collection: " + str(users.count()))
+
+# 3. Document Querying with Filter Operators
+println("\n[3] Executing rich query filters ($gt, $in, $contains)...")
+
+# Greater Than
+high_credit_users = users.find({"credits": {"$gt": 1000}})
+println("  • Users with credits > 1000: " + str(len(high_credit_users)))
+for u in high_credit_users:
+    println("    * " + u["name"] + " -> " + str(u["credits"]) + " credits")
+
+# Set Inclusion ($in)
+enterprise_users = users.find({"tier": {"$in": ["enterprise", "vip"]}})
+println("  • Enterprise tier accounts: " + str(len(enterprise_users)))
+
+# Substring/Element Containment ($contains)
+rust_devs = users.find({"skills": {"$contains": "rust"}})
+println("  • Users with Rust expertise: " + str(len(rust_devs)))
+for dev in rust_devs:
+    println("    * " + dev["name"] + " (" + dev["role"] + ")")
+
+# 4. Updates & Upserts
+println("\n[4] Updating user profile and credit balances...")
+users.update({"name": "John Doe"}, {"tier": "pro", "credits": 800})
+updated_john = users.find_one({"name": "John Doe"})
+println("  -> John Doe updated tier: " + updated_john["tier"] + ", credits: " + str(updated_john["credits"]))
+
+# 5. Orders Collection & Cross References
+println("\n[5] Creating transaction records in orders collection...")
+orders.insert({"user_id": u1["_id"], "amount": 199.99, "currency": "USD", "status": "settled"})
+orders.insert({"user_id": u3["_id"], "amount": 499.50, "currency": "USD", "status": "settled"})
+orders.insert({"user_id": u2["_id"], "amount": 49.00, "currency": "USD", "status": "pending"})
+
+println("  Total orders recorded: " + str(orders.count()))
+settled_orders = orders.find({"status": "settled"})
+println("  Settled orders count: " + str(len(settled_orders)))
+
+# 6. Persistent On-Disk Storage & WAL Snapshotting
+println("\n[6] Demonstrating persistent on-disk storage with WAL...")
+disk_db_path = "aether_demo_storage.json"
+disk_db = Database(disk_db_path)
+cache_col = disk_db.collection("telemetry")
+
+cache_col.insert({"node": "node-alpha-1", "cpu": 12.4, "status": "online"})
+cache_col.insert({"node": "node-beta-2", "cpu": 88.2, "status": "alert"})
+
+println("  Persisting and compacting WAL log to disk...")
+disk_db.compact()
+disk_db.close()
+
+# Reopen from disk to verify recovery
+reopened_db = Database(disk_db_path)
+reopened_cache = reopened_db.collection("telemetry")
+recovered_nodes = reopened_cache.find()
+println("  -> Successfully recovered " + str(len(recovered_nodes)) + " telemetry entries from on-disk snapshot.")
+reopened_db.close()
+
+println("\n==================================================================")
+println("   AetherDB Showcase Complete! In-Memory & On-Disk Storage Verified.")
+println("==================================================================")

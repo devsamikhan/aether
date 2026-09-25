@@ -1,0 +1,99 @@
+{
+  "Intent Contract Block": {
+    "prefix": "intent",
+    "body": [
+      "intent ${1:ContractName} {",
+      "    schema {",
+      "        ${2:userId}: String;",
+      "        ${3:balance}: Float;",
+      "    }",
+      "    invariants {",
+      "        require(${3:balance} >= 0.0);",
+      "        ensure(${3:balance} == old(${3:balance}) + ${4:depositAmount});",
+      "    }",
+      "}"
+    ],
+    "description": "Create an AETHER Declarative Intent Contract"
+  },
+  "Quantum Circuit Simulator": {
+    "prefix": "quantum",
+    "body": [
+      "import quantum;",
+      "",
+      "let sim = QuantumSimulator.new(${1:2});",
+      "sim.hadamard(0);",
+      "sim.cnot(0, 1);",
+      "let collapsed = sim.measure_all();",
+      "print(\"Bell state measurement: \" + str(collapsed));"
+    ],
+    "description": "Create an Entangled Bell-State Quantum Circuit"
+  },
+  "Tensor Neural Network Forward": {
+    "prefix": "tensor",
+    "body": [
+      "import tensor;",
+      "",
+      "let w = Tensor.randn([${1:4}, ${2:2}], requires_grad=True);",
+      "let x = Tensor.from_vec([[1.0, 2.0, 3.0, 4.0]]);",
+      "let y = x.matmul(w);",
+      "let loss = y.sum();",
+      "loss.backward();",
+      "print(\"Gradients: \" + str(w.grad()));"
+    ],
+    "description": "Create a Tensor Autograd Forward and Backward Pass"
+  },
+  "Knowledge Graph Dijkstra": {
+    "prefix": "graph",
+    "body": [
+      "import aether_graph;",
+      "",
+      "let g = Graph.new();",
+      "g.add_node(\"${1:Source}\", {\"type\": \"start\"});",
+      "g.add_node(\"${2:Target}\", {\"type\": \"end\"});",
+      "g.add_edge(\"${1:Source}\", \"${2:Target}\", ${3:1.0}, \"connects\");",
+      "let path = g.dijkstra(\"${1:Source}\", \"${2:Target}\");",
+      "print(\"Shortest Path: \" + str(path));"
+    ],
+    "description": "Create an AetherGraph and run Dijkstra shortest path"
+  },
+  "Zero-Downtime Hot Reload Service": {
+    "prefix": "live",
+    "body": [
+      "import aether_live;",
+      "",
+      "let reloader = LiveReloader.new();",
+      "reloader.on_reload(fn(old_state, new_state) {",
+      "    print(\"Live migration completed with zero downtime!\");",
+      "});"
+    ],
+    "description": "Define an AetherLive Zero-Downtime Hot Code Reload Hook"
+  },
+  "Function Definition": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:function_name}(${2:args}) {",
+      "    ${3:# code}",
+      "}"
+    ],
+    "description": "Define a function in AETHER"
+  },
+  "Class Definition": {
+    "prefix": "class",
+    "body": [
+      "class ${1:ClassName} {",
+      "    def __init__(self, ${2:args}):",
+      "        ${3:pass}",
+      "}"
+    ],
+    "description": "Define an OOP Class in AETHER"
+  },
+  "Fiber Concurrency Spawn": {
+    "prefix": "spawn",
+    "body": [
+      "spawn {",
+      "    ${1:# concurrent execution in green fiber}",
+      "};"
+    ],
+    "description": "Spawn a lightweight concurrent fiber"
+  }
+}

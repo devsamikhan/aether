@@ -1,0 +1,60 @@
+# ==============================================================================
+# Example 39: AetherFlow — Real-Time Reactive Streaming & Windowed DAG Engine
+# Tumbling, Sliding & Session Windows for High-Throughput Financial Ticker Analytics
+# ==============================================================================
+
+from aether_flow import DataStream
+
+print("==================================================================")
+print("   🌊 AETHER-FLOW: REAL-TIME STREAMING & WINDOWING ENGINE 🌊")
+print("==================================================================")
+
+# 1. Initialize High-Throughput Stock Ticker Price Stream
+let price_ticks = [
+    180.5, 181.2, 182.0, 181.8, 183.5, 184.0, 183.8, 185.2, 186.0, 185.5, 187.1, 188.0
+]
+
+let stream = DataStream("hft_quotes", 100)
+stream.emit_batch(price_ticks)
+print("[AetherFlow] Ingested " + str(stream.count()) + " tick quotes into stream 'hft_quotes'.")
+
+# 2. Reactive Transformation: Filter out base baseline noise (e.g. price > 182.0)
+let active_stream = stream.filter(lambda p: p > 182.0)
+print("[AetherFlow] Filtered active stream count (price > $182.0): " + str(active_stream.count()))
+
+# 3. Tumbling Window Aggregation (Fixed Batch Size 3)
+# Calculates discrete window averages: [W1, W2, W3]
+print("\n=== 1. Tumbling Window Analytics (Window Size: 3) ===")
+let tumbling = active_stream.window_tumbling(3)
+let batch_means = tumbling.mean()
+let batch_maxs = tumbling.max()
+print("Batch Averages (Mean): " + str(batch_means))
+print("Batch Highs (Max):      " + str(batch_maxs))
+
+# 4. Sliding Window Analytics (Moving Window Size: 4, Slide Step: 1)
+# Computes Rolling Simple Moving Average (SMA)
+print("\n=== 2. Sliding Window Rolling Analytics (Size: 4, Slide: 1) ===")
+let sliding = active_stream.window_sliding(4, 1)
+let rolling_sma = sliding.mean()
+let rolling_highs = sliding.max()
+print("Rolling 4-Tick SMA:  " + str(rolling_sma))
+print("Rolling 4-Tick High: " + str(rolling_highs))
+
+# 5. Session Window Grouping (Inactivity Timeout Simulation)
+print("\n=== 3. Inactivity Session Windows (Timeout: 500ms) ===")
+let session_stream = DataStream("user_events", 50)
+session_stream.emit("search_gpu", 1000)
+session_stream.emit("click_h100", 1150)
+session_stream.emit("add_cart", 1250)
+# Gap > 500ms
+session_stream.emit("login_reauth", 2200)
+session_stream.emit("checkout_complete", 2300)
+
+let sessions = session_stream.window_session(500).collect()
+print("Distinct User Sessions Detected: " + str(len(sessions)))
+print("Session 1 Events: " + str(sessions[0]))
+print("Session 2 Events: " + str(sessions[1]))
+
+print("==================================================================")
+print("   ✅ AETHER-FLOW STREAMING PIPELINE COMPLETED SUCCESSFULLY!")
+print("==================================================================")

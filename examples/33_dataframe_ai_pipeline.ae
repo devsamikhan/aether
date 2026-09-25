@@ -1,0 +1,60 @@
+# ==============================================================================
+# Example 33: AetherDataFrame to AI Pipeline (Tabular ML Bridge)
+# Seamless Columnar Data Preparation -> N-D Tensor -> Neural Forward Inference
+# ==============================================================================
+
+from aether_df import DataFrame
+from aether_tensor import Tensor
+
+print("=== 1. Loading Raw Tabular Sensor Data ===")
+let raw_sensor_data = {
+    "sensor_a": [12.0, 14.5, 11.2, 18.0, 16.5, 13.0],
+    "sensor_b": [105.0, 112.0, 98.0, 140.0, 135.0, 108.0],
+    "target_label": [0.0, 0.0, 0.0, 1.0, 1.0, 0.0]
+}
+
+let df = DataFrame(raw_sensor_data)
+print("Dataframe Initialized:")
+print("Shape: " + str(df.shape()))
+print("Schema: " + str(df.columns()))
+
+print("\n=== 2. Vectorized Feature Normalization ===")
+# Normalize sensor_a: (a - mean) / 10.0
+let sa = df["sensor_a"]
+let mean_sa = sa.mean()
+print("Sensor A Mean: " + str(mean_sa))
+
+let norm_sa = (sa - mean_sa) / 10.0
+df["norm_sensor_a"] = norm_sa
+
+# Normalize sensor_b: (b - 100.0) / 50.0
+let sb = df["sensor_b"]
+let norm_sb = (sb - 100.0) / 50.0
+df["norm_sensor_b"] = norm_sb
+
+print("Normalized Features successfully added into DataFrame.")
+
+print("\n=== 3. Zero-Copy Tabular -> N-D Tensor Bridge ===")
+let feature_cols = ["norm_sensor_a", "norm_sensor_b"]
+let X = df.to_tensor(feature_cols)
+
+print("Input Feature Tensor X:")
+print("X shape: " + str(X.shape()))
+print("X values: " + str(X.to_list()))
+
+print("\n=== 4. Neural Layer Inference ===")
+# Weight matrix W: 2 inputs -> 1 output
+# [ [0.75], [0.45] ]
+let W = Tensor([0.75, 0.45], [2, 1])
+
+# Linear combination: Z = X * W
+let Z = X.matmul(W)
+print("Logits Z shape: " + str(Z.shape()))
+print("Logits Z: " + str(Z.to_list()))
+
+# Activation: Sigmoid for binary probability
+let predictions = Z.sigmoid()
+print("Model Probabilities (Sigmoid):")
+print(str(predictions.to_list()))
+
+print("\n[SUCCESS] End-to-End DataFrame -> AI Pipeline Executed Flawlessly!")

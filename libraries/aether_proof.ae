@@ -1,0 +1,27 @@
+# ==============================================================================
+# AetherProof — Automated Formal Verification & Symbolic Execution Engine
+# Mathematical Theorem Proving & Safety Analysis for Aether Intent Contracts
+# ==============================================================================
+
+class VerificationResult:
+    def __init__(self, raw_map):
+        self.function = raw_map["function"]
+        self.verified = raw_map["verified"]
+        self.paths = raw_map["paths"]
+        self.diagnostic = raw_map["diagnostic"]
+        self.vulnerabilities = raw_map["vulnerabilities"]
+        self.counter_example = raw_map["counter_example"]
+
+    def is_valid(self):
+        return self.verified
+
+class Verifier:
+    def verify(source_code):
+        let raw_reports = __native_proof.verify(str(source_code))
+        let results = []
+        for r in raw_reports:
+            results.push(VerificationResult(r))
+        return results
+
+def verify(source_code):
+    return Verifier.verify(source_code)

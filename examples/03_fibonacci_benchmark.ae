@@ -1,0 +1,17 @@
+# AETHER 2.0 Fibonacci Performance Benchmark
+# Demonstrates deep call-stack recursion and VM throughput
+
+fn fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+let target = 25
+println("Computing Fibonacci of", target, "recursively...")
+
+let t0 = clock()
+let result = fib(target)
+let duration = clock() - t0
+
+println("Result fib(" + str(target) + ") =", result)
+println("Time taken:", duration, "seconds")

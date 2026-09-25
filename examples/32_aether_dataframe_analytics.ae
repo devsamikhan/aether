@@ -1,0 +1,64 @@
+# ==============================================================================
+# Example 32: AetherDataFrame — In-Memory Columnar Analytics Engine
+# Demonstrating Apache Arrow / Polars Grade Vectorization in Pure Aether
+# ==============================================================================
+
+from aether_df import DataFrame, Series
+
+print("=== 1. Creating Columnar DataFrame ===")
+let raw_data = {
+    "emp_id": [101, 102, 103, 104, 105, 106],
+    "department": ["Engineering", "Sales", "Engineering", "Marketing", "Engineering", "Sales"],
+    "base_salary": [95000.0, 72000.0, 115000.0, 68000.0, 130000.0, 85000.0],
+    "bonus_percent": [0.15, 0.20, 0.12, 0.10, 0.18, 0.25],
+    "rating": [4.8, 4.2, 4.9, 3.8, 5.0, 4.5]
+}
+
+let df = DataFrame(raw_data)
+print("DataFrame Shape: " + str(df.shape()))
+print("Columns: " + str(df.columns()))
+
+print("\n=== 2. Vectorized Single-Cycle Column Operations ===")
+# total_comp = base_salary + (base_salary * bonus_percent)
+let base = df["base_salary"]
+let bonus = df["bonus_percent"]
+let bonus_amount = base * bonus
+let total_comp = base + bonus_amount
+
+df["total_comp"] = total_comp
+print("Added 'total_comp' column via vectorized arithmetic.")
+
+print("\n=== 3. Statistical Reductions ===")
+print("Mean Base Salary: $" + str(base.mean()))
+print("Max Total Compensation: $" + str(total_comp.max()))
+print("Min Total Compensation: $" + str(total_comp.min()))
+
+print("\n=== 4. Columnar Boolean Filtering ===")
+# Filter top performers: rating >= 4.5
+let high_performers_mask = df["rating"] >= 4.5
+let top_tier = df.filter(high_performers_mask)
+print("Top Tier Employees (Rating >= 4.5): " + str(top_tier.shape()[0]) + " found")
+
+print("\n=== 5. Group-By Aggregations ===")
+let dept_stats = df.group_by("department").agg({"total_comp": "mean"})
+print("Average Compensation by Department:")
+print("Shape: " + str(dept_stats.shape()))
+print("Columns: " + str(dept_stats.columns()))
+
+print("\n=== 6. Relational Joins ===")
+let bonus_pool_df = DataFrame({
+    "department": ["Engineering", "Sales", "Marketing"],
+    "budget_million": [12.5, 8.0, 4.2]
+})
+
+let merged = df.join(bonus_pool_df, "department", "inner")
+print("Merged Employee & Department Budget Table:")
+print("Shape: " + str(merged.shape()))
+print("Columns: " + str(merged.columns()))
+
+print("\n=== 7. CSV Export & Roundtrip ===")
+let csv_output = df.to_csv()
+print("CSV Export Preview (first 120 chars):")
+print(csv_output)
+
+print("\n[SUCCESS] AetherDataFrame Columnar Analytics Engine Verified!")

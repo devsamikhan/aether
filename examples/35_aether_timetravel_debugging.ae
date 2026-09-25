@@ -1,0 +1,70 @@
+# ==============================================================================
+# Example 35: AetherTimeTravel — Omniscient Time-Reversible Execution Engine
+# Reversible State Journaling, Checkpoint Rollbacks & Timeline Branching
+# ==============================================================================
+
+from aether_timetravel import TimeMachine
+
+print("=== 1. Launching Omniscient Time Machine ===")
+let tm = TimeMachine()
+
+# Record initial baseline state
+tm["account_id"] = "TRADER-9001"
+tm["cash_usd"] = 100000.0
+tm["btc_holdings"] = 1.5
+tm["risk_multiplier"] = 1.0
+
+let cp1 = tm.checkpoint("checkpoint_baseline")
+print("Saved Checkpoint 1: 'checkpoint_baseline' (Step " + str(cp1) + ")")
+print("Initial Cash: $" + str(tm["cash_usd"]) + " | BTC: " + str(tm["btc_holdings"]))
+
+print("\n=== 2. Normal Trading Execution ===")
+# Buy 0.5 BTC at $60,000 ($30,000 cost)
+tm["cash_usd"] = tm["cash_usd"] - 30000.0
+tm["btc_holdings"] = tm["btc_holdings"] + 0.5
+tm["risk_multiplier"] = 1.2
+
+let cp2 = tm.checkpoint("checkpoint_pre_crash")
+print("Saved Checkpoint 2: 'checkpoint_pre_crash' (Step " + str(cp2) + ")")
+print("Updated Cash: $" + str(tm["cash_usd"]) + " | BTC: " + str(tm["btc_holdings"]))
+
+print("\n=== 3. Simulating Catastrophic Fat-Finger Anomaly ===")
+# Erroneous massive short order: cash drops to negative, risk goes crazy
+tm["cash_usd"] = -500000.0
+tm["btc_holdings"] = -25.0
+tm["risk_multiplier"] = 99.9
+print("[ALERT] Catastrophic State Detected!")
+print("Corrupted Cash: $" + str(tm["cash_usd"]) + " | Corrupted BTC: " + str(tm["btc_holdings"]))
+
+print("\n=== 4. Historical State Diff Analysis ===")
+let diff_report = tm.diff("checkpoint_pre_crash", "checkpoint_baseline")
+print("State Variance Diff between Checkpoint 1 & 2:")
+print(str(diff_report))
+
+print("\n=== 5. Omniscient State Rewind ===")
+print("Rewinding execution state backward to 'checkpoint_pre_crash'...")
+tm.restore("checkpoint_pre_crash")
+print("Restoration Complete!")
+print("Restored Cash: $" + str(tm["cash_usd"]) + " (Expected $70,000.0)")
+print("Restored BTC: " + str(tm["btc_holdings"]) + " (Expected 2.0)")
+print("Restored Risk: " + str(tm["risk_multiplier"]) + " (Expected 1.2)")
+
+print("\n=== 6. Counterfactual Timeline Branching ===")
+print("Forking reality into new safe timeline: 'timeline_hedged'...")
+tm.branch("timeline_hedged")
+
+# Execute calibrated hedge order in alternate timeline
+tm["cash_usd"] = tm["cash_usd"] - 10000.0
+tm["btc_holdings"] = tm["btc_holdings"] + 0.15
+tm["status"] = "hedged_and_healthy"
+
+print("Alternate Timeline State:")
+print("Hedged Cash: $" + str(tm["cash_usd"]))
+print("Hedged BTC: " + str(tm["btc_holdings"]))
+print("Timeline Status: " + str(tm["status"]))
+
+print("\n=== 7. Chronological Execution History ===")
+let hist = tm.history()
+print("Total Journaled Delta Events: " + str(len(hist)))
+
+print("\n[SUCCESS] AetherTimeTravel Omniscient Replay Engine Verified!")

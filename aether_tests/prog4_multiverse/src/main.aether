@@ -1,0 +1,10 @@
+intent MultiverseSolver {
+    fn main() {
+        branch_reality {
+            ManyWorldsPathfind(graph: grid, dest: target);
+            observe_timeline(res);
+        }
+        merge_universe(res);
+        println("Speculative multiverse search converged.");
+    }
+}

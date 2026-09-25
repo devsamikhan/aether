@@ -1,0 +1,173 @@
+# ==============================================================================
+# AetherDataFrame — In-Memory Columnar Vector Analytics & Apache Arrow Alternative
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+class Series:
+    def __init__(self, data, name="series"):
+        self.data = data
+        self.name = str(name)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+    # Vectorized Element-wise Arithmetic
+    def __add__(self, other):
+        return Series(__native_df.vec_op("+", self, other), self.name)
+
+    def __sub__(self, other):
+        return Series(__native_df.vec_op("-", self, other), self.name)
+
+    def __mul__(self, other):
+        return Series(__native_df.vec_op("*", self, other), self.name)
+
+    def __div__(self, other):
+        return Series(__native_df.vec_op("/", self, other), self.name)
+
+    # Vectorized Element-wise Comparisons
+    def __eq__(self, other):
+        return Series(__native_df.vec_op("==", self, other), self.name)
+
+    def __gt__(self, other):
+        return Series(__native_df.vec_op(">", self, other), self.name)
+
+    def __lt__(self, other):
+        return Series(__native_df.vec_op("<", self, other), self.name)
+
+    def __ge__(self, other):
+        return Series(__native_df.vec_op(">=", self, other), self.name)
+
+    def __le__(self, other):
+        return Series(__native_df.vec_op("<=", self, other), self.name)
+
+    # Statistical Reductions
+    def sum(self):
+        let s = 0.0
+        let i = 0
+        while i < len(self.data):
+            s = s + self.data[i]
+            i = i + 1
+        return s
+
+    def mean(self):
+        if len(self.data) == 0:
+            return 0.0
+        return self.sum() / len(self.data)
+
+    def min(self):
+        if len(self.data) == 0:
+            return 0.0
+        let m = self.data[0]
+        let i = 1
+        while i < len(self.data):
+            if self.data[i] < m:
+                m = self.data[i]
+            i = i + 1
+        return m
+
+    def max(self):
+        if len(self.data) == 0:
+            return 0.0
+        let m = self.data[0]
+        let i = 1
+        while i < len(self.data):
+            if self.data[i] > m:
+                m = self.data[i]
+            i = i + 1
+        return m
+
+class GroupByResult:
+    def __init__(self, df_id, group_col):
+        self.df_id = df_id
+        self.group_col = group_col
+
+    def agg(self, agg_dict):
+        let new_id = __native_df.group_by(self.df_id, self.group_col, agg_dict)
+        return DataFrame.from_id(new_id)
+
+class DataFrame:
+    def __init__(self, data_map):
+        self.id = __native_df.create(data_map)
+
+    def from_id(raw_id):
+        let df = DataFrame({})
+        df.id = raw_id
+        return df
+
+    def from_csv(path_or_text):
+        let raw_id = __native_df.from_csv(str(path_or_text))
+        return DataFrame.from_id(raw_id)
+
+    def to_csv(self, path=nil):
+        if path != nil:
+            return __native_df.to_csv(self.id, str(path))
+        return __native_df.to_csv(self.id)
+
+    def select(self, columns):
+        let new_id = __native_df.select(self.id, columns)
+        return DataFrame.from_id(new_id)
+
+    def filter(self, mask):
+        let mask_data = mask
+        try:
+            mask_data = mask.data
+        except:
+            pass
+        let new_id = __native_df.filter(self.id, mask_data)
+        return DataFrame.from_id(new_id)
+
+    def with_column(self, name, col_data):
+        let raw_data = col_data
+        try:
+            raw_data = col_data.data
+        except:
+            pass
+        let new_id = __native_df.with_column(self.id, str(name), raw_data)
+        return DataFrame.from_id(new_id)
+
+    def sort_by(self, col_name, descending=false):
+        let new_id = __native_df.sort_by(self.id, str(col_name), descending)
+        return DataFrame.from_id(new_id)
+
+    def group_by(self, column):
+        return GroupByResult(self.id, str(column))
+
+    def join(self, other_df, on_key, how="inner"):
+        let new_id = __native_df.join(self.id, other_df.id, str(on_key), str(how))
+        return DataFrame.from_id(new_id)
+
+    def head(self, n=5):
+        let new_id = __native_df.head(self.id, int(n))
+        return DataFrame.from_id(new_id)
+
+    def shape(self):
+        return __native_df.shape(self.id)
+
+    def columns(self):
+        return __native_df.columns(self.id)
+
+    def describe(self):
+        return __native_df.describe(self.id)
+
+    def __getitem__(self, col_name):
+        let arr = __native_df.get_column(self.id, str(col_name))
+        return Series(arr, str(col_name))
+
+    def __setitem__(self, col_name, col_data):
+        let raw_data = col_data
+        try:
+            raw_data = col_data.data
+        except:
+            pass
+        self.id = __native_df.with_column(self.id, str(col_name), raw_data)
+
+    def to_tensor(self, feature_columns):
+        let flat_res = __native_df.to_tensor_flat(self.id, feature_columns)
+        let rows = flat_res["rows"]
+        let cols = flat_res["cols"]
+        let data = flat_res["data"]
+        return Tensor(data, [rows, cols])

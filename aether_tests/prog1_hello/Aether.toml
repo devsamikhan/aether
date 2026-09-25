@@ -1,0 +1,6 @@
+[package]
+name = "prog1_hello"
+version = "0.1.0"
+author = "Developer"
+
+[dependencies]

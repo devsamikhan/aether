@@ -1,0 +1,69 @@
+# ==============================================================================
+# AetherWasm & AetherEdge — Universal WebAssembly & Sandboxed Edge Runtime
+# ==============================================================================
+
+class WasmInstanceRef:
+    def __init__(self, instance_id):
+        self.id = int(instance_id)
+
+    def call(self, func_name, args=[]):
+        return __native_wasm.invoke(self.id, str(func_name), args)
+
+    def invoke(self, func_name, args=[], fuel=1000000):
+        return __native_wasm.invoke(self.id, str(func_name), args, fuel)
+
+    def read_memory(self, offset, length):
+        return __native_wasm.read_memory(self.id, int(offset), int(length))
+
+    def write_memory(self, offset, data):
+        return __native_wasm.write_memory(self.id, int(offset), data)
+
+    def memory_size(self):
+        return __native_wasm.memory_size(self.id)
+
+class WasmCompiler:
+    def compile(self, source_code):
+        return __native_wasm.compile(str(source_code))
+
+class WasmModule:
+    def compile_source(source_code):
+        let bytes = __native_wasm.compile(str(source_code))
+        let instance_id = __native_wasm.load(bytes)
+        return WasmInstanceRef(instance_id)
+
+    def from_bytes(bytes):
+        let instance_id = __native_wasm.load(bytes)
+        return WasmInstanceRef(instance_id)
+
+    def from_file(path):
+        let f_content = File.read(str(path))
+        let instance_id = __native_wasm.load(f_content)
+        return WasmInstanceRef(instance_id)
+
+class EdgeWorker:
+    def __init__(self, wasm_instance, route="/"):
+        self.instance = wasm_instance
+        self.route = str(route)
+
+    def handle_request(self, request_map={}):
+        let t0 = clock()
+        let handler_name = "main"
+        if "handler" in request_map:
+            handler_name = request_map["handler"]
+
+        let args = []
+        if "args" in request_map:
+            args = request_map["args"]
+
+        let res = self.instance.call(handler_name, args)
+        let t1 = clock()
+        let duration_us = int((t1 - t0) * 1000000.0)
+
+        return {
+            "status": 200,
+            "route": self.route,
+            "result": res,
+            "latency_us": duration_us,
+            "memory_bytes": self.instance.memory_size(),
+            "engine": "AetherEdge-v1.0"
+        }

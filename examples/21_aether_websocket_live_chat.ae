@@ -1,0 +1,78 @@
+# ==============================================================================
+# AETHER Showcase 21: AetherWebSocket Real-Time Full-Duplex Streaming & Chat
+# ==============================================================================
+
+from aether_ws import WebSocketServer, WebSocketClient
+
+println("==================================================================")
+println("   AETHER 2.0: AetherWebSocket (RFC 6455 Pure Full-Duplex Engine)")
+println("==================================================================")
+
+let port = 19455
+let ready_ch = channel()
+let done_ch = channel()
+
+println("[1] Spawning Background WebSocket Server (ws://127.0.0.1:" + str(port) + ")...")
+
+# 1. Server runs in background fiber
+spawn:
+    let server = WebSocketServer("127.0.0.1", port)
+    server.listen()
+    send(ready_ch, "READY")
+    
+    # Server accepts Client 1
+    let conn1 = server.accept(4000)
+    if conn1 != nil:
+        let msg = conn1.recv_json(3000)
+        if msg != nil and msg["type"] == "json":
+            let sender = msg["data"]["sender"]
+            let content = msg["data"]["content"]
+            println("  • [Server received from " + sender + "]: " + content)
+            conn1.send_json({"status": "CONNECTED", "msg": "Welcome to AETHER WebSocket Hub!"})
+
+    # Server accepts Client 2
+    let conn2 = server.accept(4000)
+    if conn2 != nil:
+        println("  • [Server] Client 2 joined the chat room. Active connections: " + str(server.active_connections()))
+        # Broadcast announcement to both active clients
+        server.broadcast_json({"type": "BROADCAST", "alert": "User 'Researcher' and 'Agent' are both connected."})
+
+    sleep_ms(200)
+    server.close()
+    send(done_ch, "SERVER_DONE")
+
+# Wait for server to be actively listening
+let server_status = recv(ready_ch)
+println("  • WebSocket Server is active and listening (" + server_status + ")")
+
+# 2. Connect Client 1
+println("\n[2] Client 1 connecting to chat room...")
+let client1 = WebSocketClient.connect("ws://127.0.0.1:" + str(port))
+client1.send_json({"sender": "Researcher", "content": "Hello AETHER World! Testing RFC 6455 duplex."})
+
+let welcome = client1.recv_json(3000)
+if welcome != nil and welcome["type"] == "json":
+    println("  • [Client 1 received welcome]: " + welcome["data"]["msg"])
+
+# 3. Connect Client 2
+println("\n[3] Client 2 connecting to chat room...")
+let client2 = WebSocketClient.connect("ws://127.0.0.1:" + str(port))
+
+# 4. Receive Broadcast on both clients
+let c1_bcast = client1.recv_json(3000)
+let c2_bcast = client2.recv_json(3000)
+
+if c1_bcast != nil:
+    println("  • [Client 1 received broadcast]: " + c1_bcast["data"]["alert"])
+if c2_bcast != nil:
+    println("  • [Client 2 received broadcast]: " + c2_bcast["data"]["alert"])
+
+# 5. Clean teardown
+client1.close()
+client2.close()
+let s_done = recv(done_ch)
+
+println("\n[4] Server closed cleanly (" + s_done + ")")
+println("==================================================================")
+println("   AetherWebSocket Showcase Completed Successfully!")
+println("==================================================================")

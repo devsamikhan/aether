@@ -1,0 +1,16 @@
+let size = 1000000
+println("[Aether] Processing contiguous buffer (", size, "elements)...")
+
+let t0 = time_ms()
+let buf = alloc_buffer(size)
+for i in range(size):
+    buf[i] = (i * 7) % 1000
+
+let total = 0
+for i in range(size):
+    total += buf[i]
+free_buffer(buf, size)
+let elapsed = time_ms() - t0
+
+println("Total:", total)
+println("Time:", elapsed, "ms")

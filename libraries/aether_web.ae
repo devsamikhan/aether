@@ -1,0 +1,144 @@
+# AetherWeb — Micro Web Framework for Project AETHER
+# Express / FastAPI inspired architecture written in pure Aether
+
+class Request:
+    def __init__(self, raw):
+        self.id = 0
+        if contains(raw, "id"):
+            self.id = raw["id"]
+
+        self.method = "GET"
+        if contains(raw, "method"):
+            self.method = raw["method"]
+
+        self.path = "/"
+        if contains(raw, "path"):
+            self.path = raw["path"]
+
+        self.query = ""
+        if contains(raw, "query"):
+            self.query = raw["query"]
+
+        self.headers = {}
+        if contains(raw, "headers"):
+            self.headers = raw["headers"]
+
+        self.body = ""
+        if contains(raw, "body"):
+            self.body = raw["body"]
+
+        self.params = {}
+
+    def json(self):
+        if len(self.body) == 0:
+            return {}
+        try:
+            return Json.parse(self.body)
+        except as _:
+            return {}
+
+class Response:
+    def __init__(self, body="", status=200, headers=nil):
+        self.body = str(body)
+        self.status = status
+        self.headers = {}
+        if headers != nil:
+            self.headers = headers
+
+    def json(data, status=200):
+        h = {"Content-Type": "application/json; charset=utf-8"}
+        return Response(Json.stringify(data), status, h)
+
+    def text(msg, status=200):
+        h = {"Content-Type": "text/plain; charset=utf-8"}
+        return Response(msg, status, h)
+
+class Route:
+    def __init__(self, method, pattern, handler):
+        self.method = method
+        self.pattern = pattern
+        self.handler = handler
+        self.segments = [s for s in Strings.split(pattern, "/") if len(s) > 0]
+
+    def match_route(self, req_method, req_path):
+        if self.method != req_method:
+            return nil
+        let req_segments = [s for s in Strings.split(req_path, "/") if len(s) > 0]
+        if len(self.segments) != len(req_segments):
+            return nil
+        let params = {}
+        let seg = ""
+        let req_seg = ""
+        for i in range(len(self.segments)):
+            seg = self.segments[i]
+            req_seg = req_segments[i]
+            if Strings.starts_with(seg, ":"):
+                params[Strings.replace(seg, ":", "")] = req_seg
+            elif seg != req_seg:
+                return nil
+        return params
+
+class App:
+    def __init__(self):
+        self.routes = []
+        self.middlewares = []
+
+    def add_middleware(self, mw):
+        append(self.middlewares, mw)
+
+    def middleware(self, mw):
+        append(self.middlewares, mw)
+
+    def get(self, pattern, handler):
+        append(self.routes, Route("GET", pattern, handler))
+
+    def post(self, pattern, handler):
+        append(self.routes, Route("POST", pattern, handler))
+
+    def put(self, pattern, handler):
+        append(self.routes, Route("PUT", pattern, handler))
+
+    def delete(self, pattern, handler):
+        append(self.routes, Route("DELETE", pattern, handler))
+
+    def handle(self, raw_req):
+        let req = Request(raw_req)
+        let res = nil
+        # 1. Execute middleware chain
+        for mw in self.middlewares:
+            res = mw(req)
+            if res != nil:
+                return res
+
+        # 2. Match route
+        let params = nil
+        for route in self.routes:
+            params = route.match_route(req.method, req.path)
+            if params != nil:
+                req.params = params
+                try:
+                    res = route.handler(req)
+                    if res == nil:
+                        return Response.text("", 204)
+                    return res
+                except as err:
+                    return Response.json({"error": "InternalServerError", "message": str(err)}, 500)
+
+        # 3. Fallback 404
+        return Response.json({"error": "NotFound", "message": "Route " + req.method + " " + req.path + " not found"}, 404)
+
+    def serve(self, port, max_requests=10):
+        let listener = Http.listen(port)
+        let count = 0
+        let raw_req = nil
+        let res = nil
+        while count < max_requests:
+            try:
+                raw_req = Http.accept(listener, 4000)
+                if raw_req != nil:
+                    res = self.handle(raw_req)
+                    Http.respond(raw_req["id"], res.status, res.headers, res.body)
+                    count += 1
+            except as err:
+                println("[AetherWeb Server Error]:", err)
+        Http.close(listener)

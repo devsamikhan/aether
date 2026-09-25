@@ -1,0 +1,183 @@
+# ==============================================================================
+# AetherCompute — Software GPU & Multi-Core Workgroup Engine (SIMD Parallelism)
+# High-Throughput Compute Shaders & Tensor Kernels in Pure Standard Library
+# ==============================================================================
+
+class Buffer:
+    def __init__(self, dims, initial_data=nil):
+        if type(dims) == "int":
+            self.dims = [dims, 1, 1]
+        elif type(dims) == "array":
+            if len(dims) == 1:
+                self.dims = [dims[0], 1, 1]
+            elif len(dims) == 2:
+                self.dims = [dims[0], dims[1], 1]
+            else:
+                self.dims = dims
+        else:
+            self.dims = [1, 1, 1]
+
+        let raw_arr = initial_data
+        if type(initial_data) == "instance":
+            try:
+                raw_arr = initial_data.to_list()
+            except:
+                pass
+
+        self.id = __native_compute.create_buffer(self.dims, raw_arr)
+
+    def zeros(dims):
+        return Buffer(dims, nil)
+
+    def from_array(arr, dims=nil):
+        let d = dims
+        if d == nil:
+            d = [len(arr), 1, 1]
+        return Buffer(d, arr)
+
+    def from_id(buf_id, dims=[1, 1, 1]):
+        let b = Buffer(dims, nil)
+        b.id = buf_id
+        b.dims = __native_compute.buffer_shape(buf_id)
+        return b
+
+    def to_list(self):
+        return __native_compute.buffer_to_array(self.id)
+
+    def shape(self):
+        return __native_compute.buffer_shape(self.id)
+
+    def len(self):
+        let s = self.shape()
+        return s[0] * s[1] * s[2]
+
+    def __len__(self):
+        return self.len()
+
+class ComputePipeline:
+    def __init__(self, kernel_name):
+        self.kernel = str(kernel_name)
+
+    def dispatch(self, inputs, output, global_size, local_size=[64, 1, 1], push_constants=[]):
+        let input_ids = []
+        if type(inputs) == "array":
+            let i = 0
+            while i < len(inputs):
+                let item = inputs[i]
+                if type(item) == "instance":
+                    input_ids.append(item.id)
+                elif type(item) == "int":
+                    input_ids.append(item)
+                i = i + 1
+        elif type(inputs) == "instance":
+            input_ids.append(inputs.id)
+        elif type(inputs) == "int":
+            input_ids.append(inputs)
+
+        let out_id = output
+        if type(output) == "instance":
+            out_id = output.id
+
+        __native_compute.dispatch(
+            self.kernel,
+            input_ids,
+            out_id,
+            global_size,
+            local_size,
+            push_constants
+        )
+        return output
+
+    def benchmark(self, inputs, output, global_size, local_size=[64, 1, 1], iterations=10):
+        let input_ids = []
+        if type(inputs) == "array":
+            let i = 0
+            while i < len(inputs):
+                let item = inputs[i]
+                if type(item) == "instance":
+                    input_ids.append(item.id)
+                elif type(item) == "int":
+                    input_ids.append(item)
+                i = i + 1
+        elif type(inputs) == "instance":
+            input_ids.append(inputs.id)
+        elif type(inputs) == "int":
+            input_ids.append(inputs)
+
+        let out_id = output
+        if type(output) == "instance":
+            out_id = output.id
+
+        return __native_compute.benchmark(
+            self.kernel,
+            input_ids,
+            out_id,
+            global_size,
+            local_size,
+            push_constants=[],
+            iterations=iterations
+        )
+
+# ==============================================================================
+# Functional High-Level SIMD Acceleration Helpers
+# ==============================================================================
+
+def hardware_info():
+    return __native_compute.hardware_info()
+
+def vec_add(buf_a, buf_b):
+    let out = Buffer.zeros(buf_a.shape())
+    let pipe = ComputePipeline("vec_add")
+    pipe.dispatch([buf_a, buf_b], out, buf_a.shape(), [64, 1, 1])
+    return out
+
+def vec_sub(buf_a, buf_b):
+    let out = Buffer.zeros(buf_a.shape())
+    let pipe = ComputePipeline("vec_sub")
+    pipe.dispatch([buf_a, buf_b], out, buf_a.shape(), [64, 1, 1])
+    return out
+
+def vec_mul(buf_a, buf_b):
+    let out = Buffer.zeros(buf_a.shape())
+    let pipe = ComputePipeline("vec_mul")
+    pipe.dispatch([buf_a, buf_b], out, buf_a.shape(), [64, 1, 1])
+    return out
+
+def vec_fma(buf_a, buf_b, buf_c):
+    let out = Buffer.zeros(buf_a.shape())
+    let pipe = ComputePipeline("fma")
+    pipe.dispatch([buf_a, buf_b, buf_c], out, buf_a.shape(), [64, 1, 1])
+    return out
+
+def matmul(buf_a, buf_b, m, k, n):
+    let out = Buffer.zeros([n, m, 1])
+    let pipe = ComputePipeline("matmul")
+    pipe.dispatch([buf_a, buf_b], out, [n, m, 1], [16, 16, 1])
+    return out
+
+def conv2d(image_buf, kernel_buf, width, height, kw, kh):
+    let out = Buffer.zeros([width, height, 1])
+    let pipe = ComputePipeline("conv2d")
+    pipe.dispatch([image_buf, kernel_buf], out, [width, height, 1], [16, 16, 1])
+    return out
+
+def parallel_sum(buf):
+    let out = Buffer.zeros([1, 1, 1])
+    let pipe = ComputePipeline("parallel_sum")
+    pipe.dispatch([buf], out, buf.shape(), [64, 1, 1])
+    let res = out.to_list()
+    return res[0]
+
+def parallel_max(buf):
+    let out = Buffer.zeros([1, 1, 1])
+    let pipe = ComputePipeline("parallel_max")
+    pipe.dispatch([buf], out, buf.shape(), [64, 1, 1])
+    let res = out.to_list()
+    return res[0]
+
+def dot_product(buf_a, buf_b):
+    let out = Buffer.zeros([1, 1, 1])
+    let pipe = ComputePipeline("dot_product")
+    pipe.dispatch([buf_a, buf_b], out, buf_a.shape(), [64, 1, 1])
+    let res = out.to_list()
+    return res[0]

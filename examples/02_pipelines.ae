@@ -1,0 +1,21 @@
+# AETHER 2.0 Pipeline Example
+# Shows fluid data pipelines with the |> operator
+
+fn double(x):
+    x * 2
+
+fn square(x):
+    x * x
+
+fn add_hundred(x):
+    x + 100
+
+# Pipeline chains value transformations cleanly
+let initial = 5
+let processed = initial |> double() |> square() |> add_hundred()
+
+println("Initial value:", initial)
+println("After pipeline (double -> square -> +100):", processed)
+# (5 * 2) = 10 -> (10 ^ 2) = 100 -> +100 = 200
+assert(processed == 200, "Pipeline calculation must match 200")
+println("Pipeline assertion passed successfully!")

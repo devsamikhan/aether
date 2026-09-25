@@ -1,0 +1,30 @@
+# ==============================================================================
+# AetherGraph — Native Property Graph & Knowledge Traversal Engine
+# Graph Database, Dijkstra Shortest Path, PageRank & Hybrid Vector Search
+# ==============================================================================
+
+class Graph:
+    def __init__(self, name="graph"):
+        self.id = __native_graph.create(str(name))
+        self.name = str(name)
+
+    def add_node(self, label, props={}, embedding=nil):
+        return __native_graph.add_node(self.id, str(label), props, embedding)
+
+    def add_edge(self, from_id, to_id, label="CONNECTS", weight=1.0, props={}):
+        return __native_graph.add_edge(self.id, int(from_id), int(to_id), str(label), float(weight), props)
+
+    def shortest_path(self, from_id, to_id):
+        return __native_graph.shortest_path(self.id, int(from_id), int(to_id))
+
+    def pagerank(self, iterations=20, damping=0.85):
+        return __native_graph.pagerank(self.id, int(iterations), float(damping))
+
+    def bfs(self, start_id, depth=10):
+        return __native_graph.bfs(self.id, int(start_id), int(depth))
+
+    def dfs(self, start_id, depth=10):
+        return __native_graph.dfs(self.id, int(start_id), int(depth))
+
+    def semantic_search(self, query_vec, top_k=5):
+        return __native_graph.semantic_search(self.id, query_vec, int(top_k))

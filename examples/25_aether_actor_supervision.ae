@@ -1,0 +1,76 @@
+# ==============================================================================
+# AETHER 2.0 Showcase: Erlang/OTP-Style Virtual Actors & Supervision Trees
+# ==============================================================================
+# Demonstrates:
+#  1. Creating an ActorSystem with concurrent actors.
+#  2. Asynchronous mailbox message passing (send).
+#  3. Synchronous request-response pattern (ask / reply).
+#  4. Supervisor with One-For-One self-healing auto-restart on worker crash.
+# ==============================================================================
+
+from aether_actor import ActorSystem, Supervisor
+
+print("================================================================================")
+print("       AETHER 2.0: ERLANG/OTP VIRTUAL ACTORS & SUPERVISION TREE DEMO           ")
+print("================================================================================")
+
+# 1. Initialize Actor System and Supervisor
+system = ActorSystem("production-core")
+supervisor = Supervisor("one_for_one", max_retries=3)
+
+# 2. Worker Handler: Handles account ledger operations
+fn bank_ledger_handler(msg):
+    if type(msg) == "map":
+        let op = msg["op"]
+        if op == "deposit":
+            return {"status": "ok", "new_balance": msg["amount"] + 1000}
+        elif op == "transfer":
+            return {"status": "ok", "transferred": msg["amount"]}
+    elif msg == "ping":
+        return "pong"
+    return {"status": "unknown"}
+
+# 3. Spawn Supervised Financial Worker
+print("\n[Step 1] Spawning Financial Transaction Worker Actor...")
+worker = system.spawn_actor(bank_ledger_handler, "ledger_worker")
+supervisor.supervise(worker)
+
+print("  Actor ID:       " + str(worker.id))
+print("  Actor Name:     " + worker.name)
+print("  Initial Status: " + worker.status())
+print("  Restart Count:  " + str(worker.restarts()))
+
+# 4. Request-Response via ask()
+print("\n[Step 2] Sending Synchronous 'ask' Requests (Request-Response)...")
+let ping_reply = worker.ask("ping", 1000)
+print("  > worker.ask('ping')           => " + str(ping_reply))
+
+let deposit_req = {"op": "deposit", "amount": 500}
+let deposit_reply = worker.ask(deposit_req, 1000)
+print("  > worker.ask(deposit $500)     => " + str(deposit_reply))
+
+# 5. Simulate Sudden Worker Crash / Unhandled Failure
+print("\n[Step 3] Simulating Worker Hardware/Network Fault (Controlled Crash)...")
+worker.fail()
+print("  Current Status after crash:    " + worker.status())
+
+# 6. Supervisor Self-Healing (One-For-One Strategy)
+print("\n[Step 4] Supervisor Inspecting Hierarchy & Triggering Self-Healing...")
+let healed = supervisor.check_and_heal()
+print("  Supervisor Healed Count:       " + str(healed) + " actor(s)")
+print("  Worker Status after Heal:      " + worker.status())
+print("  Worker Total Restarts:         " + str(worker.restarts()))
+
+# 7. Post-Heal Verification
+print("\n[Step 5] Verifying Post-Heal Service Availability...")
+let post_heal_reply = worker.ask("ping", 1000)
+print("  > worker.ask('ping') after heal => " + str(post_heal_reply))
+
+# 8. Clean Shutdown
+print("\n[Step 6] Stopping Actor...")
+worker.stop()
+print("  Final Status:                  " + worker.status())
+
+print("\n================================================================================")
+print("  RESULT: Supervision Tree successfully auto-recovered actor with zero downtime!")
+print("================================================================================")

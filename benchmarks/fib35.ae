@@ -1,0 +1,14 @@
+fn fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+let target = 35
+println("[Aether] Computing Fibonacci(", target, ") recursively...")
+
+let t0 = time_ms()
+let result = fib(target)
+let elapsed = time_ms() - t0
+
+println("Result:", result)
+println("Time:", elapsed, "ms")

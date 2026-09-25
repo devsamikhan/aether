@@ -1,0 +1,185 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AETHER",
+  "scopeName": "source.aether",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#intent-system" },
+    { "include": "#quantum-primitives" },
+    { "include": "#tensor-primitives" },
+    { "include": "#graph-primitives" },
+    { "include": "#crdt-primitives" },
+    { "include": "#concurrency-primitives" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#function-declarations" },
+    { "include": "#function-calls" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.aether",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.line.double-slash.aether",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.aether",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.aether",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.aether", "match": "\\\\." }
+          ]
+        },
+        {
+          "name": "string.quoted.single.aether",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.aether", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.aether",
+          "match": "\\b(if|elif|else|while|for|in|match|case|return|break|continue|pass|try|except|finally|raise|assert)\\b"
+        },
+        {
+          "name": "keyword.declaration.aether",
+          "match": "\\b(def|fn|let|mut|const|struct|class|enum|trait|impl|interface|import|from|as|export)\\b"
+        },
+        {
+          "name": "constant.language.boolean.aether",
+          "match": "\\b(True|False|true|false|None|nil|null)\\b"
+        }
+      ]
+    },
+    "intent-system": {
+      "patterns": [
+        {
+          "name": "keyword.other.intent.aether",
+          "match": "\\b(intent|schema|invariant|require|ensure|precondition|postcondition|old|verify|contract)\\b"
+        }
+      ]
+    },
+    "quantum-primitives": {
+      "patterns": [
+        {
+          "name": "keyword.other.quantum.aether",
+          "match": "\\b(qubit|hadamard|cnot|entangle|measure|measure_all|pauli_x|pauli_y|pauli_z|phase_s|t_gate|QuantumSimulator)\\b"
+        }
+      ]
+    },
+    "tensor-primitives": {
+      "patterns": [
+        {
+          "name": "keyword.other.tensor.aether",
+          "match": "\\b(Tensor|zeros|ones|randn|from_vec|matmul|backward|grad|requires_grad|relu|sigmoid|softmax|conv2d|adam|sgd)\\b"
+        }
+      ]
+    },
+    "graph-primitives": {
+      "patterns": [
+        {
+          "name": "keyword.other.graph.aether",
+          "match": "\\b(Graph|add_node|add_edge|dijkstra|pagerank|bfs|dfs|find_path|has_cycle|neighbors)\\b"
+        }
+      ]
+    },
+    "crdt-primitives": {
+      "patterns": [
+        {
+          "name": "keyword.other.crdt.aether",
+          "match": "\\b(GCounter|PNCounter|GSet|ORSet|LWWRegister|MVRegister|merge|increment|decrement|add|remove|read)\\b"
+        }
+      ]
+    },
+    "concurrency-primitives": {
+      "patterns": [
+        {
+          "name": "keyword.control.concurrency.aether",
+          "match": "\\b(spawn|fiber|channel|send|recv|try_recv|select|await|yield|sleep)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.aether",
+          "match": "\\b(Int|Float|String|Bool|List|Dict|Set|Tuple|Any|Void|Result|Option|Vector|Matrix)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.aether",
+          "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.aether",
+          "match": "\\b\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.hex.aether",
+          "match": "\\b0x[0-9a-fA-F]+\\b"
+        }
+      ]
+    },
+    "function-declarations": {
+      "match": "\\b(def|fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.aether" },
+        "2": { "name": "entity.name.function.aether" }
+      }
+    },
+    "function-calls": {
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.call.aether" }
+      }
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.aether",
+          "match": "(\\+|\\-|\\*|\\/|\\%|\\*\\*)"
+        },
+        {
+          "name": "keyword.operator.comparison.aether",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.logical.aether",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.operator.assignment.aether",
+          "match": "(=|\\+=|\\-=|\\*=|\\/=)"
+        },
+        {
+          "name": "keyword.operator.arrow.aether",
+          "match": "(->|=>)"
+        }
+      ]
+    }
+  }
+}

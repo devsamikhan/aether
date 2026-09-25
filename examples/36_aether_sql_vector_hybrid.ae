@@ -1,0 +1,58 @@
+# ==============================================================================
+# Example 36: AetherSQL Vector-Relational Hybrid SQL Engine
+# Demonstrating Tabular SQL Querying with AI Vector Cosine Similarity
+# ==============================================================================
+
+from aether_df import DataFrame
+from aether_sql import SQLContext, sql
+
+print("==================================================================")
+print("   ⚡ AETHER-SQL: VECTOR-RELATIONAL HYBRID QUERY ENGINE ⚡")
+print("==================================================================")
+
+# 1. Initialize Vector-Relational SQL Context
+let ctx = SQLContext()
+
+# 2. Prepare Sample AI Knowledge Base / Product Catalog
+let catalog_data = {
+    "id": [1, 2, 3, 4, 5],
+    "name": ["Nvidia H100 GPU", "Quantum Annealer", "Neural LLM Weights", "Coffee Maker", "Kubernetes Cloud Cluster"],
+    "category": ["hardware", "hardware", "software", "kitchen", "infra"],
+    "price": [30000.0, 150000.0, 1200.0, 85.0, 4500.0],
+    "embedding": [
+        [0.95, 0.88, 0.12],
+        [0.40, 0.92, 0.85],
+        [0.92, 0.91, 0.10],
+        [0.05, 0.10, 0.02],
+        [0.75, 0.60, 0.30]
+    ]
+}
+
+let df = DataFrame(catalog_data)
+ctx.register("products", df)
+print("[SQL] Registered Table 'products' with 5 rows & vector embeddings.")
+print("Columns: " + str(df.columns()))
+
+# 3. Query 1: Standard Relational SQL (SELECT with WHERE, expressions, and ORDER BY)
+print("\n[SQL Query 1: Relational Filter & Arithmetic Projection]")
+let q1 = "SELECT id, name, price, price * 1.15 AS price_with_tax FROM products WHERE price > 1000.0 ORDER BY price DESC"
+print("Executing: " + q1)
+let res1 = ctx.query(q1)
+print(res1.to_csv())
+
+# 4. Query 2: Hybrid AI Vector Similarity Search
+# Query embedding representing AI & High Performance Computing: [0.90, 0.85, 0.15]
+print("\n[SQL Query 2: AI Vector Cosine Similarity Search]")
+let q2 = "SELECT name, category, price, vector_cosine(embedding, [0.90, 0.85, 0.15]) AS similarity FROM products ORDER BY similarity DESC LIMIT 3"
+print("Executing: " + q2)
+let res2 = ctx.query(q2)
+print(res2.to_csv())
+
+# 5. Direct Global sql() invocation
+print("\n[SQL Query 3: Standalone Helper sql()]")
+let res3 = sql("SELECT name, vector_l2(embedding, [1.0, 1.0, 0.0]) AS dist FROM products ORDER BY dist ASC LIMIT 2", {"products": df})
+print(res3.to_csv())
+
+print("==================================================================")
+print("   ✅ AETHER-SQL HYBRID VECTOR QUERYING COMPLETED SUCCESSFULLY!")
+print("==================================================================")

@@ -1,0 +1,142 @@
+"""
+==================================================================
+           AETHER LANGUAGE 2.0: CONTROL FLOW SHOWCASE
+   Python-level Ergonomics & Flexibility with C/Rust Native Speed
+==================================================================
+"""
+
+println("=== Aether Control Flow Showcase ===")
+
+# ----------------------------------------------------------------
+# 1. IF, ELIF, ELSE CHAINS
+# ----------------------------------------------------------------
+println("\n--- 1. If, Elif, Else ---")
+
+score = 85
+if score >= 90:
+    grade = "A"
+elif score >= 80:
+    grade = "B"
+elif score >= 70:
+    grade = "C"
+elif score >= 60:
+    grade = "D"
+else:
+    grade = "F"
+
+println("Score:", score, "-> Grade:", grade)
+
+# ----------------------------------------------------------------
+# 2. NESTED CONDITIONS
+# ----------------------------------------------------------------
+println("\n--- 2. Nested Conditions ---")
+
+age = 19
+has_ticket = True
+
+if age >= 18:
+    if has_ticket:
+        println("Access granted: Welcome to the VIP concert!")
+    else:
+        println("Access denied: You need to purchase a ticket.")
+else:
+    if age >= 13:
+        println("Youth section access only.")
+    else:
+        println("Children require adult supervision.")
+
+# ----------------------------------------------------------------
+# 3. MATCH-CASE STATEMENTS (Python-style 'case')
+# ----------------------------------------------------------------
+println("\n--- 3. Match-Case Statements ---")
+
+fn check_http_status(status):
+    match status:
+        case 200:
+            return "200: OK (Success)"
+        case 301:
+            return "301: Moved Permanently (Redirect)"
+        case 400:
+            return "400: Bad Request (Client Error)"
+        case 404:
+            return "404: Not Found (Resource Missing)"
+        case 500..599:
+            return "5xx: Server Error (Internal Fault)"
+        case _:
+            return "Unknown Status Code"
+
+println(check_http_status(200))
+println(check_http_status(404))
+println(check_http_status(502))
+println(check_http_status(777))
+
+# ----------------------------------------------------------------
+# 4. WHILE LOOPS WITH BREAK & CONTINUE
+# ----------------------------------------------------------------
+println("\n--- 4. While Loops (with Break & Continue) ---")
+
+count = 0
+println("While loop count with continue (skips odd numbers):")
+while count < 10:
+    count += 1
+    if count % 2 != 0:
+        continue # Skip odd numbers
+    print(count, "")
+println()
+
+println("While loop with early break:")
+n = 1
+while True:
+    if n > 5:
+        println("Reached threshold (n > 5), breaking!")
+        break
+    print(n, "")
+    n += 1
+
+# ----------------------------------------------------------------
+# 5. FOR LOOPS (Over Range, Arrays, and Strings)
+# ----------------------------------------------------------------
+println("\n--- 5. For Loops ---")
+
+# (A) For loop over range
+println("Range iteration [1 to 5]:")
+for i in range(1, 6):
+    print(i, "")
+println()
+
+# (B) For loop over array with break & continue
+println("Array iteration (skips 3, stops at 7):")
+items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+for x in items:
+    if x == 3:
+        continue # skip 3
+    if x == 8:
+        break    # terminate at 8
+    print(x, "")
+println()
+
+# (C) For loop over string
+println("String character iteration:")
+for ch in "AETHER":
+    print(ch, "-> ")
+println("DONE")
+
+# ----------------------------------------------------------------
+# 6. PASS STATEMENT (Pythonic No-Op Placeholder)
+# ----------------------------------------------------------------
+println("\n--- 6. Pass Statement (No-Op) ---")
+
+feature_enabled = False
+if feature_enabled:
+    # Future implementation goes here
+    pass
+else:
+    println("Feature currently disabled (bypassed via pass)")
+
+# Empty loop using pass
+for dummy in range(3):
+    pass
+
+println("Loop with pass executed successfully without errors.")
+
+println("\n=== Control Flow Demonstration Complete! ===")

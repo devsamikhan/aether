@@ -1,0 +1,34 @@
+# AETHER 2.0 Standard Library Demo
+# Showcasing File, Json, Math, Strings, and Sys modules
+
+println("--- 1. Math Module ---")
+let radius = 7
+let area = Math.PI * (radius ^ 2)
+println("Circle Area with radius 7:", area)
+println("Square root of 256:", Math.sqrt(256))
+println("Random roll [1..6]:", Math.random_int(1, 7))
+
+println("\n--- 2. Strings Module ---")
+let sentence = "fast, flexible, expressive, aether"
+let tags = Strings.split(sentence, ", ")
+println("Parsed tags:", tags)
+println("Uppercase joined:", Strings.upper(Strings.join(tags, " | ")))
+
+println("\n--- 3. JSON Module ---")
+let raw_json = "{\"project\":\"Aether\",\"version\":2,\"status\":\"active\"}"
+let config = Json.parse(raw_json)
+println("Project name from JSON:", config["project"])
+println("Serialized pretty JSON:\n" + Json.pretty(config))
+
+println("\n--- 4. File I/O Module ---")
+let demo_file = "demo_notes.txt"
+File.write(demo_file, "Note 1: AETHER 2.0 is alive!\nNote 2: Python simplicity achieved.\nNote 3: C++ speed underway.")
+println("File exists check:", File.exists(demo_file))
+let lines = File.lines(demo_file)
+println("Lines read from file:", lines)
+File.delete(demo_file)
+println("Temporary file cleaned up safely.")
+
+println("\n--- 5. System Module ---")
+println("Current working directory:", Sys.cwd())
+println("Timestamp ms:", Sys.time_ms())

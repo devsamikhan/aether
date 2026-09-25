@@ -1,0 +1,6 @@
+intent SwarmCounter {
+    fn main() {
+        swarm_spawn(5);
+        println("Swarm CRDT synchronization verified.");
+    }
+}

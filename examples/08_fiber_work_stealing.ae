@@ -1,0 +1,71 @@
+# AETHER 2.0 Work-Stealing Fiber Concurrency Demo
+# Demonstrates M:N green thread scheduler, work stealing across cores, and typed channels
+
+println("=== AETHER 2.0 Fiber Concurrency Scheduler ===")
+
+# --- 1. Basic Fiber Spawn & Channel Communication ---
+println("\n[1] Spawning Background Fiber with Channel...")
+let ch = channel()
+
+spawn:
+    println(" -> [Fiber] Running in background worker thread")
+    sleep_ms(50)
+    send(ch, "Result computed by background fiber!")
+
+println(" -> [Main] Waiting on channel recv()...")
+let msg = recv(ch)
+println(" -> [Main] Received message:", msg)
+
+# --- 2. Parallel Work-Stealing Fan-Out / Fan-In ---
+println("\n[2] Parallel Fan-Out to 8 Work-Stealing Fibers...")
+let result_ch = channel()
+let num_tasks = 8
+
+fn compute_heavy_task(worker_id):
+    let mut sum = 0
+    for j in range(100):
+        sum += j
+    return worker_id * 1000 + sum
+
+for i in range(num_tasks):
+    spawn:
+        let res = compute_heavy_task(i)
+        send(result_ch, res)
+
+println(" -> [Main] Aggregating results from all 8 concurrent fibers...")
+let mut total_work = 0
+for i in range(num_tasks):
+    let val = recv(result_ch)
+    println("    * Completed fiber task return:", val)
+    total_work += val
+
+println(" -> [Main] Total aggregated computational output:", total_work)
+
+# --- 3. Fiber with Braced Block Syntax & Local Variable Capture ---
+println("\n[3] Fiber with Braced Syntax & Automatic Variable Capture...")
+let notify_ch = channel()
+let task_name = "Matrix_Multiplication_Job"
+
+spawn {
+    let status = "DONE"
+    send(notify_ch, Strings.join([task_name, status], " -> "))
+}
+
+let notification = recv(notify_ch)
+println(" -> [Main] Notification received:", notification)
+
+# --- 4. Non-Blocking Channel Check (try_recv) ---
+println("\n[4] Non-blocking Channel Polling with try_recv()...")
+let empty_ch = channel()
+let check1 = try_recv(empty_ch)
+println(" -> Immediate check on empty channel:", check1)
+
+spawn:
+    sleep_ms(20)
+    send(empty_ch, "Arrived later")
+
+sleep_ms(40)
+let check2 = try_recv(empty_ch)
+println(" -> Check after fiber finished:", check2)
+
+println("\n=== Fiber Work-Stealing Concurrency Completed Successfully! ===")

@@ -1,0 +1,130 @@
+# ==============================================================================
+# AETHER Showcase 24: AetherAgent Autonomous Multi-Step Tool & ReAct Engine
+# ==============================================================================
+
+from aether_agent import Agent, Tool, AgentMemory
+from aether_vector import VectorStore
+
+println("==================================================================")
+println("   AETHER 2.0: AetherAgent Native Autonomous Agent Framework")
+println("==================================================================")
+
+# 1. Initialize Long-Term Semantic Memory
+let memory = AgentMemory()
+memory.remember(
+    "sec_protocol",
+    "Primary Failover Protocol: TLS-Mutual-v1.3 with Quantum Key Exchange (QKD)",
+    [0.10, 0.95, 0.30],
+    {"classification": "top-secret", "service": "failover"}
+)
+println("[1] Agent Long-Term Semantic Memory initialized with system protocols.")
+
+# 2. Define Autonomous Tools
+fn query_cluster_inventory(args):
+    println("      [Tool Executing] Querying distributed cluster infrastructure...")
+    return {
+        "nodes": ["node-alpha", "node-beta", "node-gamma"],
+        "ram_gb": [32, 64, 128],
+        "status": "HEALTHY"
+    }
+
+fn calculate_sum(args):
+    println("      [Tool Executing] Computing total memory aggregation...")
+    let total = 0
+    let list = args
+    if type(args) == "map" and args["values"] != nil:
+        list = args["values"]
+    let i = 0
+    while i < len(list):
+        total = total + list[i]
+        i = i + 1
+    return total
+
+fn query_security_vault(args):
+    println("      [Tool Executing] Searching semantic vector memory for protocol...")
+    let query_emb = [0.12, 0.90, 0.28]
+    let hits = memory.recall(query_emb, 1)
+    if len(hits) > 0:
+        return hits[0]["metadata"]["text"]
+    return "Protocol not found"
+
+let tool_cluster = Tool("cluster_inventory", "Retrieves active cluster nodes and RAM", query_cluster_inventory)
+let tool_calc = Tool("calculator", "Calculates sum of list of numbers", calculate_sum)
+let tool_vault = Tool("security_vault", "Retrieves security protocols from vector memory", query_security_vault)
+
+# 3. Create the Autonomous Agent
+let agent = Agent(
+    "AetherOpsBot",
+    "Autonomous Site Reliability & Security Agent",
+    [tool_cluster, tool_calc, tool_vault],
+    memory,
+    6
+)
+
+println("[2] Agent '" + agent.name + "' armed with 3 tools:")
+for t in agent._list_tools():
+    println("  • " + t["name"] + ": " + t["description"])
+
+# 4. Multi-Step Planner Callback (ReAct Loop)
+fn custom_react_planner(state):
+    let step = state["step"]
+    let obs = state["last_observation"]
+
+    if step == 0:
+        return {
+            "thought": "First, I must discover all active nodes and their RAM allocations.",
+            "action": "call_tool",
+            "tool": "cluster_inventory",
+            "args": []
+        }
+    elif step == 1:
+        let ram_list = obs["ram_gb"]
+        return {
+            "thought": "Nodes discovered with RAMs " + str(ram_list) + ". Now calculating total RAM sum.",
+            "action": "call_tool",
+            "tool": "calculator",
+            "args": ram_list
+        }
+    elif step == 2:
+        return {
+            "thought": "Total RAM is " + str(obs) + " GB. Next, retrieving the failover security protocol.",
+            "action": "call_tool",
+            "tool": "security_vault",
+            "args": ["failover protocol"]
+        }
+    else:
+        return {
+            "thought": "All information collected. Ready to synthesize executive report.",
+            "action": "finish",
+            "tool": nil,
+            "args": nil,
+            "response": "Executive Report: Cluster active with 3 nodes totaling 224 GB RAM. " + str(obs)
+        }
+
+# 5. Execute Autonomous Mission
+println("\n[3] Launching Autonomous Mission:")
+let goal = "Audit cluster RAM capacity and retrieve failover security protocol."
+println("  • Goal: \"" + goal + "\"\n")
+
+let mission_result = agent.run(goal, custom_react_planner)
+
+# 6. Display Autonomous Trace
+println("\n[4] ReAct Execution Trace (" + str(mission_result["steps"]) + " steps):")
+let trace = mission_result["trace"]
+let k = 0
+while k < len(trace):
+    let t_step = trace[k]
+    println("  Step " + str(k + 1) + ":")
+    println("    * Thought: " + t_step["thought"])
+    println("    * Action:  " + t_step["action"] + " (" + str(t_step["tool"]) + ")")
+    if t_step["observation"] != nil:
+        println("    * Result:  " + str(t_step["observation"]))
+    k = k + 1
+
+println("\n[5] Final Mission Output:")
+println("  • Status: " + mission_result["status"])
+println("  • Answer: " + mission_result["result"])
+
+println("\n==================================================================")
+println("   AetherAgent Showcase Completed Successfully!")
+println("==================================================================")

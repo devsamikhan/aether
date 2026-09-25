@@ -1,0 +1,115 @@
+# ==============================================================================
+# AetherWebSocket — Real-Time Live Streaming & Full-Duplex Sockets (RFC 6455)
+# ==============================================================================
+
+import json
+
+class WebSocketConnection:
+    def __init__(self, ws_id):
+        self.id = ws_id
+
+    def send(self, data):
+        return __native_ws.send(self.id, str(data))
+
+    def send_json(self, data):
+        return __native_ws.send(self.id, Json.stringify(data))
+
+    def recv(self, timeout_ms=50):
+        return __native_ws.recv(self.id, timeout_ms)
+
+    def recv_json(self, timeout_ms=50):
+        let msg = __native_ws.recv(self.id, timeout_ms)
+        if msg == nil or msg["type"] != "text":
+            return msg
+        let parsed = Json.parse(msg["data"])
+        return {
+            "type": "json",
+            "data": parsed
+        }
+
+    def close(self):
+        return __native_ws.close(self.id)
+
+    def is_open(self):
+        return __native_ws.is_open(self.id)
+
+class WebSocketServer:
+    def __init__(self, host="127.0.0.1", port=8080):
+        self.host = str(host)
+        self.port = int(port)
+        self.listener_id = nil
+        self.clients = []
+
+    def listen(self):
+        self.listener_id = __native_http.listen(self.host, self.port)
+        return self.listener_id
+
+    def accept(self, timeout_ms=50):
+        if self.listener_id == nil:
+            return nil
+        let req = __native_http.accept(self.listener_id, timeout_ms)
+        if req == nil:
+            return nil
+        let headers = req["headers"]
+        if headers != nil and headers["sec-websocket-key"] != nil:
+            let ws_id = __native_ws.upgrade(req)
+            let conn = WebSocketConnection(ws_id)
+            self.clients.push(conn)
+            return conn
+        __native_http.respond(req["id"], 400, {}, "Expected WebSocket Upgrade Request")
+        return nil
+
+    def broadcast(self, message):
+        let ids = []
+        for client in self.clients:
+            if client.is_open():
+                ids.push(client.id)
+        if len(ids) == 0:
+            return 0
+        return __native_ws.broadcast(ids, str(message))
+
+    def broadcast_json(self, data):
+        return self.broadcast(Json.stringify(data))
+
+    def active_connections(self):
+        let active = []
+        for client in self.clients:
+            if client.is_open():
+                active.push(client)
+        self.clients = active
+        return len(active)
+
+    def close(self):
+        for client in self.clients:
+            client.close()
+        self.clients = []
+        if self.listener_id != nil:
+            __native_http.close(self.listener_id)
+            self.listener_id = nil
+        return true
+
+class WebSocketClient:
+    def __init__(self, ws_id):
+        self.conn = WebSocketConnection(ws_id)
+
+    def connect(url):
+        let ws_id = __native_ws.connect(url)
+        return WebSocketClient(ws_id)
+
+    def send(self, data):
+        return self.conn.send(data)
+
+    def send_json(self, data):
+        return self.conn.send_json(data)
+
+    def recv(self, timeout_ms=50):
+        return self.conn.recv(timeout_ms)
+
+    def recv_json(self, timeout_ms=50):
+        return self.conn.recv_json(timeout_ms)
+
+    def close(self):
+        return self.conn.close()
+
+    def is_open(self):
+        return self.conn.is_open()

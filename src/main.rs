@@ -6053,28 +6053,153 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() > 1 {
+        let first_arg = &args[1];
+        if first_arg.ends_with(".ae") || first_arg.ends_with(".aether") {
+            match std::fs::read_to_string(first_arg) {
+                Ok(src) => {
+                    if let Err(e) = aether::vm::run_source(&src) {
+                        eprintln!("Runtime Error: {}", e);
+                    }
+                }
+                Err(err) => eprintln!("Failed to read file '{}': {}", first_arg, err),
+            }
+            return;
+        }
+
         let subcommand = &args[1];
         match subcommand.as_str() {
-            "init" => {
+            "init" | "new" => {
                 if args.len() > 2 {
-                    if let Err(e) = init_project(&args[2]) {
-                        eprintln!("Error: {}", e);
+                    let project_name = &args[2];
+                    let mut template = "default";
+                    let mut i = 3;
+                    while i < args.len() {
+                        if (args[i] == "--template" || args[i] == "-t") && i + 1 < args.len() {
+                            template = &args[i + 1];
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    match aether::toolchain::scaffold_project(project_name, template) {
+                        Ok(p) => {
+                            println!("✨ Successfully created AETHER project '{}' (Template: {})", project_name, template);
+                            println!("  Location: {}", p.display());
+                            println!("  To get started:");
+                            println!("    cd {}", project_name);
+                            println!("    aether run src/main.ae\n");
+                        }
+                        Err(e) => eprintln!("Error: {}", e),
                     }
                 } else {
-                    eprintln!("Usage: aether init <project_name>");
+                    eprintln!("Usage: aether new <project_name> [--template ai|web|fintech|minimal]");
                 }
             }
             "add" => {
                 if args.len() > 2 {
-                    let current_dir = std::env::current_dir().unwrap();
-                    if let Err(e) = add_dependency(&current_dir, &args[2]) {
-                        eprintln!("Error: {}", e);
+                    let pm = aether::package_manager::AetherPackageManager::new(".");
+                    match pm.add(&args[2]) {
+                        Ok(dep) => {
+                            println!("✓ Successfully added dependency: {} (v{})", dep.name, dep.version);
+                            if let Some(src) = dep.source {
+                                println!("  Source: {}", src);
+                            }
+                            if let Some(csum) = dep.checksum {
+                                println!("  Checksum: {}", csum);
+                            }
+                        }
+                        Err(e) => eprintln!("AetherPM Error: {}", e),
                     }
                 } else {
-                    eprintln!("Usage: aether add <package_name>");
+                    eprintln!("Usage: aether add <package_name> (e.g. neural_vision or github.com/user/repo@v1.0)");
                 }
             }
+            "remove" => {
+                if args.len() > 2 {
+                    let pm = aether::package_manager::AetherPackageManager::new(".");
+                    match pm.remove(&args[2]) {
+                        Ok(_) => println!("✓ Successfully removed dependency: {}", args[2]),
+                        Err(e) => eprintln!("AetherPM Error: {}", e),
+                    }
+                } else {
+                    eprintln!("Usage: aether remove <package_name>");
+                }
+            }
+            "publish" => {
+                let pm = aether::package_manager::AetherPackageManager::new(".");
+                match pm.publish() {
+                    Ok(msg) => println!("{}", msg),
+                    Err(e) => eprintln!("Publish Error: {}", e),
+                }
+            }
+            "lsp" => {
+                if args.len() > 2 && args[2] == "--check" {
+                    if args.len() > 3 {
+                        if let Ok(code) = std::fs::read_to_string(&args[3]) {
+                            let srv = aether::lsp::AetherLanguageServer::new();
+                            let diags = srv.analyze(&code);
+                            if diags.is_empty() {
+                                println!("LSP Diagnostics: OK (0 errors) ✅");
+                            } else {
+                                for d in diags {
+                                    eprintln!("{}:{}: Error: {}", d.line + 1, d.col + 1, d.message);
+                                }
+                            }
+                        } else {
+                            eprintln!("Could not read file: {}", args[3]);
+                        }
+                    } else {
+                        eprintln!("Usage: aether lsp --check <file.ae>");
+                    }
+                } else {
+                    let mut srv = aether::lsp::AetherLanguageServer::new();
+                    if let Err(e) = srv.run_stdio_server() {
+                        eprintln!("LSP Daemon Exited: {}", e);
+                    }
+                }
+            }
+            "playground" => {
+                let port = if args.len() > 2 {
+                    args[2].parse::<u16>().unwrap_or(8080)
+                } else {
+                    8080
+                };
+                if let Err(e) = aether::playground_server::start_playground_server(port, true) {
+                    eprintln!("Playground Server Error: {}", e);
+                }
+            }
+            "mcp" => {
+                let srv = aether::mcp_server::AetherMcpServer::new();
+                if let Err(e) = srv.run_stdio_server() {
+                    eprintln!("MCP Server Exited: {}", e);
+                }
+            }
+            "ai" | "ai-context" => {
+                println!("{}", aether::mcp_server::generate_ai_system_context());
+            }
             "build" => {
+                if args.len() > 2 && args[2].ends_with(".ae") {
+                    let source_path = Path::new(&args[2]);
+                    let mut output_path = source_path.with_extension("exe");
+                    let mut release = false;
+                    let mut i = 3;
+                    while i < args.len() {
+                        if args[i] == "-o" && i + 1 < args.len() {
+                            output_path = PathBuf::from(&args[i + 1]);
+                            i += 2;
+                        } else if args[i] == "--release" {
+                            release = true;
+                            i += 1;
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    let builder = aether::codegen::aot_builder::AotBuilder::new(release);
+                    if let Err(e) = builder.build_executable(source_path, &output_path) {
+                        eprintln!("AOT Build Error: {}", e);
+                    }
+                    return;
+                }
                 let current_dir = std::env::current_dir().unwrap();
                 let mut target = "desktop";
                 if args.len() > 3 && args[2] == "--target" {
@@ -6143,9 +6268,410 @@ fn main() {
                 }
             }
             "run" => {
-                let current_dir = std::env::current_dir().unwrap();
-                if let Err(e) = run_project(&current_dir) {
-                    eprintln!("Error: {}", e);
+                let use_jit = args.iter().any(|a| a == "--jit" || a == "--native");
+                let clean_args: Vec<&String> = args.iter().filter(|a| *a != "--jit" && *a != "--native").collect();
+                if clean_args.len() > 2 {
+                    let file_path = clean_args[2];
+                    match std::fs::read_to_string(file_path) {
+                        Ok(src) => {
+                            if use_jit {
+                                match aether::syntax::parse(&src) {
+                                    Ok(prog) => match aether::codegen::cranelift_backend::CraneliftCompiler::new() {
+                                        Ok(mut compiler) => {
+                                            if let Err(e) = compiler.compile_and_run(&prog) {
+                                                eprintln!("JIT Execution Error: {}", e);
+                                            }
+                                        }
+                                        Err(e) => eprintln!("JIT Init Error: {}", e),
+                                    },
+                                    Err((e, span)) => eprintln!("{}:{}: Syntax Error: {}", span.line, span.col, e),
+                                }
+                            } else if let Err(e) = aether::vm::run_source(&src) {
+                                eprintln!("Runtime Error: {}", e);
+                            }
+                        }
+                        Err(err) => eprintln!("Failed to read file '{}': {}", file_path, err),
+                    }
+                } else {
+                    let current_dir = std::env::current_dir().unwrap();
+                    let main_ae = current_dir.join("src").join("main.ae");
+                    if main_ae.exists() {
+                        let src = std::fs::read_to_string(&main_ae).unwrap();
+                        if let Err(e) = aether::vm::run_source(&src) {
+                            eprintln!("Runtime Error: {}", e);
+                        }
+                    } else if let Err(e) = run_project(&current_dir) {
+                        eprintln!("Error: {}", e);
+                    }
+                }
+            }
+            "jit" => {
+                if args.len() > 2 {
+                    let file_path = &args[2];
+                    match std::fs::read_to_string(file_path) {
+                        Ok(src) => match aether::syntax::parse(&src) {
+                            Ok(prog) => match aether::codegen::cranelift_backend::CraneliftCompiler::new() {
+                                Ok(mut compiler) => {
+                                    if let Err(e) = compiler.compile_and_run(&prog) {
+                                        eprintln!("JIT Execution Error: {}", e);
+                                    }
+                                }
+                                Err(e) => eprintln!("JIT Init Error: {}", e),
+                            },
+                            Err((e, span)) => eprintln!("{}:{}: Syntax Error: {}", span.line, span.col, e),
+                        },
+                        Err(err) => eprintln!("Failed to read file '{}': {}", file_path, err),
+                    }
+                } else {
+                    eprintln!("Usage: aether jit <file.ae>");
+                }
+            }
+            "wasm" => {
+                if args.len() > 2 {
+                    let file_path = &args[2];
+                    let mut out_path = format!("{}.wasm", file_path.trim_end_matches(".ae"));
+                    if let Some(pos) = args.iter().position(|a| a == "-o") {
+                        if pos + 1 < args.len() {
+                            out_path = args[pos + 1].clone();
+                        }
+                    }
+                    match std::fs::read_to_string(file_path) {
+                        Ok(src) => match aether::syntax::parse(&src) {
+                            Ok(prog) => {
+                                let mut compiler = aether::codegen::wasm::WasmCompiler::new();
+                                match compiler.compile_program(&prog) {
+                                    Ok(wasm_bytes) => {
+                                        if let Err(e) = std::fs::write(&out_path, &wasm_bytes) {
+                                            eprintln!("Failed to write WASM binary: {}", e);
+                                        } else {
+                                            println!("[AetherWasm] Successfully compiled {} -> {} ({} bytes)", file_path, out_path, wasm_bytes.len());
+                                        }
+                                    }
+                                    Err(e) => eprintln!("WASM Compilation Error: {}", e),
+                                }
+                            }
+                            Err((e, span)) => eprintln!("{}:{}: Syntax Error: {}", span.line, span.col, e),
+                        },
+                        Err(err) => eprintln!("Failed to read file '{}': {}", file_path, err),
+                    }
+                } else {
+                    println!("Usage: aether wasm <file.ae> [-o <out.wasm>]");
+                }
+            }
+            "edge" => {
+                if args.len() > 3 {
+                    let wasm_file = &args[2];
+                    let func_name = &args[3];
+                    let call_args: Vec<i64> = args[4..].iter().map(|s| s.parse::<i64>().unwrap_or(0)).collect();
+                    match std::fs::read(wasm_file) {
+                        Ok(bytes) => match aether::vm::wasm_runtime::WasmModule::parse(&bytes) {
+                            Ok(module) => {
+                                let mut instance = aether::vm::wasm_runtime::WasmInstance::new(module);
+                                match instance.invoke(func_name, &call_args, 1_000_000) {
+                                    Ok(result) => println!("{}", result),
+                                    Err(e) => eprintln!("AetherEdge Execution Error: {}", e),
+                                }
+                            }
+                            Err(e) => eprintln!("WASM Module Parse Error: {}", e),
+                        },
+                        Err(e) => eprintln!("Failed to read file '{}': {}", wasm_file, e),
+                    }
+                } else {
+                    println!("Usage: aether edge <file.wasm> <function_name> [args...]");
+                }
+            }
+            "rpc" | "rpc-call" => {
+                if args.len() > 3 {
+                    let target = &args[2];
+                    let method = &args[3];
+                    let (host, port) = if let Some((h, p)) = target.split_once(':') {
+                        (h, p.parse::<u16>().unwrap_or(19890))
+                    } else {
+                        ("127.0.0.1", target.parse::<u16>().unwrap_or(19890))
+                    };
+
+                    let call_args: Vec<aether::vm::Value> = args[4..]
+                        .iter()
+                        .map(|s| {
+                            if let Ok(i) = s.parse::<i64>() {
+                                aether::vm::Value::Int(i)
+                            } else if let Ok(f) = s.parse::<f64>() {
+                                aether::vm::Value::Float(f)
+                            } else if s == "true" {
+                                aether::vm::Value::Bool(true)
+                            } else if s == "false" {
+                                aether::vm::Value::Bool(false)
+                            } else {
+                                aether::vm::Value::string(s.clone())
+                            }
+                        })
+                        .collect();
+
+                    let mut req_map = std::collections::HashMap::new();
+                    req_map.insert("id".to_string(), aether::vm::Value::Int(1));
+                    req_map.insert("method".to_string(), aether::vm::Value::string(method.to_string()));
+                    req_map.insert("args".to_string(), aether::vm::Value::array(call_args));
+
+                    let payload = aether::vm::rpc::AetherPack::pack(&aether::vm::Value::map(req_map));
+                    match std::net::TcpStream::connect((host, port)) {
+                        Ok(mut stream) => {
+                            let _ = stream.set_nodelay(true);
+                            if let Err(e) = aether::vm::rpc::write_framed(&mut stream, &payload) {
+                                eprintln!("Failed to send RPC request: {}", e);
+                            } else {
+                                match aether::vm::rpc::read_framed(&mut stream) {
+                                    Ok(resp_bytes) => {
+                                        match aether::vm::rpc::AetherPack::unpack(&resp_bytes) {
+                                            Ok(resp_val) => {
+                                                if let aether::vm::Value::Map(m) = resp_val {
+                                                    let map = m.lock().clone();
+                                                    let status = map.get("status").map(|s| s.to_string()).unwrap_or_default();
+                                                    let result = map.get("result").cloned().unwrap_or(aether::vm::Value::Nil);
+                                                    if status == "ok" {
+                                                        println!("{}", result);
+                                                    } else {
+                                                        eprintln!("RPC Remote Error: {}", result);
+                                                    }
+                                                } else {
+                                                    println!("{}", resp_val);
+                                                }
+                                            }
+                                            Err(e) => eprintln!("Failed to unpack RPC response: {}", e),
+                                        }
+                                    }
+                                    Err(e) => eprintln!("Failed to read RPC response: {}", e),
+                                }
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to connect to RPC server at {}:{}: {}", host, port, e),
+                    }
+                } else {
+                    println!("Usage: aether rpc-call <host:port> <method> [args...]");
+                }
+            }
+            "df" => {
+                if args.len() > 2 {
+                    let csv_path = &args[2];
+                    let mode = if args.len() > 3 { args[3].as_str() } else { "summary" };
+                    match std::fs::read_to_string(csv_path) {
+                        Ok(content) => {
+                            match aether::vm::dataframe::NativeDataFrame::from_csv(&content) {
+                                Ok(df) => {
+                                    println!("=== AETHER Columnar DataFrame ===");
+                                    println!("Source: {}", csv_path);
+                                    let (rows, cols) = df.shape();
+                                    println!("Shape: [{} rows x {} columns]", rows, cols);
+                                    println!("Schema: {:?}", df.column_names);
+                                    match mode {
+                                        "head" => {
+                                            let n = if args.len() > 4 {
+                                                args[4].parse::<usize>().unwrap_or(5)
+                                            } else {
+                                                5
+                                            };
+                                            let preview = df.head(n);
+                                            println!("\n[First {} Rows Preview]\n{}", n, preview.to_csv());
+                                        }
+                                        _ => {
+                                            println!("\n[Columnar Statistical Summary]");
+                                            let desc = df.describe();
+                                            for (k, v) in desc {
+                                                println!("  • {}: {}", k, v);
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => eprintln!("Failed to parse CSV: {}", e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to read file '{}': {}", csv_path, e),
+                    }
+                } else {
+                    println!("Usage: aether df <file.csv> [summary|head [n]]");
+                }
+            }
+            "sql" => {
+                if args.len() > 3 {
+                    let csv_path = &args[2];
+                    let query_str = &args[3];
+                    match std::fs::read_to_string(csv_path) {
+                        Ok(content) => {
+                            match aether::vm::dataframe::NativeDataFrame::from_csv(&content) {
+                                Ok(df) => {
+                                    let mut tables = std::collections::HashMap::new();
+                                    let table_name = std::path::Path::new(csv_path)
+                                        .file_stem()
+                                        .and_then(|s| s.to_str())
+                                        .unwrap_or("data")
+                                        .to_lowercase();
+                                    tables.insert(table_name.clone(), std::sync::Arc::new(std::sync::Mutex::new(df.clone())));
+                                    tables.insert("data".to_string(), std::sync::Arc::new(std::sync::Mutex::new(df)));
+
+                                    match aether::vm::sql::execute_sql(query_str, &tables) {
+                                        Ok(result_df) => {
+                                            println!("=== AetherSQL Execution Result ===");
+                                            println!("Query: {}", query_str);
+                                            println!("Shape: [{} rows x {} columns]\n", result_df.row_count, result_df.column_names.len());
+                                            println!("{}", result_df.to_csv());
+                                        }
+                                        Err(e) => eprintln!("SQL Execution Error: {}", e),
+                                    }
+                                }
+                                Err(e) => eprintln!("Failed to parse CSV: {}", e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to read file '{}': {}", csv_path, e),
+                    }
+                } else {
+                    println!("Usage: aether sql <file.csv> \"<SELECT ... FROM table ...>\"");
+                }
+            }
+            "replay" | "timetravel" => {
+                if args.len() > 2 {
+                    let script_path = &args[2];
+                    match std::fs::read_to_string(script_path) {
+                        Ok(source) => {
+                            let session_id = aether::vm::timetravel::create_session();
+                            let session_arc = aether::vm::timetravel::get_session(session_id).unwrap();
+                            match aether::vm::run_source(&source) {
+                                Ok(_) => {
+                                    println!("Script executed. Launching Interactive TimeTravel TUI Debugger...");
+                                    let stdin = std::io::stdin();
+                                    let mut reader = stdin.lock();
+                                    let mut stdout = std::io::stdout();
+                                    let _ = aether::vm::timetravel_tui::run_interactive_tui(session_arc, &mut reader, &mut stdout);
+                                }
+                                Err(e) => eprintln!("Execution Error: {}", e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to read script '{}': {}", script_path, e),
+                    }
+                } else {
+                    println!("Usage: aether replay <script.ae>");
+                }
+            }
+            "compile" | "aot" => {
+                if args.len() > 2 {
+                    let script_path = std::path::Path::new(&args[2]);
+                    let mut out_path = std::path::PathBuf::from(
+                        script_path.file_stem().and_then(|s| s.to_str()).unwrap_or("output")
+                    );
+                    out_path.set_extension("obj");
+
+                    let mut i = 3;
+                    while i < args.len() {
+                        if (args[i] == "-o" || args[i] == "--out") && i + 1 < args.len() {
+                            out_path = std::path::PathBuf::from(&args[i + 1]);
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                    }
+
+                    println!("=== AETHER AOT Native Compiler (Cranelift) ===");
+                    println!("Source: {}", script_path.display());
+                    println!("Target: Native Machine Code Object ({})", out_path.display());
+
+                    match aether::codegen::aot::compile_file_to_object(script_path, &out_path) {
+                        Ok(bytes_written) => {
+                            println!("✅ Successfully compiled Ahead-of-Time native object: {} ({} bytes)", out_path.display(), bytes_written);
+                        }
+                        Err(e) => eprintln!("AOT Compilation Error: {}", e),
+                    }
+                } else {
+                    println!("Usage: aether compile <script.ae> [-o <output.obj>]");
+                }
+            }
+            "verify" | "prove" => {
+                if args.len() > 2 {
+                    let script_path = std::path::Path::new(&args[2]);
+                    match std::fs::read_to_string(script_path) {
+                        Ok(source) => {
+                            println!("=== AETHER Formal Verification & Symbolic Prover ===");
+                            println!("Analyzing: {}\n", script_path.display());
+                            match aether::syntax::parse(&source) {
+                                Ok(program) => {
+                                    let mut verifier = aether::vm::proof::SymbolicVerifier::new();
+                                    let reports = verifier.verify_program(&program);
+                                    let mut all_pass = true;
+                                    for r in reports {
+                                        if r.is_verified {
+                                            println!("  [PROVED ✅] Intent Function '{}' mathematically verified across {} paths.", r.function_name, r.paths_explored);
+                                        } else {
+                                            all_pass = false;
+                                            println!("  [FAILED ❌] Function '{}' safety verification failed!", r.function_name);
+                                            println!("    Diagnostic: {}", r.diagnostic);
+                                            if let Some(ce) = &r.counter_example {
+                                                println!("    Counter-Example Input: {:?}", ce);
+                                            }
+                                        }
+                                        for v in &r.vulnerabilities {
+                                            println!("    ⚠️  Vulnerability: {}", v);
+                                        }
+                                    }
+                                    println!("\nVerification Result: {}", if all_pass { "ALL CONTRACTS PROVED MATHEMATICALLY SOUND ✅" } else { "CONTRACT VIOLATIONS DETECTED ❌" });
+                                }
+                                Err((e, span)) => eprintln!("{}:{}: Syntax Error: {}", span.line, span.col, e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to read file '{}': {}", script_path.display(), e),
+                    }
+                } else {
+                    println!("Usage: aether verify <script.ae>");
+                }
+            }
+            "live" | "hotreload" => {
+                if args.len() > 2 {
+                    let file_path = &args[2];
+                    let poll_interval: u64 = if args.len() > 3 {
+                        args[3].parse::<u64>().unwrap_or(250)
+                    } else {
+                        250
+                    };
+                    if let Err(e) = aether::vm::hotreload::run_live_watcher(file_path, poll_interval) {
+                        eprintln!("AetherLive Error: {}", e);
+                    }
+                } else {
+                    println!("Usage: aether live <file.ae> [poll_interval_ms]");
+                }
+            }
+            "repl" => {
+                println!("AETHER 2.0 Interactive REPL");
+                println!("Type 'exit' or Ctrl+C to quit.\n");
+                let mut vm = aether::vm::VM::new();
+                use std::io::{self, BufRead, Write};
+                let stdin = io::stdin();
+                loop {
+                    print!("aether> ");
+                    let _ = io::stdout().flush();
+                    let mut line = String::new();
+                    if stdin.lock().read_line(&mut line).unwrap_or(0) == 0 {
+                        break;
+                    }
+                    let trimmed = line.trim();
+                    if trimmed == "exit" || trimmed == "quit" {
+                        break;
+                    }
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    match aether::syntax::parse(trimmed) {
+                        Ok(prog) => {
+                            let compiler = aether::vm::BytecodeCompiler::new("<repl>", 0);
+                            match compiler.compile(&prog) {
+                                Ok(compiled_fn) => match vm.interpret(compiled_fn) {
+                                    Ok(val) => {
+                                        if val != aether::vm::Value::Nil {
+                                            println!("=> {}", val);
+                                        }
+                                    }
+                                    Err(e) => eprintln!("Runtime Error: {}", e),
+                                },
+                                Err(e) => eprintln!("Compiler Error: {}", e),
+                            }
+                        }
+                        Err((e, span)) => eprintln!("{}:{}: Syntax Error: {}", span.line, span.col, e),
+                    }
                 }
             }
             "benchmark" => {
@@ -6175,28 +6701,91 @@ fn main() {
                 }
             }
             "version" | "--version" | "-v" => {
-                println!("AETHER Language Compiler v{}", AETHER_VERSION);
-                if let Some(newer) = check_for_updates() {
-                    println!(
-                        "  -> Update available: v{} (Run 'aether self-update' to install)",
-                        newer
-                    );
-                } else {
-                    println!("  -> System up to date.");
+                println!("AETHER Language Compiler v{}", aether::toolchain::AETHER_VERSION);
+                println!("Channel: {}", aether::toolchain::AETHER_RELEASE_CHANNEL);
+                println!("Target: Native Cranelift JIT/AOT + Bytecode VM");
+            }
+            "self-update" | "update" | "upgrade" => {
+                match aether::toolchain::perform_self_update() {
+                    Ok(rep) => {
+                        println!("✨ AETHER toolchain updated successfully to v{}!", rep.new_version);
+                    }
+                    Err(e) => eprintln!("Update Error: {}", e),
                 }
             }
-            "self-update" => {
-                if let Err(e) = self_update() {
-                    eprintln!("Update Error: {}", e);
+            "doctor" => {
+                let doc = aether::toolchain::run_doctor();
+                println!("================================================================================");
+                println!("🩺 AETHER TOOLCHAIN DOCTOR (SYSTEM HEALTH DIAGNOSTICS)");
+                println!("================================================================================");
+                println!("Version: v{} ({})", doc.version, doc.channel);
+                println!("Host OS: {} ({})", doc.os, doc.arch);
+                println!("Binary Location: {}", doc.bin_location.display());
+                println!("AETHER_HOME: {}", doc.aether_home.display());
+                println!("\nDiagnostics Checklist:");
+                let mut all_ok = true;
+                for check in doc.checks {
+                    let mark = if check.passed { "✅ OK" } else { all_ok = false; "⚠️  ATTN" };
+                    println!("  [{}] {}: {}", mark, check.name, check.detail);
                 }
+                println!("\nStatus: {}", if all_ok { "SYSTEM 100% HEALTHY & READY FOR PRODUCTION 🚀" } else { "ATTENTION NEEDED (Review checklist above)" });
+                println!("================================================================================");
             }
             "install" => {
-                if args.len() > 2 {
+                if args.len() == 2 || (args.len() > 2 && (args[2] == "--system" || args[2] == "-s" || args[2] == "--global" || args[2] == "-g")) {
+                    match aether::toolchain::install_to_system() {
+                        Ok(rep) => {
+                            println!("================================================================================");
+                            println!("🚀 AETHER GLOBAL TOOLCHAIN INSTALLATION");
+                            println!("================================================================================");
+                            println!("Installed Binary: {}", rep.target_bin.display());
+                            println!("Standard Libraries Copied: {}", rep.libraries_copied);
+                            if rep.already_in_path {
+                                println!("PATH Status: Already registered in User PATH ✅");
+                            } else if rep.path_updated {
+                                println!("PATH Status: Successfully added to User PATH environment variable ✅");
+                                println!("  Note: Please restart your terminal/PowerShell window to refresh PATH.");
+                            } else {
+                                println!("PATH Status: Please add '{}' to your system PATH.", aether::toolchain::get_aether_bin_dir().display());
+                            }
+                            println!("Verification: Type 'aether --version' from any terminal directory!");
+                            println!("================================================================================");
+                        }
+                        Err(e) => eprintln!("System Install Error: {}", e),
+                    }
+                } else if args.len() > 2 {
                     if let Err(e) = install_library(&args[2]) {
                         eprintln!("Install Error: {}", e);
                     }
                 } else {
-                    eprintln!("Usage: aether install <library_name>[@version]");
+                    eprintln!("Usage: aether install [--system] OR aether install <library_name>");
+                }
+            }
+            "install-system" | "setup" => {
+                match aether::toolchain::install_to_system() {
+                    Ok(rep) => {
+                        println!("================================================================================");
+                        println!("🚀 AETHER GLOBAL TOOLCHAIN INSTALLATION");
+                        println!("================================================================================");
+                        println!("Installed Binary: {}", rep.target_bin.display());
+                        println!("Standard Libraries Copied: {}", rep.libraries_copied);
+                        if rep.already_in_path {
+                            println!("PATH Status: Already registered in User PATH ✅");
+                        } else if rep.path_updated {
+                            println!("PATH Status: Successfully added to User PATH environment variable ✅");
+                            println!("  Note: Please restart your terminal/PowerShell window to refresh PATH.");
+                        } else {
+                            println!("PATH Status: Please add '{}' to your system PATH.", aether::toolchain::get_aether_bin_dir().display());
+                        }
+                        println!("Verification: Type 'aether --version' from any terminal directory!");
+                        println!("================================================================================");
+                    }
+                    Err(e) => eprintln!("System Install Error: {}", e),
+                }
+            }
+            "bench" => {
+                if let Err(e) = aether::toolchain::run_production_benchmarks() {
+                    eprintln!("Benchmark Error: {}", e);
                 }
             }
             "uninstall" => {
@@ -6273,6 +6862,15 @@ fn main() {
                 println!("  uninstall <lib>       Remove a library from environment and manifest");
                 println!("  list                  List all installed cached libraries");
                 println!("  search <query>        Search registry indexes for AETHER libraries");
+                println!("  sql <file.csv> <q>    Execute hybrid SQL query directly over CSV");
+                println!("  replay <script.ae>    Run script and launch interactive TimeTravel TUI debugger");
+                println!("  compile <script.ae>   Ahead-of-Time compile script to native machine code object (.obj/.o)");
+                println!("  verify <script.ae>    Formally prove intent contracts & detect vulnerabilities");
+                println!("  lsp [--check <f.ae>]  Launch Language Server Protocol daemon for VS Code & IDEs");
+                println!("  playground [port]     Launch interactive in-browser WASM playground");
+                println!("  mcp                   Launch Model Context Protocol (MCP) server for AI assistants");
+                println!("  ai                    Output full AI pair-programming system prompt");
+                println!("  publish               Package current library for decentralized AetherPM distribution");
             }
         }
     } else {

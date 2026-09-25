@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETHER 2.0 Web Playground — Live Code Sandbox</title>
+  <link rel="stylesheet" href="playground.css">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div class="brand-title">
+        <span class="brand-name">AETHER 2.0</span>
+        <span class="brand-badge">WASM Playground</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="selector-wrapper">
+        <label for="templateSelect">Example:</label>
+        <select id="templateSelect">
+          <option value="quantum">⚛️ Quantum Entanglement & Bell State</option>
+          <option value="neural">🧠 Neural Tensor & Autograd Backward</option>
+          <option value="graph">🕸️ Knowledge Graph & Dijkstra Path</option>
+          <option value="crdt">🐝 Swarm CRDT Convergence</option>
+          <option value="intent">🛡️ Declarative Intent Verification</option>
+        </select>
+      </div>
+
+      <button id="runBtn" class="btn btn-run">
+        <span class="btn-icon">▶</span> Run Code <span class="kbd-hint">Ctrl+↵</span>
+      </button>
+      <button id="clearBtn" class="btn btn-secondary">Clear</button>
+      <button id="shareBtn" class="btn btn-secondary">Copy Snippet</button>
+    </div>
+  </header>
+
+  <!-- Main Playground Workspace -->
+  <main class="workspace">
+    <!-- Left Pane: Code Editor -->
+    <section class="editor-pane">
+      <div class="pane-header">
+        <span class="pane-title">📝 main.ae</span>
+        <span class="pane-status" id="editorStatus">Ready</span>
+      </div>
+      <div class="editor-container">
+        <div class="line-numbers" id="lineNumbers">1</div>
+        <textarea id="codeEditor" spellcheck="false" autocomplete="off"></textarea>
+      </div>
+    </section>
+
+    <!-- Right Pane: Terminal & Visualizer -->
+    <section class="output-pane">
+      <!-- Terminal Output -->
+      <div class="output-box">
+        <div class="pane-header">
+          <span class="pane-title">📟 Execution Output</span>
+          <span class="exec-time" id="execTime">Latency: 0.00ms</span>
+        </div>
+        <pre class="terminal-content" id="terminalOutput">// Click 'Run Code' or press Ctrl+Enter to execute AETHER in browser...</pre>
+      </div>
+
+      <!-- Realtime Visualizer -->
+      <div class="visualizer-box">
+        <div class="pane-header">
+          <span class="pane-title" id="visualizerTitle">📊 State & Graph Visualizer</span>
+        </div>
+        <div class="visualizer-viewport" id="visualizerViewport">
+          <!-- Dynamic SVG/Canvas Rendered by playground.js -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>AETHER 2.0.0 (WASM Engine)</span>
+    <span>Zero Runtime Dependencies • Post-Quantum • Pure Intent Architecture</span>
+  </footer>
+
+  <script src="playground.js"></script>
+</body>
+</html>

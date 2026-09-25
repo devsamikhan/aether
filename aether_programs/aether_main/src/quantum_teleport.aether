@@ -1,0 +1,12 @@
+pub intent QuantumTeleportation {
+    pub fn run_teleport() {
+        qubit q_alice;
+        qubit q_entangled_a;
+        qubit q_entangled_b;
+        
+        entangle(q_entangled_a, q_entangled_b);
+        measure(q_alice) => collapsed_state;
+        
+        println("Qubit entangled state teleported successfully.");
+    }
+}

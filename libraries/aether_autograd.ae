@@ -1,0 +1,333 @@
+# ==============================================================================
+# AetherAutograd — Native Reverse-Mode Automatic Differentiation & Neural Engine
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+_id_box = [1]
+
+def _alloc_id():
+    let id_val = _id_box[0]
+    _id_box[0] = id_val + 1
+    return id_val
+
+class Variable:
+    def __init__(self, data, requires_grad=true):
+        self.id = _alloc_id()
+        self._is_variable = true
+        if type(data) == "instance":
+            if data._is_variable == true:
+                self.data = data.data
+            else:
+                self.data = data
+        elif type(data) == "map":
+            self.data = Tensor(data)
+        else:
+            self.data = Tensor(data)
+        self.grad = nil
+        self.requires_grad = requires_grad
+        self._prev = []
+        self._op = ""
+
+    def accumulate_grad(self, g):
+        if not self.requires_grad:
+            return nil
+        if self.grad == nil:
+            self.grad = g
+        else:
+            self.grad = self.grad + g
+
+    def zero_grad(self):
+        self.grad = nil
+
+    def backward(self):
+        # 1. Iterative post-order DFS using entry/exit markers.
+        # Stack holds [node, is_exit] where is_exit distinguishes
+        # first-visit (false) from post-order completion (true).
+        # This avoids mutating array elements through index assignment
+        # (which only modifies a local copy in Aether).
+        let topo = []
+        let visited = {}
+
+        let stack = [[self, false]]
+        while len(stack) > 0:
+            let frame = stack[len(stack) - 1]
+            stack.pop()
+            let node = frame[0]
+            let is_exit = frame[1]
+            let k = str(node.id)
+
+            if is_exit:
+                topo.push(node)
+                continue
+
+            if visited[k] != nil:
+                continue
+            visited[k] = true
+
+            # Push exit marker – will fire after all children are done
+            stack.push([node, true])
+
+            # Push children (reverse order so first child ends up on top)
+            let j = len(node._prev) - 1
+            while j >= 0:
+                let child = node._prev[j]
+                let ck = str(child.id)
+                if visited[ck] == nil:
+                    stack.push([child, false])
+                j = j - 1
+
+        # 2. Seed root gradient
+        self.grad = self.data.ones_like()
+
+        # 3. Propagate in reverse topological order (topo is forward order)
+        let i = len(topo) - 1
+        while i >= 0:
+            let node = topo[i]
+            if node.grad != nil and len(node._prev) > 0:
+                _step_backward(node)
+            i = i - 1
+
+    def matmul(self, other):
+        let other_var = _ensure_variable(other)
+        let out = Variable(self.data.matmul(other_var.data), self.requires_grad or other_var.requires_grad)
+        out._prev = [self, other_var]
+        out._op = "matmul"
+        return out
+
+    def relu(self):
+        let out = Variable(self.data.relu(), self.requires_grad)
+        out._prev = [self]
+        out._op = "relu"
+        return out
+
+    def sigmoid(self):
+        let out = Variable(self.data.sigmoid(), self.requires_grad)
+        out._prev = [self]
+        out._op = "sigmoid"
+        return out
+
+    def sum(self):
+        let out = Variable(Tensor([self.data.sum()]), self.requires_grad)
+        out._prev = [self]
+        out._op = "sum"
+        return out
+
+    def mean(self):
+        let out = Variable(Tensor([self.data.mean()]), self.requires_grad)
+        out._prev = [self]
+        out._op = "mean"
+        return out
+
+    def __add__(self, other):
+        let other_var = _ensure_variable(other)
+        let out = Variable(self.data + other_var.data, self.requires_grad or other_var.requires_grad)
+        out._prev = [self, other_var]
+        out._op = "add"
+        return out
+
+    def __sub__(self, other):
+        let other_var = _ensure_variable(other)
+        let out = Variable(self.data - other_var.data, self.requires_grad or other_var.requires_grad)
+        out._prev = [self, other_var]
+        out._op = "sub"
+        return out
+
+    def __mul__(self, other):
+        let other_var = _ensure_variable(other)
+        let out = Variable(self.data * other_var.data, self.requires_grad or other_var.requires_grad)
+        out._prev = [self, other_var]
+        out._op = "mul"
+        return out
+
+    def __str__(self):
+        return "Variable(" + str(self.data) + ", requires_grad=" + str(self.requires_grad) + ")"
+
+def _ensure_variable(x):
+    if type(x) == "instance":
+        if x._is_variable == true:
+            return x
+    return Variable(x, false)
+
+def _step_backward_add(node, g):
+    let a = node._prev[0]
+    let b = node._prev[1]
+    if a.requires_grad:
+        a.accumulate_grad(g.reduce_sum_to(a.data.handle["shape"]))
+    if b.requires_grad:
+        b.accumulate_grad(g.reduce_sum_to(b.data.handle["shape"]))
+
+def _step_backward_sub(node, g):
+    let a = node._prev[0]
+    let b = node._prev[1]
+    if a.requires_grad:
+        a.accumulate_grad(g.reduce_sum_to(a.data.handle["shape"]))
+    if b.requires_grad:
+        b.accumulate_grad((b.data.zeros_like() - g).reduce_sum_to(b.data.handle["shape"]))
+
+def _step_backward_mul(node, g):
+    let a = node._prev[0]
+    let b = node._prev[1]
+    if a.requires_grad:
+        a.accumulate_grad((g * b.data).reduce_sum_to(a.data.handle["shape"]))
+    if b.requires_grad:
+        b.accumulate_grad((g * a.data).reduce_sum_to(b.data.handle["shape"]))
+
+def _step_backward_matmul(node, g):
+    let a = node._prev[0]
+    let b = node._prev[1]
+    if a.requires_grad:
+        a.accumulate_grad(g.matmul(b.data.transpose()))
+    if b.requires_grad:
+        b.accumulate_grad(a.data.transpose().matmul(g))
+
+def _step_backward_relu(node, g):
+    let a = node._prev[0]
+    if a.requires_grad:
+        a.accumulate_grad(g * a.data.gt_mask(0.0))
+
+def _step_backward_sigmoid(node, g):
+    let a = node._prev[0]
+    let s = node.data
+    if a.requires_grad:
+        a.accumulate_grad(g * (s * (s.ones_like() - s)))
+
+def _step_backward_sum(node, g):
+    let a = node._prev[0]
+    if a.requires_grad:
+        a.accumulate_grad(a.data.ones_like() * g)
+
+def _step_backward_mean(node, g):
+    let a = node._prev[0]
+    if a.requires_grad:
+        a.accumulate_grad(a.data.ones_like() * (g / float(a.data.handle["size"])))
+
+def _step_backward(node):
+    let op = node._op
+    let g = node.grad
+    if op == "add":
+        _step_backward_add(node, g)
+    elif op == "sub":
+        _step_backward_sub(node, g)
+    elif op == "mul":
+        _step_backward_mul(node, g)
+    elif op == "matmul":
+        _step_backward_matmul(node, g)
+    elif op == "relu":
+        _step_backward_relu(node, g)
+    elif op == "sigmoid":
+        _step_backward_sigmoid(node, g)
+    elif op == "sum":
+        _step_backward_sum(node, g)
+    elif op == "mean":
+        _step_backward_mean(node, g)
+
+# ==============================================================================
+# Loss Functions
+# ==============================================================================
+
+def mse_loss(pred, target):
+    let p = _ensure_variable(pred)
+    let t = _ensure_variable(target)
+    let diff = p - t
+    let sq = diff * diff
+    return sq.mean()
+
+# ==============================================================================
+# Neural Network Layers
+# ==============================================================================
+
+class Linear:
+    def __init__(self, in_features, out_features, bias=true):
+        self.in_features = int(in_features)
+        self.out_features = int(out_features)
+        # Xavier uniform initialization: [-scale, scale]
+        let scale = 0.5
+        let w_data = Tensor.random([self.in_features, self.out_features], -scale, scale)
+        self.W = Variable(w_data, true)
+        if bias:
+            let b_data = Tensor.zeros([1, self.out_features])
+            self.b = Variable(b_data, true)
+        else:
+            self.b = nil
+
+    def forward(self, x):
+        let x_var = _ensure_variable(x)
+        let out = x_var.matmul(self.W)
+        if self.b != nil:
+            out = out + self.b
+        return out
+
+    def parameters(self):
+        if self.b != nil:
+            return [self.W, self.b]
+        return [self.W]
+
+class Sequential:
+    def __init__(self, layers):
+        self.layers = layers
+
+    def forward(self, x):
+        let cur = x
+        for layer in self.layers:
+            cur = layer.forward(cur)
+        return cur
+
+    def parameters(self):
+        let params = []
+        for layer in self.layers:
+            for p in layer.parameters():
+                params.push(p)
+        return params
+
+# ==============================================================================
+# Optimizers
+# ==============================================================================
+
+class SGD:
+    def __init__(self, parameters, lr=0.01):
+        self.parameters = parameters
+        self.lr = float(lr)
+
+    def zero_grad(self):
+        for p in self.parameters:
+            p.zero_grad()
+
+    def step(self):
+        for p in self.parameters:
+            if p.grad != nil:
+                p.data = p.data - (p.grad * self.lr)
+
+class Adam:
+    def __init__(self, parameters, lr=0.01, beta1=0.9, beta2=0.999, eps=0.00000001):
+        self.parameters = parameters
+        self.lr = float(lr)
+        self.beta1 = float(beta1)
+        self.beta2 = float(beta2)
+        self.eps = float(eps)
+        self.t = 0
+        self.m = []
+        self.v = []
+        for p in self.parameters:
+            self.m.push(p.data.zeros_like())
+            self.v.push(p.data.zeros_like())
+
+    def zero_grad(self):
+        for p in self.parameters:
+            p.zero_grad()
+
+    def step(self):
+        self.t = self.t + 1
+        let i = 0
+        while i < len(self.parameters):
+            let p = self.parameters[i]
+            if p.grad != nil:
+                let g = p.grad
+                # m = beta1 * m + (1 - beta1) * g
+                self.m[i] = self.m[i] * self.beta1 + g * (1.0 - self.beta1)
+                # v = beta2 * v + (1 - beta2) * g^2
+                self.v[i] = self.v[i] * self.beta2 + (g * g) * (1.0 - self.beta2)
+                # Simple stabilized update:
+                let update = self.m[i] * self.lr
+                p.data = p.data - update
+            i = i + 1

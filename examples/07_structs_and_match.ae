@@ -1,0 +1,58 @@
+﻿# AETHER 2.0 Structs and Pattern Matching Demo
+# Demonstrates zero-cost data structures and expressive match expressions
+
+println("--- 1. Struct Definition & Instantiation ---")
+
+struct Vector2D:
+    x
+    y
+
+let v1 = Vector2D(10, 25)
+println("Vector coordinates: (", v1.x, ",", v1.y, ")")
+
+# Struct field mutation
+v1.x += 15
+v1.y = v1.y * 2
+println("Updated Vector coordinates: (", v1.x, ",", v1.y, ")")
+
+println("\n--- 2. Domain Entities & Methods ---")
+
+struct BankAccount:
+    owner
+    balance
+    tier
+
+let account = BankAccount("Sami Khan", 1500, "Silver")
+println("Account Owner:", account.owner)
+println("Initial Balance: $", account.balance)
+
+# Deposit & update balance
+account.balance += 3500
+println("Deposit completed. New Balance: $", account.balance)
+
+println("\n--- 3. Pattern Matching with Ranges & Literals ---")
+
+fn evaluate_tier(bal):
+    match bal:
+        5000..1000000 => "Platinum VIP"
+        1000..4999 => "Gold"
+        100..999 => "Silver"
+        _ => "Standard"
+
+account.tier = evaluate_tier(account.balance)
+println("Promoted Account Tier:", account.tier)
+
+fn http_status_message(code):
+    match code:
+        200 => "200: OK - Request succeeded"
+        201 => "201: Created - Resource generated"
+        400 => "400: Bad Request"
+        404 => "404: Not Found"
+        500 => "500: Internal Server Error"
+        _ => "Unknown HTTP status"
+
+println("HTTP Status checks:")
+println(" -", http_status_message(200))
+println(" -", http_status_message(404))
+println(" -", http_status_message(500))
+println(" -", http_status_message(418))

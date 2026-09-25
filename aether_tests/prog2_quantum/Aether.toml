@@ -1,0 +1,6 @@
+[package]
+name = "prog2_quantum"
+version = "0.1.0"
+author = "Developer"
+
+[dependencies]

@@ -1,0 +1,8 @@
+intent QuantumCoin {
+    fn main() {
+        qubit q;
+        superpose(q);
+        measure(q) => outcome;
+        println("Quantum coin flipped. Outcome: " + outcome);
+    }
+}

@@ -1,0 +1,178 @@
+# ==============================================================================
+# AetherAgent — Native Autonomous AI Agent & Tool Orchestration Engine
+# ==============================================================================
+
+from aether_vector import VectorStore
+
+class Tool:
+    def __init__(self, name, description, handler):
+        self.name = str(name)
+        self.description = str(description)
+        self.handler = handler
+
+    def execute(self, args):
+        return self.handler(args)
+
+class AgentMemory:
+    def __init__(self, vector_store=nil):
+        self.short_term = []
+        if vector_store != nil:
+            self.long_term = vector_store
+        else:
+            self.long_term = VectorStore("cosine")
+
+    def add_interaction(self, role, content):
+        let item = {
+            "role": str(role),
+            "content": str(content)
+        }
+        self.short_term.push(item)
+        return item
+
+    def get_history(self):
+        return self.short_term
+
+    def remember(self, memory_id, text, vector, metadata={}):
+        let meta = metadata
+        meta["text"] = str(text)
+        return self.long_term.add(memory_id, vector, meta)
+
+    def recall(self, query_vector, top_k=3):
+        return self.long_term.search(query_vector, top_k)
+
+class Agent:
+    def __init__(self, name="AetherAgent", system_prompt="You are a helpful autonomous agent.", tools=[], memory=nil, max_steps=8):
+        self.name = str(name)
+        self.system_prompt = str(system_prompt)
+        self.tools = {}
+        for t in tools:
+            self.add_tool(t)
+        if memory != nil:
+            self.memory = memory
+        else:
+            self.memory = AgentMemory()
+        self.max_steps = int(max_steps)
+
+    def add_tool(self, tool):
+        self.tools[tool.name] = tool
+
+    def get_tool(self, name):
+        return self.tools[name]
+
+    def _call_tool(self, tool_name, args):
+        let t = self.tools[tool_name]
+        if t == nil:
+            return "Error: Tool '" + str(tool_name) + "' does not exist."
+        return t.execute(args)
+
+    def _get_decision(self, step, goal, last_obs, planner_fn):
+        if planner_fn != nil:
+            let state = {
+                "step": step,
+                "goal": goal,
+                "history": self.memory.get_history(),
+                "last_observation": last_obs,
+                "available_tools": self._list_tools()
+            }
+            return planner_fn(state)
+        return self._default_plan(step, goal, last_obs)
+
+    def run(self, user_goal, planner_fn=nil):
+        self.memory.add_interaction("user", user_goal)
+        let trace = []
+        let last_obs = nil
+        let step = 0
+        let decision = nil
+        let action = ""
+
+        while step < self.max_steps:
+            decision = self._get_decision(step, user_goal, last_obs, planner_fn)
+            action = decision["action"]
+
+            trace.push({
+                "step": step,
+                "thought": decision["thought"],
+                "action": action,
+                "tool": decision["tool"],
+                "args": decision["args"]
+            })
+
+            if action == "finish":
+                self.memory.add_interaction("assistant", decision["response"])
+                return {
+                    "status": "completed",
+                    "result": decision["response"],
+                    "steps": step + 1,
+                    "trace": trace
+                }
+
+            if action == "call_tool":
+                last_obs = self._call_tool(decision["tool"], decision["args"])
+                self.memory.add_interaction("tool", str(last_obs))
+                trace[len(trace) - 1]["observation"] = last_obs
+
+            step = step + 1
+
+        return {
+            "status": "max_steps_reached",
+            "result": last_obs,
+            "steps": step,
+            "trace": trace
+        }
+
+    def _list_tools(self):
+        let list = []
+        for name in self.tools.keys():
+            let t = self.tools[name]
+            list.push({
+                "name": t.name,
+                "description": t.description
+            })
+        return list
+
+    def _default_plan(self, step, goal, last_obs):
+        # Built-in deterministic multi-step reasoning
+
+        if step == 0:
+            # First step: if memory/vector search tool is available, query memory
+            if self.tools["recall_memory"] != nil:
+                return {
+                    "thought": "Checking long-term semantic memory for relevant context.",
+                    "action": "call_tool",
+                    "tool": "recall_memory",
+                    "args": [goal]
+                }
+            # Or if math calculation is in goal
+            if self.tools["calculator"] != nil and ("calc" in goal or "+" in goal or "*" in goal):
+                return {
+                    "thought": "Delegating arithmetic calculation to Calculator tool.",
+                    "action": "call_tool",
+                    "tool": "calculator",
+                    "args": [goal]
+                }
+            # Or if database tool is present
+            if self.tools["db_lookup"] != nil:
+                return {
+                    "thought": "Querying local knowledge database.",
+                    "action": "call_tool",
+                    "tool": "db_lookup",
+                    "args": [goal]
+                }
+
+        # Conclude with synthesis of observation
+        if last_obs != nil:
+            return {
+                "thought": "Goal accomplished using retrieved information.",
+                "action": "finish",
+                "tool": nil,
+                "args": nil,
+                "response": "Answer based on tools: " + str(last_obs)
+            }
+
+        return {
+            "thought": "Synthesizing direct response.",
+            "action": "finish",
+            "tool": nil,
+            "args": nil,
+            "response": "Processed goal: " + str(goal)
+        }

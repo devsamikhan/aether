@@ -1,0 +1,16 @@
+# AETHER 2.0 Concurrency Example
+# Demonstrates message-passing concurrency using channels
+
+let ch = channel()
+
+println("Sending job tokens across channel...")
+send(ch, "Task #1: Matrix Multiply")
+send(ch, "Task #2: Quantum State Synthesis")
+send(ch, "Task #3: CRDT State Sync")
+
+println("Receiving from channel:")
+println("  <-", recv(ch))
+println("  <-", recv(ch))
+println("  <-", recv(ch))
+
+println("All tasks communicated successfully across channel!")

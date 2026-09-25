@@ -1,0 +1,11 @@
+let n = 10000000
+println("[Aether] Running intensive loop (", n, "iterations)...")
+
+let t0 = time_ms()
+let total = 0
+for i in range(n):
+    total = total + (i * 3) - (i / 2)
+let elapsed = time_ms() - t0
+
+println("Total:", total)
+println("Time:", elapsed, "ms")

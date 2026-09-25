@@ -1,0 +1,6 @@
+[package]
+name = "prog3_crdt"
+version = "0.1.0"
+author = "Developer"
+
+[dependencies]

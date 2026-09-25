@@ -1,0 +1,58 @@
+# ==============================================================================
+# AetherDB — Pure Aether Object-Oriented Database Library
+# ==============================================================================
+
+class Collection:
+    def __init__(self, db_handle, name):
+        self.db = db_handle
+        self.name = str(name)
+
+    def insert(self, doc):
+        return __native_db.insert(self.db, self.name, doc)
+
+    def find(self, query={}):
+        return __native_db.find(self.db, self.name, query)
+
+    def find_one(self, query={}):
+        return __native_db.find_one(self.db, self.name, query)
+
+    def update(self, query, update_data, upsert=false):
+        return __native_db.update(self.db, self.name, query, update_data, upsert)
+
+    def delete(self, query):
+        return __native_db.delete(self.db, self.name, query)
+
+    def count(self, query={}):
+        return __native_db.count(self.db, self.name, query)
+
+class Database:
+    def __init__(self, path=":memory:"):
+        self.path = str(path)
+        self.handle = __native_db.open(self.path)
+
+    def collection(self, name):
+        return Collection(self.handle, name)
+
+    def insert(self, collection_name, doc):
+        return __native_db.insert(self.handle, collection_name, doc)
+
+    def find(self, collection_name, query={}):
+        return __native_db.find(self.handle, collection_name, query)
+
+    def find_one(self, collection_name, query={}):
+        return __native_db.find_one(self.handle, collection_name, query)
+
+    def update(self, collection_name, query, update_data, upsert=false):
+        return __native_db.update(self.handle, collection_name, query, update_data, upsert)
+
+    def delete(self, collection_name, query):
+        return __native_db.delete(self.handle, collection_name, query)
+
+    def count(self, collection_name, query={}):
+        return __native_db.count(self.handle, collection_name, query)
+
+    def close(self):
+        return __native_db.close(self.handle)
+
+    def compact(self):
+        return __native_db.compact(self.handle)

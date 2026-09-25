@@ -1,0 +1,162 @@
+# ==============================================================================
+# AetherActor — Erlang/OTP-Style Distributed Virtual Actors & Cluster Mesh
+# ==============================================================================
+
+class ActorRef:
+    def __init__(self, actor_id, name=""):
+        self.id = int(actor_id)
+        self.name = str(name)
+
+    def send(self, message):
+        return __native_actor.send(self.id, message)
+
+    def ask(self, message, timeout_ms=3000):
+        return __native_actor.ask(self.id, message, timeout_ms)
+
+    def recv(self, timeout_ms=nil):
+        return __native_actor.recv(self.id, timeout_ms)
+
+    def reply(self, reply_id, value):
+        return __native_actor.reply(reply_id, value)
+
+    def status(self):
+        return __native_actor.status(self.id)
+
+    def restarts(self):
+        return __native_actor.restarts(self.id)
+
+    def fail(self):
+        return __native_actor.fail(self.id)
+
+    def restart(self):
+        return __native_actor.restart(self.id)
+
+    def stop(self):
+        return __native_actor.stop(self.id)
+
+class Actor:
+    def __init__(self):
+        self.ref = nil
+
+    def receive(self, message):
+        return message
+
+    def on_start(self):
+        return nil
+
+    def on_stop(self):
+        return nil
+
+    def pre_restart(self):
+        return nil
+
+class ActorSystem:
+    def __init__(self, name="aether-system"):
+        self.name = str(name)
+        self.actors = {}
+
+    def _run_actor_loop(self, a_id, h):
+        let active = true
+        let msg_env = nil
+        let payload = nil
+        let res = nil
+        let st = nil
+        while active:
+            st = __native_actor.status(a_id)
+            if st != "running":
+                if st == "stopped":
+                    active = false
+                    break
+                sleep_ms(20)
+                continue
+
+            msg_env = __native_actor.recv(a_id, 50)
+            if msg_env != nil:
+                payload = msg_env["payload"]
+                if type(h) == "instance":
+                    res = h.receive(payload)
+                else:
+                    res = h(payload)
+
+                if msg_env["has_reply"] == true and msg_env["reply_id"] != nil:
+                    __native_actor.reply(msg_env["reply_id"], res)
+
+    def spawn_actor(self, handler=nil, name="", initial_state=nil):
+        let act_name = name
+        if len(act_name) == 0:
+            act_name = "actor-" + str(__native_actor.count() + 1)
+
+        let actor_id = __native_actor.spawn(act_name, initial_state)
+        let aref = ActorRef(actor_id, act_name)
+        self.actors[act_name] = aref
+
+        # If a handler function or actor instance is provided, run its worker loop in a background fiber
+        if handler != nil:
+            let a_id = actor_id
+            let h = handler
+            let sys = self
+            spawn sys._run_actor_loop(a_id, h)
+
+        return aref
+
+    def create_actor(self, handler=nil, name="", initial_state=nil):
+        return self.spawn_actor(handler, name, initial_state)
+
+    def lookup(self, name):
+        let actor_id = __native_actor.lookup(name)
+        if actor_id != nil:
+            return ActorRef(actor_id, name)
+        return nil
+
+    def count(self):
+        return __native_actor.count()
+
+class Supervisor:
+    def __init__(self, strategy="one_for_one", max_retries=3):
+        self.strategy = str(strategy)
+        self.max_retries = int(max_retries)
+        self.children = []
+
+    def supervise(self, actor_ref):
+        self.children.push(actor_ref)
+        return actor_ref
+
+    def restart_siblings(self, failed_id):
+        for sib in self.children:
+            if sib.id != failed_id:
+                sib.restart()
+
+    def check_and_heal(self):
+        let healed_count = 0
+        for child in self.children:
+            let st = child.status()
+            if st == "failed":
+                if child.restarts() < self.max_retries:
+                    child.restart()
+                    healed_count = healed_count + 1
+                    if self.strategy == "all_for_one":
+                        self.restart_siblings(child.id)
+        return healed_count
+
+class ClusterNode:
+    def __init__(self, node_name, host="127.0.0.1", port=9090):
+        self.node_name = str(node_name)
+        self.host = str(host)
+        self.port = int(port)
+        self.listener_id = nil
+        __native_actor.cluster_init(self.node_name)
+
+    def listen(self):
+        self.listener_id = __native_actor.cluster_listen(self.port)
+        return self.listener_id
+
+    def join(self, remote_node_name, host, port):
+        return __native_actor.cluster_join(str(remote_node_name), str(host), int(port))
+
+    def send(self, remote_node_name, target_actor, message):
+        return __native_actor.cluster_send(str(remote_node_name), str(target_actor), str(message))
+
+    def poll(self):
+        if self.listener_id != nil:
+            return __native_actor.cluster_poll(self.listener_id)
+        return nil

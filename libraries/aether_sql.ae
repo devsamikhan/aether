@@ -1,0 +1,38 @@
+# ==============================================================================
+# AetherSQL — Vector-Relational Hybrid SQL Engine
+# Standard SQL Querying & AI Vector Similarity over DataFrames
+# ==============================================================================
+
+from aether_df import DataFrame
+
+class SQLContext:
+    def __init__(self):
+        self.tables = {}
+
+    def register(self, name, df):
+        self.tables[str(name)] = df
+        try:
+            __native_sql.register_table(str(name), df.id)
+        except:
+            pass
+
+    def register_csv(self, name, csv_path):
+        let df = DataFrame.from_csv(str(csv_path))
+        self.register(name, df)
+        return df
+
+    def query(self, query_string, extra_tables=nil):
+        let tbls = self.tables
+        if extra_tables != nil:
+            for k in extra_tables:
+                tbls[k] = extra_tables[k]
+
+        let res_id = __native_sql.query(str(query_string), tbls)
+        return DataFrame.from_id(res_id)
+
+def sql(query_string, tables_map=nil):
+    let ctx = SQLContext()
+    if tables_map != nil:
+        for k in tables_map:
+            ctx.register(k, tables_map[k])
+    return ctx.query(query_string)

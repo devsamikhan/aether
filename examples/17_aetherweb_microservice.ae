@@ -1,0 +1,149 @@
+# ==============================================================================
+# PROJECT AETHER — Example 17: AetherWeb Production REST Microservice
+# ==============================================================================
+# Showcases:
+# 1. Zero-dependency Pure Aether Web Framework (aether_web.ae)
+# 2. Pure Rust Crypto Standard Library (sha256, hmac_sha256, base64)
+# 3. Interactive HTTP Server & Native Client Loop
+# 4. Fiber concurrency for non-blocking server execution
+# ==============================================================================
+
+from aether_web import App, Response
+from crypto import sha256, hmac_sha256, base64_encode
+from http import get, post
+from sys import sleep
+
+println("=================================================================")
+println("    PROJECT AETHER — AETHERWEB REST MICROSERVICE SHOWCASE        ")
+println("=================================================================")
+
+let app = App()
+let secret_key = "aether-secure-production-hmac-key"
+
+# In-memory database of items
+let db_items = {}
+
+# ------------------------------------------------------------------------------
+# 1. Global Middleware: Request Tracing & Timing
+# ------------------------------------------------------------------------------
+fn logging_middleware(req):
+    println("[AetherWeb INCOMING] ->", req.method, req.path)
+    req.headers["x-server"] = "AetherWeb/2.0-Native"
+    return nil
+
+app.add_middleware(logging_middleware)
+
+# ------------------------------------------------------------------------------
+# 2. Endpoint: GET /health
+# ------------------------------------------------------------------------------
+fn health_handler(req):
+    return Response.json({
+        "status": "online",
+        "runtime": "Aether 2.0 VM",
+        "concurrency": "Work-Stealing Fibers",
+        "crypto_engine": "Native Pure Rust SHA256/HMAC"
+    })
+
+app.get("/health", health_handler)
+
+# ------------------------------------------------------------------------------
+# 3. Endpoint: POST /auth/token (Crypto Token Generation)
+# ------------------------------------------------------------------------------
+fn auth_handler(req):
+    let body = req.json()
+    if !contains(body, "username") or !contains(body, "password"):
+        return Response.json({"error": "MissingCredentials"}, 400)
+
+    let username = body["username"]
+    let password_hash = sha256(body["password"])
+    let token_payload = username + ":" + password_hash
+    let signature = hmac_sha256(secret_key, token_payload)
+    let token = base64_encode(token_payload + "." + signature)
+
+    return Response.json({
+        "authenticated": true,
+        "user": username,
+        "token": token,
+        "sha256_fingerprint": password_hash
+    })
+
+app.post("/auth/token", auth_handler)
+
+# ------------------------------------------------------------------------------
+# 4. Endpoint: POST /api/items (Create Item)
+# ------------------------------------------------------------------------------
+fn create_item_handler(req):
+    let item = req.json()
+    if !contains(item, "id"):
+        return Response.json({"error": "ItemIDRequired"}, 400)
+
+    let item_id = str(item["id"])
+    db_items[item_id] = item
+    return Response.json({
+        "created": true,
+        "item": item
+    }, 201)
+
+app.post("/api/items", create_item_handler)
+
+# ------------------------------------------------------------------------------
+# 5. Endpoint: GET /api/items/:id (Route Parameter Matching)
+# ------------------------------------------------------------------------------
+fn get_item_handler(req):
+    let item_id = req.params["id"]
+    if contains(db_items, item_id):
+        return Response.json({
+            "found": true,
+            "data": db_items[item_id]
+        })
+    return Response.json({"error": "ItemNotFound", "id": item_id}, 404)
+
+app.get("/api/items/:id", get_item_handler)
+
+# ------------------------------------------------------------------------------
+# 6. Launch Server on Port 18080 inside a Fiber
+# ------------------------------------------------------------------------------
+let port = 18080
+let base_url = "http://127.0.0.1:" + str(port)
+
+println("[INIT] Launching AetherWeb server fiber on port:", port)
+
+spawn:
+    # Serve up to 6 requests then gracefully exit
+    app.serve(port, 6)
+
+sleep(0.08)
+
+# ------------------------------------------------------------------------------
+# 7. Live Interactive REST Microservice Verification
+# ------------------------------------------------------------------------------
+println("[TEST 1/5] Calling GET /health ...")
+let r1 = get(base_url + "/health")
+println("          Status:", r1["status"], "| Body:", r1["body"])
+
+println("[TEST 2/5] Calling POST /auth/token ...")
+let auth_payload = Json.stringify({"username": "admin", "password": "supersecretpassword123"})
+let r2 = post(base_url + "/auth/token", auth_payload, {"Content-Type": "application/json"})
+println("          Status:", r2["status"], "| Body:", r2["body"])
+
+println("[TEST 3/5] Calling POST /api/items ...")
+let item_payload = Json.stringify({"id": 101, "name": "Quantum Tensor Core", "price": 4999.99})
+let r3 = post(base_url + "/api/items", item_payload, {"Content-Type": "application/json"})
+println("          Status:", r3["status"], "| Body:", r3["body"])
+
+println("[TEST 4/5] Calling GET /api/items/101 (Parameterized Route) ...")
+let r4 = get(base_url + "/api/items/101")
+println("          Status:", r4["status"], "| Body:", r4["body"])
+
+println("[TEST 5/5] Calling GET /api/items/999 (Missing Item - 404) ...")
+let r5 = get(base_url + "/api/items/999")
+println("          Status:", r5["status"], "| Body:", r5["body"])
+
+println("[TEST 6/6] Calling GET /undefined/route (Fallback 404) ...")
+let r6 = get(base_url + "/undefined/route")
+println("          Status:", r6["status"], "| Body:", r6["body"])
+
+sleep(0.05)
+println("=================================================================")
+println("    AETHERWEB MICROSERVICE VERIFICATION COMPLETED SUCCESSFULLY   ")
+println("=================================================================")

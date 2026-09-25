@@ -1,0 +1,41 @@
+# ==============================================================================
+# Example 38: AetherAOT — Ahead-of-Time Cranelift Native Compilation
+# Demonstrating High-Performance Algorithmic Kernels Compiled to Machine Code (.obj)
+# ==============================================================================
+
+# 1. Fast Integer Power Algorithm (Binary Exponentiation)
+def fast_power(base, exp):
+    let result = 1
+    let b = base
+    let e = exp
+    while e > 0:
+        if e % 2 == 1:
+            result = result * b
+        b = b * b
+        e = e / 2
+    return result
+
+# 2. Optimized Euclidean Greatest Common Divisor
+def compute_gcd(a, b):
+    let x = a
+    let y = b
+    while y != 0:
+        let rem = x % y
+        x = y
+        y = rem
+    return x
+
+# 3. Factorial Kernel
+def factorial(n):
+    let acc = 1
+    let i = 2
+    while i <= n:
+        acc = acc * i
+        i = i + 1
+    return acc
+
+# 4. Top-level Execution Entry Point
+let p = fast_power(2, 10)
+let g = compute_gcd(1071, 462)
+let f = factorial(6)
+let total = p + g + f

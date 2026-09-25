@@ -1,0 +1,64 @@
+# ==============================================================================
+# Example 37: AetherTimeTravel TUI — Live Interactive Omniscient Visualizer
+# ASCII Timeline Ribbon, Checkpoint Delta Inspection & State Time-Replay
+# ==============================================================================
+
+from aether_timetravel import TimeMachine
+from aether_tui import TimeTravelTUI
+
+print("==================================================================")
+print("   ⏳ AETHER-TIMETRAVEL TUI: OMNISCIENT DEBUGGER VISUALIZER ⏳")
+print("==================================================================")
+
+# 1. Initialize High-Frequency Trading Bot Portfolio State
+let tm = TimeMachine()
+
+print("[TimeMachine] Recording Execution Steps & State Journaling...")
+tm["trader_id"] = "QUANT-ALPHA-99"
+tm["portfolio_cash"] = 250000.0
+tm["btc_exposure"] = 2.0
+tm["eth_exposure"] = 25.0
+tm["system_state"] = "IDLE"
+
+# Save Baseline Checkpoint
+let cp1 = tm.checkpoint("baseline_portfolio")
+print("  -> Created Checkpoint: 'baseline_portfolio' at Step " + str(cp1))
+
+# Step 2: Aggressive Long Position
+tm["portfolio_cash"] = tm["portfolio_cash"] - 90000.0
+tm["btc_exposure"] = tm["btc_exposure"] + 1.5
+tm["system_state"] = "AGGRESSIVE_LONG"
+
+# Step 3: Flash Crash Incident
+tm["portfolio_cash"] = tm["portfolio_cash"] - 45000.0
+tm["system_state"] = "FLASH_CRASH_DEFENSE"
+let cp2 = tm.checkpoint("incident_crash")
+print("  -> Created Checkpoint: 'incident_crash' at Step " + str(cp2))
+
+# Step 4: Hedging & Rebalance
+tm["btc_exposure"] = tm["btc_exposure"] - 1.0
+tm["portfolio_cash"] = tm["portfolio_cash"] + 65000.0
+tm["system_state"] = "NORMALIZED"
+
+# 2. Attach Interactive TUI Canvas
+let tui = TimeTravelTUI(tm)
+
+# 3. Render Live TUI Frame at Current Head Step
+print("\n[TUI Frame: Current Head State]")
+let head_frame = tui.render()
+print(head_frame)
+
+# 4. Omniscient State Reconstruction at Prior Step (Step 1 Baseline)
+print("[TimeTravel Omniscient Reconstruction at Step 1 (Baseline)]")
+let state_at_1 = tui.state_at(1)
+print("State at Step 1: " + str(state_at_1))
+
+# 5. Omniscient State Reconstruction at Crash Incident (Step 8)
+print("\n[TimeTravel Omniscient Reconstruction at Crash Incident Checkpoint]")
+let state_at_crash = tui.state_at(cp2)
+print("State at Crash Checkpoint: " + str(state_at_crash))
+
+print("==================================================================")
+print("   ✅ AETHER-TIMETRAVEL TUI REPLAY COMPLETED SUCCESSFULLY!")
+print("   Tip: Run 'aether replay <script.ae>' for full terminal interactive mode!")
+print("==================================================================")

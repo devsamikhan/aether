@@ -1,0 +1,118 @@
+# ==============================================================================
+# AetherTest — Native Test Runner, Assertions & Benchmark Harness
+# ==============================================================================
+
+fn assert_eq(actual, expected, msg=""):
+    if actual != expected:
+        let err = "AssertionError: Expected " + str(expected) + " but got " + str(actual)
+        if len(msg) > 0:
+            err = err + " (" + str(msg) + ")"
+        raise err
+
+fn assert_ne(actual, expected, msg=""):
+    if actual == expected:
+        let err = "AssertionError: Expected value NOT to equal " + str(expected)
+        if len(msg) > 0:
+            err = err + " (" + str(msg) + ")"
+        raise err
+
+fn assert_true(val, msg=""):
+    if !val:
+        let err = "AssertionError: Expected condition to be true"
+        if len(msg) > 0:
+            err = err + " (" + str(msg) + ")"
+        raise err
+
+fn assert_false(val, msg=""):
+    if val:
+        let err = "AssertionError: Expected condition to be false"
+        if len(msg) > 0:
+            err = err + " (" + str(msg) + ")"
+        raise err
+
+fn assert_almost_eq(actual, expected, eps=0.0001, msg=""):
+    let diff = Math.abs(actual - expected)
+    if diff > eps:
+        let err = "AssertionError: Values differ by " + str(diff) + " (tolerance=" + str(eps) + ")"
+        if len(msg) > 0:
+            err = err + " (" + str(msg) + ")"
+        raise err
+
+fn assert_raises(fn_to_call, expected_substr=""):
+    let caught = false
+    let err_msg = ""
+    try:
+        fn_to_call()
+    except as err:
+        caught = true
+        err_msg = str(err)
+    if !caught:
+        raise "AssertionError: Expected exception was not raised"
+    if len(expected_substr) > 0:
+        if !Strings.contains(err_msg, expected_substr):
+            raise "AssertionError: Exception message '" + err_msg + "' does not contain '" + expected_substr + "'"
+
+class TestSuite:
+    def __init__(self, name="Aether Test Suite"):
+        self.name = str(name)
+        self.tests = []
+
+    def test(self, name, test_fn):
+        append(self.tests, {"name": str(name), "fn": test_fn})
+
+    def run(self):
+        println("================================================================")
+        println("  RUNNING SUITE: " + self.name)
+        println("================================================================")
+        let passed = 0
+        let failed = 0
+        let suite_start = Sys.time()
+        for t in self.tests:
+            let t_start = Sys.time()
+            let t_name = t["name"]
+            let func = t["fn"]
+            try:
+                func()
+                let elapsed = (Sys.time() - t_start) * 1000.0
+                println("  [PASS] " + t_name + " (" + str(Math.round(elapsed, 2)) + " ms)")
+                passed += 1
+            except as err:
+                let elapsed = (Sys.time() - t_start) * 1000.0
+                println("  [FAIL] " + t_name + " (" + str(Math.round(elapsed, 2)) + " ms) -> " + str(err))
+                failed += 1
+        let total_time = (Sys.time() - suite_start) * 1000.0
+        println("----------------------------------------------------------------")
+        println("  Summary: " + str(passed) + " passed; " + str(failed) + " failed; in " + str(Math.round(total_time, 2)) + " ms")
+        println("================================================================\n")
+        return {"passed": passed, "failed": failed, "total": len(self.tests)}
+
+fn benchmark(name, callable_fn, iterations=1000):
+    # 1. Warmup
+    let warmup = 5
+    let w = 0
+    while w < warmup:
+        callable_fn()
+        w += 1
+
+    # 2. Benchmark timing
+    let start = Sys.time()
+    let i = 0
+    while i < iterations:
+        callable_fn()
+        i += 1
+    let elapsed = Sys.time() - start
+
+    if elapsed <= 0.0:
+        elapsed = 0.000001
+
+    let ops_per_sec = (iterations * 1.0) / elapsed
+    let avg_us = (elapsed / (iterations * 1.0)) * 1000000.0
+
+    println("[BENCHMARK] " + str(name) + ": " + str(Math.round(ops_per_sec, 0)) + " ops/sec (" + str(Math.round(avg_us, 2)) + " us/op)")
+    return {
+        "name": str(name),
+        "iterations": iterations,
+        "elapsed_sec": elapsed,
+        "ops_per_sec": ops_per_sec,
+        "avg_us": avg_us
+    }

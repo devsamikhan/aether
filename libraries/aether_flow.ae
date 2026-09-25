@@ -1,0 +1,85 @@
+# ==============================================================================
+# AetherFlow — Real-Time Reactive Streaming & Windowed DAG Engine
+# Tumbling, Sliding & Session Windows with Reactive Stream Transformations
+# ==============================================================================
+
+class WindowedStream:
+    def __init__(self, stream_id, window_type, size, slide=1, timeout_ms=1000):
+        self.stream_id = stream_id
+        self.window_type = window_type
+        self.size = size
+        self.slide = slide
+        self.timeout_ms = timeout_ms
+
+    def aggregate(self, agg_op="values"):
+        if self.window_type == "tumbling":
+            return __native_flow.tumbling_window(self.stream_id, self.size, str(agg_op))
+        elif self.window_type == "sliding":
+            return __native_flow.sliding_window(self.stream_id, self.size, self.slide, str(agg_op))
+        elif self.window_type == "session":
+            return __native_flow.session_window(self.stream_id, self.timeout_ms, str(agg_op))
+        return []
+
+    def sum(self):
+        return self.aggregate("sum")
+
+    def mean(self):
+        return self.aggregate("mean")
+
+    def min(self):
+        return self.aggregate("min")
+
+    def max(self):
+        return self.aggregate("max")
+
+    def count(self):
+        return self.aggregate("count")
+
+    def collect(self):
+        return self.aggregate("values")
+
+class DataStream:
+    def __init__(self, name="stream", capacity=1024):
+        self.id = __native_flow.create(str(name), int(capacity))
+        self.name = str(name)
+
+    def from_array(arr, name="stream", capacity=1024):
+        let s = DataStream(name, capacity)
+        s.emit_batch(arr)
+        return s
+
+    def emit(self, val, timestamp_ms=nil):
+        return __native_flow.emit(self.id, val, timestamp_ms)
+
+    def emit_batch(self, val_array, start_ts=nil):
+        return __native_flow.emit_batch(self.id, val_array, start_ts)
+
+    def window_tumbling(self, size):
+        return WindowedStream(self.id, "tumbling", int(size))
+
+    def window_sliding(self, size, slide=1):
+        return WindowedStream(self.id, "sliding", int(size), int(slide))
+
+    def window_session(self, timeout_ms):
+        return WindowedStream(self.id, "session", 0, 0, int(timeout_ms))
+
+    def filter(self, predicate_fn):
+        let raw = self.window_tumbling(1).collect()
+        let filtered = []
+        for w in raw:
+            if len(w) > 0:
+                let v = w[0]
+                if predicate_fn(v):
+                    filtered.push(v)
+        return DataStream.from_array(filtered, self.name + "_filtered")
+
+    def map(self, transform_fn):
+        let raw = self.window_tumbling(1).collect()
+        let mapped = []
+        for w in raw:
+            if len(w) > 0:
+                mapped.push(transform_fn(w[0]))
+        return DataStream.from_array(mapped, self.name + "_mapped")
+
+    def count(self):
+        return __native_flow.count(self.id)

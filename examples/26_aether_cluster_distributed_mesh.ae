@@ -1,0 +1,67 @@
+# ==============================================================================
+# AETHER 2.0 Showcase: Zero-Broker Distributed Actor Clustering & TCP Mesh
+# ==============================================================================
+# Demonstrates:
+#  1. Creating decentralized cluster nodes without RabbitMQ/Kafka or external brokers.
+#  2. Direct TCP peer-to-peer wire protocol with framed JSON packets.
+#  3. Cross-node message dispatching directly targeting remote virtual actors.
+#  4. Non-blocking packet polling and envelope decoding.
+# ==============================================================================
+
+from aether_actor import ClusterNode
+
+print("================================================================================")
+print("     AETHER 2.0: ZERO-BROKER DISTRIBUTED CLUSTER & TCP MESH DEMO              ")
+print("================================================================================")
+
+let cluster_port = 19750
+
+# 1. Initialize Cluster Node Alpha (Leader / Primary Mesh Listener)
+print("\n[Node Alpha] Initializing Server Listener on 127.0.0.1:" + str(cluster_port) + "...")
+node_alpha = ClusterNode("node-alpha", "127.0.0.1", cluster_port)
+let lid = node_alpha.listen()
+print("  Listener Socket Active: ID #" + str(lid))
+
+# 2. Initialize Cluster Node Beta (Worker / Satellite Node)
+print("\n[Node Beta] Initializing Satellite Node 'node-beta'...")
+node_beta = ClusterNode("node-beta", "127.0.0.1", 19751)
+
+# 3. Join Node Beta into Cluster Mesh with Node Alpha
+print("\n[Node Beta] Joining Direct Peer Mesh with Node Alpha...")
+let join_ok = node_beta.join("node-alpha", "127.0.0.1", cluster_port)
+print("  Mesh Peering Established: " + str(join_ok))
+
+# 4. Dispatch Cross-Node Actor Messages
+print("\n[Step 4] Node Beta Dispatching Distributed Messages to Node Alpha's Actors...")
+
+# Message 1: Heartbeat
+let send_1 = node_beta.send("node-alpha", "cluster_coordinator", "DISCOVERY_PING")
+print("  > Sent [DISCOVERY_PING] to node-alpha/cluster_coordinator => " + str(send_1))
+
+# Message 2: Distributed Job Task
+let send_2 = node_beta.send("node-alpha", "analytics_worker", "MAP_REDUCE_CHUNK_42")
+print("  > Sent [MAP_REDUCE_CHUNK_42] to node-alpha/analytics_worker => " + str(send_2))
+
+# 5. Node Alpha Polling & Processing Distributed Envelopes
+print("\n[Step 5] Node Alpha Polling TCP Mesh Receiver...")
+
+# Short pause for network buffer flush
+sleep_ms(30)
+
+let msg1 = node_alpha.poll()
+if msg1 != nil:
+    print("  [Alpha Received Frame 1]:")
+    print("    From Node:    " + str(msg1["sender_node"]))
+    print("    Target Actor: " + str(msg1["target_actor"]))
+    print("    Payload:      " + str(msg1["payload"]))
+
+let msg2 = node_alpha.poll()
+if msg2 != nil:
+    print("  [Alpha Received Frame 2]:")
+    print("    From Node:    " + str(msg2["sender_node"]))
+    print("    Target Actor: " + str(msg2["target_actor"]))
+    print("    Payload:      " + str(msg2["payload"]))
+
+print("\n================================================================================")
+print("  RESULT: Multi-node peer-to-peer distributed mesh communicated successfully!")
+print("================================================================================")

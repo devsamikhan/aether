@@ -1,0 +1,175 @@
+# ====================================================
+# Project AETHER - Real-World Showcase: AetherCache
+# An In-Memory Key-Value Cache Engine with LRU & TTL
+# ====================================================
+
+print("====================================================")
+print("     Project AETHER: In-Memory Cache Engine         ")
+print("====================================================")
+
+class CacheEntry:
+    def __init__(self, key, value, ttl_seconds=0):
+        self.key = key
+        self.value = value
+        self.created_at = clock()
+        self.ttl_seconds = ttl_seconds
+        self.last_accessed = self.created_at
+        self.access_count = 0
+
+    def is_expired(self):
+        if self.ttl_seconds <= 0:
+            return False
+        elapsed = clock() - self.created_at
+        return elapsed > self.ttl_seconds
+
+    def touch(self):
+        self.last_accessed = clock()
+        self.access_count += 1
+
+class AetherCache:
+    def __init__(self, capacity=500):
+        self.capacity = capacity
+        self.store = {}
+        self.order = []
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    def set(self, key, value, ttl_seconds=0):
+        k = str(key)
+        if len(self.store) >= self.capacity and not contains(self.store, k):
+            self.evict_oldest()
+
+        entry = CacheEntry(k, value, ttl_seconds)
+        self.store[k] = entry
+        if not contains(self.order, k):
+            append(self.order, k)
+
+    def get(self, key, default_val=nil):
+        k = str(key)
+        if contains(self.store, k):
+            entry = self.store[k]
+            if entry.is_expired():
+                self.delete(k)
+                self.misses += 1
+                return default_val
+            entry.touch()
+            self.hits += 1
+            return entry.value
+        self.misses += 1
+        return default_val
+
+    def delete(self, key):
+        k = str(key)
+        if contains(self.store, k):
+            remove(self.store, k)
+            remove(self.order, k)
+            return True
+        return False
+
+    def evict_oldest(self):
+        if len(self.order) > 0:
+            oldest_key = self.order[0]
+            self.delete(oldest_key)
+            self.evictions += 1
+
+    def clean_expired(self):
+        expired_count = 0
+        all_keys = keys(self.store)
+        for k in all_keys:
+            if contains(self.store, k):
+                entry = self.store[k]
+                if entry.is_expired():
+                    self.delete(k)
+                    expired_count += 1
+        return expired_count
+
+    def stats(self):
+        return {
+            "size": len(self.store),
+            "capacity": self.capacity,
+            "hits": self.hits,
+            "misses": self.misses,
+            "evictions": self.evictions
+        }
+
+    def __len__(self):
+        return len(self.store)
+
+    def __getitem__(self, key):
+        return self.get(key, nil)
+
+    def __setitem__(self, key, val):
+        self.set(key, val, 0)
+
+# ----------------------------------------------------
+# 1. Functional Verification
+# ----------------------------------------------------
+print("\n--- 1. Basic Key-Value & Magic Method Indexing ---")
+cache = AetherCache(capacity=5)
+
+# Setting via method and subscript operator
+cache.set("user:101", {"name": "Alice", "role": "Admin"})
+cache["user:102"] = {"name": "Bob", "role": "Engineer"}
+cache["config:timeout"] = 3000
+
+print("Cached entries count:", len(cache))
+print("Get user:101 ->", cache["user:101"])
+print("Get user:102 ->", cache["user:102"])
+print("Get config:timeout ->", cache.get("config:timeout"))
+print("Get missing key ->", cache.get("user:999", "NOT_FOUND"))
+
+# ----------------------------------------------------
+# 2. LRU Capacity Eviction Test
+# ----------------------------------------------------
+print("\n--- 2. LRU Eviction Under Capacity Limit ---")
+print("Cache capacity is 5. Adding 4 more keys (total 7 attempted)...")
+cache["item:1"] = 100
+cache["item:2"] = 200
+cache["item:3"] = 300
+cache["item:4"] = 400
+
+print("Size after overflows:", len(cache))
+print("Evictions count:", cache.stats()["evictions"])
+print("Oldest key 'user:101' should be evicted:", cache.get("user:101", "EVICTED"))
+print("Recently added 'item:4' exists:", cache.get("item:4"))
+
+# ----------------------------------------------------
+# 3. High-Throughput Performance Benchmark
+# ----------------------------------------------------
+print("\n--- 3. High-Throughput Performance Benchmark ---")
+benchmark_cache = AetherCache(capacity=10000)
+BENCHMARK_ITEMS = 5000
+
+print("Benchmarking sequential write of", BENCHMARK_ITEMS, "records...")
+start_write = clock()
+i = 0
+while i < BENCHMARK_ITEMS:
+    benchmark_cache["metric:" + str(i)] = i * 10
+    i += 1
+write_time = clock() - start_write
+write_ops = float(BENCHMARK_ITEMS) / write_time
+
+print("Write completed in:", write_time, "seconds")
+print("Write throughput:", int(write_ops), "ops/second")
+
+print("Benchmarking sequential read of", BENCHMARK_ITEMS, "records...")
+start_read = clock()
+read_sum = 0
+j = 0
+while j < BENCHMARK_ITEMS:
+    val = benchmark_cache["metric:" + str(j)]
+    if val != nil:
+        read_sum += val
+    j += 1
+read_time = clock() - start_read
+read_ops = float(BENCHMARK_ITEMS) / read_time
+
+print("Read completed in:", read_time, "seconds")
+print("Read throughput:", int(read_ops), "ops/second")
+print("Verification checksum sum(0..4999 * 10):", read_sum)
+print("Cache final statistics:", benchmark_cache.stats())
+
+print("\n====================================================")
+print("       AetherCache Benchmark Passed Successfully!   ")
+print("====================================================")

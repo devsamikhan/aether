@@ -1,0 +1,106 @@
+# ==============================================================================
+# AETHER 2.0 Showcase: AetherEdge Serverless Edge Workers & Memory Isolation
+# ==============================================================================
+# Demonstrates:
+#  1. Compiling high-frequency business logic to sandboxed W3C WASM modules.
+#  2. Deploying multiple EdgeWorker isolates with zero cold-start overhead.
+#  3. Processing simulated HTTP edge requests with microsecond latency.
+#  4. Sandboxed linear memory read/write operations with strict boundary protection.
+# ==============================================================================
+
+from aether_wasm import WasmModule, EdgeWorker
+
+print("================================================================================")
+print("      AETHER 2.0: AETHEREDGE SERVERLESS WORKER & ISOLATE RUNTIME               ")
+print("================================================================================")
+
+# 1. Define Serverless Edge Handlers (Auth & Pricing Tier Computation)
+let worker_source = """
+def authenticate_token(token_hash, salt):
+    let check = (token_hash * 31 + salt) % 999983
+    if check > 500000:
+        return 1
+    return 0
+
+def calculate_discount(price_cents, tier):
+    if tier == 3:
+        return (price_cents * 75) / 100
+    if tier == 2:
+        return (price_cents * 85) / 100
+    if tier == 1:
+        return (price_cents * 95) / 100
+    return price_cents
+
+def process_batch_sum(n):
+    let sum = 0
+    let i = 1
+    while i <= n:
+        sum = sum + i
+        i = i + 1
+    return sum
+"""
+
+print("\n[Step 1] Compiling Serverless Worker Bytecode to Sandboxed WASM...")
+let wasm_isolate = WasmModule.compile_source(worker_source)
+print("  Sandbox Initialized: Isolated 64KB Linear Memory Segment allocated.")
+
+# 2. Deploy Multiple Edge Worker Endpoints
+print("\n[Step 2] Mounting Multi-Tenant Edge Worker Microservice Routes...")
+let auth_worker = EdgeWorker(wasm_isolate, "/edge/v1/auth/verify")
+let pricing_worker = EdgeWorker(wasm_isolate, "/edge/v1/billing/discount")
+let compute_worker = EdgeWorker(wasm_isolate, "/edge/v1/analytics/aggregate")
+
+print("  Active Routes:")
+print("    * " + auth_worker.route)
+print("    * " + pricing_worker.route)
+print("    * " + compute_worker.route)
+
+# 3. Simulate High-Throughput Serverless Edge Invocations
+print("\n[Step 3] Dispatching Simulated Edge Invocations...")
+
+# Test 1: Authentication
+let req_auth = {
+    "handler": "authenticate_token",
+    "args": [48291, 1024]
+}
+let res_auth = auth_worker.handle_request(req_auth)
+print("\n  [Route: " + res_auth["route"] + "]")
+print("    Status:       " + str(res_auth["status"]) + " OK")
+print("    Authorized:   " + str(res_auth["result"] == 1))
+print("    Latency:      " + str(res_auth["latency_us"]) + " us")
+print("    Memory:       " + str(res_auth["memory_bytes"]) + " bytes")
+
+# Test 2: Dynamic Tiered Pricing
+let req_price = {
+    "handler": "calculate_discount",
+    "args": [10000, 3] # $100.00 with Tier 3 (25% off)
+}
+let res_price = pricing_worker.handle_request(req_price)
+print("\n  [Route: " + res_price["route"] + "]")
+print("    Status:       " + str(res_price["status"]) + " OK")
+print("    Final Price:  $" + str(res_price["result"] / 100) + "." + str(res_price["result"] % 100))
+print("    Latency:      " + str(res_price["latency_us"]) + " us")
+
+# Test 3: High-Frequency Loop Aggregation
+let req_compute = {
+    "handler": "process_batch_sum",
+    "args": [1000]
+}
+let res_compute = compute_worker.handle_request(req_compute)
+print("\n  [Route: " + res_compute["route"] + "]")
+print("    Status:       " + str(res_compute["status"]) + " OK")
+print("    Sum(1..1000): " + str(res_compute["result"]) + "  (Expected: 500500)")
+print("    Latency:      " + str(res_compute["latency_us"]) + " us")
+
+# 4. Direct Linear Memory Boundary Verification
+print("\n[Step 4] Direct Linear Memory Verification (Host <-> Edge Isolate)...")
+let test_header = "X-AETHER-EDGE-TRACE-OK"
+let ok = wasm_isolate.write_memory(2048, test_header)
+print("  Wrote " + str(len(test_header)) + " bytes into WASM isolate memory at offset 2048.")
+
+let memory_read_back = wasm_isolate.read_memory(2048, len(test_header))
+print("  Read back from isolate linear memory: '" + memory_read_back + "'")
+
+print("\n================================================================================")
+print("  AetherEdge Serverless Workers Operating With Sub-Millisecond Precision!       ")
+print("================================================================================")

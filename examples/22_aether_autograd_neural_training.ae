@@ -1,0 +1,110 @@
+# ==============================================================================
+# AETHER Showcase 22: AetherAutograd Native Neural Network Training & Backprop
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_autograd import Variable, Linear, Sequential, SGD, mse_loss
+
+println("==================================================================")
+println("   AETHER 2.0: AetherAutograd (Reverse-Mode AD & Neural Engine)")
+println("==================================================================")
+
+# 1. Computational Graph & Gradient Verification
+println("\n[1] Constructing Dynamic Computational Graph & Testing Gradients...")
+println("  • Target function: f(x, y) = x * y + x")
+println("  • Expected analytical derivatives:")
+println("    df/dx = y + 1")
+println("    df/dy = x")
+
+let x = Variable([[2.0, 3.0]])
+let y = Variable([[4.0, 5.0]])
+
+let prod = x * y
+let f = prod + x
+let loss = f.sum()
+
+println("  • Forward pass computed loss: " + str(loss.data.to_list()))
+println("  • Executing reverse-mode automatic differentiation (loss.backward())...")
+loss.backward()
+
+println("  • x.grad (Expected [[5.0, 6.0]]): " + str(x.grad.to_list()))
+println("  • y.grad (Expected [[2.0, 3.0]]): " + str(y.grad.to_list()))
+
+# 2. Multi-Layer Neural Network Training Loop
+println("\n[2] Training a 2-Layer Neural Network with SGD Optimizer...")
+
+# Dataset: Synthetic regression problem y = X @ [[2.0], [-1.0]] + 0.5
+let X_data = Variable([
+    [1.0, 2.0],
+    [2.0, 1.0],
+    [0.0, 1.0],
+    [3.0, 0.0],
+    [1.5, 1.5]
+])
+
+let y_target = Variable([
+    [0.5],
+    [3.5],
+    [-0.5],
+    [6.5],
+    [2.0]
+])
+
+# Initialize a Linear layer: 2 inputs -> 1 output with bias
+let model = Linear(2, 1, true)
+let optimizer = SGD(model.parameters(), 0.04)
+
+let epochs = 50
+let initial_loss = 0.0
+let final_loss = 0.0
+
+println("  • Commencing 50-epoch training loop:")
+
+let epoch = 0
+while epoch < epochs:
+    # 1. Reset gradients
+    optimizer.zero_grad()
+
+    # 2. Forward pass
+    let pred = model.forward(X_data)
+
+    # 3. Compute Mean Squared Error Loss
+    let cur_loss = mse_loss(pred, y_target)
+    let loss_scalar = cur_loss.data.to_list()[0]
+
+    if epoch == 0:
+        initial_loss = loss_scalar
+        println("    * Epoch   0 | Initial MSE Loss: " + str(loss_scalar))
+
+    if epoch == 25:
+        println("    * Epoch  25 | Midpoint MSE Loss: " + str(loss_scalar))
+
+    final_loss = loss_scalar
+
+    # 4. Backward pass (auto-accumulate gradients)
+    cur_loss.backward()
+
+    # 5. Optimizer step
+    optimizer.step()
+
+    epoch = epoch + 1
+
+println("    * Epoch  50 | Final MSE Loss:    " + str(final_loss))
+
+# 3. Training Convergence Evaluation
+println("\n[3] Training Convergence Report:")
+let reduction = (1.0 - (final_loss / initial_loss)) * 100.0
+println("  • Initial Loss:     " + str(initial_loss))
+println("  • Final Loss:       " + str(final_loss))
+println("  • Loss Reduction:   " + str(Math.round(reduction, 2)) + "%")
+println("  • Optimized Weight: " + str(model.W.data.to_list()))
+println("  • Optimized Bias:   " + str(model.b.data.to_list()))
+
+if final_loss < initial_loss / 2.0:
+    println("  • Status: CONVERGED! Model weights successfully learned dataset patterns.")
+else:
+    println("  • Status: FAILED TO CONVERGE")
+
+println("==================================================================")
+println("   AetherAutograd Showcase Completed Successfully!")
+println("==================================================================")

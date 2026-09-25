@@ -1,0 +1,20 @@
+# AETHER 2.0 Quickstart Example
+# Clean, readable, zero-ceremony syntax
+
+fn greet(name):
+    println("Welcome to AETHER 2.0, " + name + "!")
+
+greet("Developer")
+
+# Dynamic-feeling typed variables
+let mut count = 0
+while count < 5:
+    println("Iteration:", count)
+    count += 1
+
+# List manipulation
+let items = ["Rust", "Python", "Aether"]
+push(items, "Future")
+
+println("Loaded items:", items)
+println("Total count:", len(items))

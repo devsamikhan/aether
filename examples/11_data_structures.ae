@@ -1,0 +1,92 @@
+# ----------------------------------------------------
+# Project AETHER - Data Structures Demonstration
+# ----------------------------------------------------
+
+print("========================================")
+print("     Project AETHER: Data Structures    ")
+print("========================================")
+
+# 1. Lists (Dynamic, Mutable Arrays)
+print("\n--- 1. Lists ---")
+fruits = ["Apple", "Banana", "Cherry"]
+print("Initial list:", fruits)
+fruits.append("Date")
+print("After append:", fruits)
+first_fruit = fruits[0]
+last_fruit = fruits[-1]
+print("First fruit:", first_fruit, "| Last fruit:", last_fruit)
+print("Is 'Banana' in fruits?", "Banana" in fruits)
+print("Length of fruits:", len(fruits))
+
+# List repetition & concatenation
+repeated = [1, 2] * 2
+combined = fruits + ["Elderberry"]
+print("Repeated list:", repeated)
+print("Combined list:", combined)
+
+# 2. Tuples (Immutable Sequences)
+print("\n--- 2. Tuples ---")
+point = (10, 20, 30)
+single_tuple = (42,)
+print("Point tuple:", point)
+print("Single element tuple:", single_tuple)
+print("Tuple x-coordinate (point[0]):", point[0])
+print("Tuple z-coordinate (point[-1]):", point[-1])
+print("Is 20 in point?", 20 in point)
+print("Occurrences of 20:", point.count(20))
+print("Index of 30:", point.index(30))
+
+# 3. Sets (Unique, Unordered Collections)
+print("\n--- 3. Sets ---")
+tags = {"compiler", "runtime", "jit", "compiler"}
+print("Tags set (auto-deduplicated):", tags)
+tags.add("concurrency")
+print("After adding 'concurrency':", tags)
+tags.remove("runtime")
+print("After removing 'runtime':", tags)
+print("Is 'jit' in tags?", "jit" in tags)
+print("Set length:", len(tags))
+
+# Set constructor from list with duplicates
+numbers_set = set([1, 2, 2, 3, 3, 3, 4])
+print("Set from list with duplicates:", numbers_set)
+
+# 4. Dictionaries (Hash Maps)
+print("\n--- 4. Dictionaries ---")
+system_info = {
+    "name": "Project AETHER",
+    "version": 1.1,
+    "speed": "blazing"
+}
+print("Dictionary:", system_info)
+print("System name:", system_info["name"])
+system_info["threads"] = 16
+print("Updated threads:", system_info["threads"])
+print("Safe get 'license' with default:", system_info.get("license", "MIT"))
+print("Dictionary keys:", system_info.keys())
+print("Dictionary values:", system_info.values())
+print("Is 'name' in system_info?", "name" in system_info)
+
+# Iterating over dictionary keys
+print("Iterating over keys:")
+for key in system_info:
+    print(" -", key, "=>", system_info[key])
+
+# 5. Strings (UTF-8 Immutable Text)
+print("\n--- 5. Strings ---")
+greeting = "Hello, Aether World!"
+print("Original string:", greeting)
+print("Upper case:", greeting.upper())
+print("Lower case:", greeting.lower())
+print("Substring 'Aether' in greeting?", "Aether" in greeting)
+print("Starts with 'Hello'?", greeting.startswith("Hello"))
+print("Ends with 'World!'?", greeting.endswith("World!"))
+print("Character at index 0:", greeting[0])
+print("Character at index -1:", greeting[-1])
+print("Length of string:", len(greeting))
+
+parts = greeting.split(" ")
+print("Split string by space:", parts)
+stars = "*" * 20
+print(stars)
+print("Data Structures execution completed successfully!")

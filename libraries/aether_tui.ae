@@ -1,0 +1,22 @@
+# ==============================================================================
+# AetherTimeTravel TUI — Live Interactive Visualizer
+# ASCII Timeline Ribbon, Live State Inspector & Time-Machine Replay
+# ==============================================================================
+
+from aether_timetravel import TimeMachine
+
+class TimeTravelTUI:
+    def __init__(self, time_machine_or_id):
+        try:
+            self.id = time_machine_or_id.id
+        except:
+            self.id = time_machine_or_id
+
+    def render(self, step=nil, show_diff=true):
+        return __native_tui.render_frame(self.id, step, show_diff)
+
+    def state_at(self, step):
+        return __native_tui.state_at(self.id, int(step))
+
+    def run(self):
+        return __native_tui.interactive(self.id)

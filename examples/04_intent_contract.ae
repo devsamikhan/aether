@@ -1,0 +1,17 @@
+# AETHER 2.0 Intent-Driven Programming Example
+# Intent blocks specify pre-conditions (require) and post-conditions (ensure)
+
+intent compute_taxed_salary(base, bonus):
+    require: base > 0
+    require: bonus >= 0
+    ensure: gross > base
+    body:
+        let gross = base + bonus
+        let net = gross * 0.85
+        return net
+
+let net_salary = compute_taxed_salary(100000, 25000)
+println("Base: 100,000, Bonus: 25,000")
+println("Net Taxed Salary:", net_salary)
+assert(net_salary > 100000, "Net salary must satisfy intent ensure condition")
+println("Intent contract verified!")

@@ -1,0 +1,65 @@
+intent DataScienceApp {
+    fn run_analytics() {
+        println("Starting AETHER Data Science Pipeline...");
+        
+        python {
+            import pandas as pd
+            import numpy as np
+            import matplotlib.pyplot as plt
+
+            # Create data dictionary
+            data = {
+                'Product': ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'],
+                'Sales': [12000, 15000, 9000, 22000, 18000],
+                'Quantity': [120, 150, 95, 210, 190]
+            }
+
+            # Create DataFrame
+            df = pd.DataFrame(data)
+            df.to_csv('data.csv', index=False)
+
+            # Analyze using NumPy
+            sales_arr = df['Sales'].to_numpy()
+            avg_sales = np.mean(sales_arr)
+            max_sales = np.max(sales_arr)
+            total_qty = np.sum(df['Quantity'].to_numpy())
+
+            # Visualize using Matplotlib
+            plt.figure(figsize=(8, 5))
+            plt.bar(df['Product'], df['Sales'], color='purple')
+            plt.title('Product Sales Performance')
+            plt.xlabel('Product')
+            plt.ylabel('Sales ($)')
+            plt.grid(True, linestyle='--', alpha=0.6)
+            plt.savefig('sales_plot.png')
+            plt.close()
+
+            # Generate markdown report
+            report = f"""# AETHER Data Science Report
+Generated via GIL-safe Python FFI bridge.
+
+## Key Metrics:
+- **Total Products Analyzed**: {len(df)}
+- **Average Sales**: ${avg_sales:,.2f}
+- **Maximum Sales**: ${max_sales:,.2f}
+- **Total Units Sold**: {total_qty}
+
+## Visualization
+Product sales distribution has been plotted and saved to `sales_plot.png`.
+"""
+            with open('report.md', 'w') as f:
+                f.write(report)
+
+            print("[Python FFI] Pandas DataFrame generated and saved to data.csv")
+            print(f"[Python FFI] NumPy analysis complete. Avg Sales: ${avg_sales}")
+            print("[Python FFI] Matplotlib visualization saved to sales_plot.png")
+            print("[Python FFI] Report written to report.md")
+
+            return avg_sales
+        } => average_sales;
+
+        println("Data Science Pipeline complete!");
+        print("Average Sales computed: $");
+        println(average_sales);
+    }
+}

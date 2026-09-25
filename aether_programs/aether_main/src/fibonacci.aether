@@ -1,0 +1,15 @@
+pub intent Fibonacci {
+    pub fn fib_iterative(limit: Int) {
+        let prev = 0;
+        let curr = 1;
+        println("Fibonacci sequence up to " + limit + " steps:");
+        println("  Term: " + prev);
+        println("  Term: " + curr);
+        for i in 2..limit {
+            let next = prev + curr;
+            println("  Term: " + next);
+            prev = curr;
+            curr = next;
+        }
+    }
+}

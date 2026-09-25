@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETHER 2.0 Documentation & Tutorials Hub</title>
+  <link rel="stylesheet" href="docs.css">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="brand-logo">⚡</span>
+      <span class="brand-title">AETHER 2.0</span>
+    </div>
+
+    <div class="nav-section">Getting Started</div>
+    <a href="#quickstart" class="nav-link active">1. Quickstart & Installation</a>
+    <a href="#toolchain" class="nav-link">2. Toolchain Doctor & CLI</a>
+
+    <div class="nav-section">Core Tutorials</div>
+    <a href="#fundamentals" class="nav-link">3. Language Fundamentals</a>
+    <a href="#intent" class="nav-link">4. Intent-Driven Contracts</a>
+    <a href="#quantum" class="nav-link">5. Post-Quantum Simulation</a>
+    <a href="#neural" class="nav-link">6. Deep Learning & Autograd</a>
+    <a href="#graph" class="nav-link">7. AetherGraph Knowledge Engine</a>
+    <a href="#hotreload" class="nav-link">8. Zero-Downtime Hot Reload</a>
+    <a href="#crdt" class="nav-link">9. Swarm CRDTs Convergence</a>
+    <a href="#package-manager" class="nav-link">10. AetherPM & VS Code</a>
+  </aside>
+
+  <!-- Content Viewport -->
+  <div class="content-area">
+    <header class="top-bar">
+      <nav class="top-nav">
+        <a href="../index.html" class="top-link">Home</a>
+        <a href="../playground/index.html" class="top-link">Playground</a>
+        <a href="https://github.com/devsamikhan/aether" target="_blank" class="top-link">GitHub ↗</a>
+      </nav>
+      <a href="../playground/index.html" class="btn-playground">Try in Browser Sandbox ▶</a>
+    </header>
+
+    <main class="main-content">
+      <div class="badge">Official Documentation & Tutorials v2.0</div>
+      <h1>AETHER 2.0 Developer Guide</h1>
+      <p>Welcome to the official documentation and tutorial portal for the <strong>AETHER 2.0</strong> programming language. AETHER combines declarative intent contracts, quantum state vector simulation, native deep learning tensors, knowledge graph traversal, and Erlang-grade live code swapping into a single unified systems language.</p>
+
+      <!-- Section 1: Quickstart -->
+      <section id="quickstart">
+        <h2>1. Quickstart & Installation</h2>
+        <p>AETHER ships as a standalone, zero-dependency native executable. No runtimes, no external DLLs, and no administrative privileges required.</p>
+
+        <h3>Windows (PowerShell)</h3>
+        <div class="code-block">
+          <div class="code-header"><span>PowerShell</span></div>
+          <pre><code>irm https://raw.githubusercontent.com/devsamikhan/aether/main/install.ps1 | iex</code></pre>
+        </div>
+
+        <h3>Linux & macOS (Terminal)</h3>
+        <div class="code-block">
+          <div class="code-header"><span>Bash</span></div>
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/devsamikhan/aether/main/install.sh | bash</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 2: Toolchain -->
+      <section id="toolchain">
+        <h2>2. Toolchain Doctor & CLI</h2>
+        <p>After installation, verify your environment health using the built-in system doctor:</p>
+        <div class="code-block">
+          <div class="code-header"><span>CLI</span></div>
+          <pre><code>aether doctor
+aether bench
+aether new my_project --template ai
+cd my_project
+aether run src/main.ae</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 3: Fundamentals -->
+      <section id="fundamentals">
+        <h2>3. Language Fundamentals</h2>
+        <p>AETHER combines the syntax clarity of Python with the memory safety and predictable execution of systems languages.</p>
+        <div class="code-block">
+          <div class="code-header"><span>fundamentals.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code># Variable declarations
+let x = 42;
+let mut name = "AETHER";
+
+# Pattern Matching
+let role = match x {
+    42 => "Optimal Answer",
+    _ => "Standard State"
+};
+
+# Classes and Methods
+class Agent {
+    def __init__(self, name):
+        self.name = name
+    
+    def greet(self):
+        return "Hello from " + self.name
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 4: Intent -->
+      <section id="intent">
+        <h2>4. Intent-Driven Programming</h2>
+        <p>Intent blocks allow you to bind schema constraints, preconditions, and postconditions to computational state. The runtime mathematically proves these invariants before execution proceeds.</p>
+        <div class="code-block">
+          <div class="code-header"><span>intent_contract.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code>intent SecureVault {
+    schema {
+        account_id: String;
+        balance: Float;
+        withdrawal: Float;
+    }
+    invariants {
+        require(balance >= 0.0);
+        require(withdrawal > 0.0);
+        require(balance >= withdrawal);
+        ensure(balance == old(balance) - withdrawal);
+    }
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 5: Quantum -->
+      <section id="quantum">
+        <h2>5. Post-Quantum Algorithmic Simulation</h2>
+        <p>AETHER natively embeds a state vector matrix simulator supporting Hadamard, Pauli-X/Y/Z, CNOT, and phase gates.</p>
+        <div class="code-block">
+          <div class="code-header"><span>quantum_bell.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code>import quantum;
+
+let sim = QuantumSimulator.new(2);
+sim.hadamard(0);      // Put Qubit 0 into Superposition (|0⟩ + |1⟩)/√2
+sim.cnot(0, 1);        // Entangle Qubit 0 and 1 into Bell State |Φ+⟩
+
+let measurement = sim.measure_all();
+print("Measurement result: " + str(measurement));</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 6: Neural -->
+      <section id="neural">
+        <h2>6. Deep Learning & Autograd</h2>
+        <p>First-class multidimensional tensors with reverse-mode automatic differentiation.</p>
+        <div class="code-block">
+          <div class="code-header"><span>neural_autograd.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code>import tensor;
+
+let w = Tensor.randn([2, 2], requires_grad=True);
+let x = Tensor.from_vec([[1.0, 2.0], [3.0, 4.0]]);
+let b = Tensor.zeros([2, 2]);
+
+let y = x.matmul(w) + b;
+let loss = y.sum();
+
+loss.backward();
+print("Weight gradients: " + str(w.grad()));</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 7: Graph -->
+      <section id="graph">
+        <h2>7. AetherGraph Knowledge Engine</h2>
+        <p>Embedded in-memory property graph with Dijkstra shortest-path and PageRank authority algorithms.</p>
+        <div class="code-block">
+          <div class="code-header"><span>knowledge_graph.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code>import aether_graph;
+
+let g = Graph.new();
+g.add_node("Alpha", {"role": "Agent"});
+g.add_node("Beta", {"role": "KnowledgeBase"});
+g.add_edge("Alpha", "Beta", 1.2, "queries");
+
+let path = g.dijkstra("Alpha", "Beta");
+let ranks = g.pagerank(0.85, 20);</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 8: Hot Reload -->
+      <section id="hotreload">
+        <h2>8. Zero-Downtime Live Code Reloading</h2>
+        <p>Erlang BEAM-grade live code swapping allowing active production servers to update without restarting the process or dropping client connections.</p>
+        <div class="code-block">
+          <div class="code-header"><span>Terminal</span></div>
+          <pre><code>aether live server.ae --poll 250</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 9: CRDTs -->
+      <section id="crdt">
+        <h2>9. Swarm CRDTs Convergence</h2>
+        <p>Mathematically proven Conflict-Free Replicated Data Types ensuring eventual consistency across distributed nodes without locks.</p>
+        <div class="code-block">
+          <div class="code-header"><span>crdt_swarm.ae</span><a href="../playground/index.html">Run in Playground ↗</a></div>
+          <pre><code>import crdt;
+
+let c1 = GCounter.new("node_1");
+let c2 = GCounter.new("node_2");
+
+c1.increment(5);
+c2.increment(10);
+
+c1.merge(c2);
+print("Converged Total: " + str(c1.read())); // 15</code></pre>
+        </div>
+      </section>
+
+      <!-- Section 10: Packages -->
+      <section id="package-manager">
+        <h2>10. AetherPM & VS Code Extension</h2>
+        <p>Manage project dependencies with the decentralized package manager and write code with full syntax highlighting.</p>
+        <div class="code-block">
+          <div class="code-header"><span>Terminal</span></div>
+          <pre><code># Add package dependency
+aether add neural_vision@1.0.0
+
+# Install VS Code support
+aether install --vscode
+
+# Launch Language Server
+aether lsp --check main.ae</code></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

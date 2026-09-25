@@ -1,0 +1,142 @@
+# ----------------------------------------------------
+# Project AETHER - Functions & Closures Demonstration
+# ----------------------------------------------------
+
+print("========================================")
+print("       Project AETHER: Functions        ")
+print("========================================")
+
+# 1. Creating Functions (def and fn syntax)
+print("\n--- 1. Creating Functions (def & fn) ---")
+
+def add_numbers(a, b):
+    return a + b
+
+fn multiply_numbers(a, b) {
+    return a * b
+}
+
+print("add_numbers(15, 27) ->", add_numbers(15, 27))
+print("multiply_numbers(6, 7) ->", multiply_numbers(6, 7))
+
+# 2. Parameters & Multiple Return Values (Sequence Unpacking)
+print("\n--- 2. Multiple Return Values & Unpacking ---")
+
+def get_screen_resolution():
+    width = 1920
+    height = 1080
+    return width, height
+
+w, h = get_screen_resolution()
+print("Unpacked width:", w, "| Unpacked height:", h)
+
+# 3. Default Arguments
+print("\n--- 3. Default Arguments ---")
+
+def create_server(host, port=8080, protocol="HTTP/2"):
+    return protocol + "://" + host + ":" + str(port)
+
+print("Default port & protocol:", create_server("127.0.0.1"))
+print("Custom port, default protocol:", create_server("localhost", 9000))
+print("All custom arguments:", create_server("api.aether.org", 443, "HTTPS"))
+
+# 4. Keyword Arguments
+print("\n--- 4. Keyword Arguments ---")
+
+def format_profile(username, role="guest", active=true):
+    status = "Inactive"
+    if active:
+        status = "Active"
+    return username + " [" + role + "] - " + status
+
+print("Positional call:", format_profile("alice", "admin", true))
+print("Keyword call (out of order):", format_profile(role="moderator", username="bob"))
+print("Mixed call:", format_profile("charlie", active=false))
+
+# 5. Variable-Length Arguments (*args and **kwargs)
+print("\n--- 5. Variable-Length Arguments (*args, **kwargs) ---")
+
+def summarize_task(task_name, *subtasks, **metadata):
+    print("Task:", task_name)
+    print("Subtasks count:", len(subtasks))
+    for st in subtasks:
+        print("  -", st)
+    print("Priority:", metadata["priority"])
+    print("Assigned to:", metadata["assignee"])
+    return len(subtasks)
+
+count = summarize_task(
+    "Release Aether v1.2",
+    "Run unit tests",
+    "Verify Cranelift backend",
+    "Benchmark fibers",
+    priority="High",
+    assignee="Sami Khan"
+)
+print("Total subtasks scheduled:", count)
+
+# 6. Call-Site Unpacking (*list and **dict)
+print("\n--- 6. Call-Site Unpacking (* and **) ---")
+
+def calculate_volume(length, width, height):
+    return length * width * height
+
+dimensions = [5, 4, 3]
+vol = calculate_volume(*dimensions)
+print("Volume with unpacked list *[5, 4, 3]:", vol)
+
+server_config = {
+    "host": "cluster.aether.internal",
+    "port": 7070,
+    "protocol": "gRPC"
+}
+server_endpoint = create_server(**server_config)
+print("Endpoint with unpacked dict **server_config:", server_endpoint)
+
+# 7. Lambda Functions and Closures
+print("\n--- 7. Lambda Functions & Closures ---")
+
+square = lambda x: x * x
+print("Lambda square(9) ->", square(9))
+
+def make_power_function(exponent):
+    # Lexical closure captures 'exponent'
+    return lambda base: base ** exponent
+
+cube = make_power_function(3)
+fourth_power = make_power_function(4)
+
+print("Closure cube(4) ->", cube(4))
+print("Closure fourth_power(3) ->", fourth_power(3))
+
+# Higher-order function passing lambda
+def transform_data(items, transform_func):
+    output = []
+    for it in items:
+        output.append(transform_func(it))
+    return output
+
+raw_numbers = [1, 2, 3, 4, 5]
+squared_numbers = transform_data(raw_numbers, lambda x: x * x)
+print("Original:", raw_numbers)
+print("Transformed with lambda:", squared_numbers)
+
+# 8. Scope and Global Statement
+print("\n--- 8. Scope & Global Statement ---")
+
+app_state_counter = 0
+
+def record_transaction(amount):
+    global app_state_counter
+    app_state_counter = app_state_counter + amount
+    local_shadow = "tx_" + str(amount)
+    print("Processed transaction:", local_shadow)
+
+record_transaction(150)
+record_transaction(350)
+record_transaction(500)
+print("Final module-level global counter:", app_state_counter)
+
+print("\n========================================")
+print("  All Aether Function Features Active!  ")
+print("========================================")

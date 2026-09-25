@@ -123,3 +123,73 @@ fn test_python_error_handling() {
     let err = res.err().unwrap();
     assert!(err.contains("E0400"));
 }
+
+#[test]
+fn test_aether_data_science_pipeline() {
+    if !is_python_available() {
+        println!("Python not available, skipping test_aether_data_science_pipeline.");
+        return;
+    }
+
+    let code = r##"
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 1. Read / Create CSV with Pandas
+data = {
+    'Product': ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'],
+    'Sales': [12000, 15000, 9000, 22000, 18000],
+    'Quantity': [120, 150, 95, 210, 190]
+}
+df = pd.DataFrame(data)
+df.to_csv('data.csv', index=False)
+
+# 2. Analyze with NumPy
+sales_arr = df['Sales'].to_numpy()
+avg_sales = np.mean(sales_arr)
+max_sales = np.max(sales_arr)
+total_qty = np.sum(df['Quantity'].to_numpy())
+
+# 3. Visualize with Matplotlib
+plt.figure(figsize=(8, 5))
+plt.bar(df['Product'], df['Sales'], color='purple')
+plt.title('Product Sales Performance')
+plt.xlabel('Product')
+plt.ylabel('Sales ($)')
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.savefig('sales_plot.png')
+plt.close()
+
+# 4. Generate Reports
+report = f"""# AETHER Data Science Report
+Generated via GIL-safe Python FFI bridge.
+
+## Key Metrics:
+- **Total Products Analyzed**: {len(df)}
+- **Average Sales**: ${avg_sales:,.2f}
+- **Maximum Sales**: ${max_sales:,.2f}
+- **Total Units Sold**: {total_qty}
+
+## Visualization
+Product sales distribution has been plotted and saved to `sales_plot.png`.
+"""
+with open('report.md', 'w') as f:
+    f.write(report)
+
+return avg_sales
+"##;
+
+    let res = py_exec(code).unwrap();
+    assert_eq!(res, RuntimeValue::Float(15200.0));
+
+    // Verify report and plot files exist
+    assert!(std::path::Path::new("data.csv").exists());
+    assert!(std::path::Path::new("sales_plot.png").exists());
+    assert!(std::path::Path::new("report.md").exists());
+
+    // Clean up files
+    let _ = std::fs::remove_file("data.csv");
+    let _ = std::fs::remove_file("sales_plot.png");
+    let _ = std::fs::remove_file("report.md");
+}

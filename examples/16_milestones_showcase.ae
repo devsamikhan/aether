@@ -1,0 +1,109 @@
+# ====================================================
+# Project AETHER: 4 Major Language Milestones Showcase
+# 1. Exception Handling (try / except / finally / raise)
+# 2. Module System (import / from ... import)
+# 3. List & Dict Comprehensions
+# 4. Native HTTP Networking & Microservices
+# ====================================================
+
+print("====================================================")
+print("     Project AETHER: 4 Major Milestones Showcase    ")
+print("====================================================")
+
+# ----------------------------------------------------
+# 1. Exception Handling
+# ----------------------------------------------------
+print("\n--- 1. Exception Handling (try / except / finally / raise) ---")
+
+def safe_divide(numerator, denominator):
+    result = 0
+    try:
+        if denominator == 0:
+            raise "MathError: denominator cannot be zero!"
+        result = numerator / denominator
+        print("Division successful:", numerator, "/", denominator, "=", result)
+    except as err:
+        print("Caught Exception:", err)
+        result = -1
+    finally:
+        print("Cleanup: safe_divide call completed.")
+    return result
+
+print("Testing valid division:")
+r1 = safe_divide(100, 4)
+print("Return value:", r1)
+
+print("\nTesting zero division with exception catching:")
+r2 = safe_divide(50, 0)
+print("Return value after recovery:", r2)
+
+# ----------------------------------------------------
+# 2. Module & Package Import System
+# ----------------------------------------------------
+print("\n--- 2. Module System (import & from ... import) ---")
+
+import math as m
+from strings import upper, lower
+
+radius = 5.0
+circle_area = m.PI * radius * radius
+hypotenuse = m.sqrt(3.0 * 3.0 + 4.0 * 4.0)
+
+print("Imported math as m:")
+print(" - Math.PI:", m.PI)
+print(" - Circle Area for r=5:", circle_area)
+print(" - Hypotenuse (3, 4):", hypotenuse)
+
+greeting = "aether language"
+print("From strings import upper, lower:")
+print(" - upper(greeting):", upper(greeting))
+print(" - lower(greeting):", lower(greeting))
+
+# ----------------------------------------------------
+# 3. List & Dictionary Comprehensions
+# ----------------------------------------------------
+print("\n--- 3. List & Dictionary Comprehensions ---")
+
+numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# List comprehension with filtering
+squared_evens = [x * x for x in numbers if x % 2 == 0]
+print("Original numbers:", numbers)
+print("Squared evens [x*x for x in numbers if x%2==0]:", squared_evens)
+
+# Transformation list comprehension
+labels = ["Item-" + str(x) for x in [10, 20, 30]]
+print("Generated labels:", labels)
+
+# Dictionary comprehension
+user_ids = [101, 102, 103, 104]
+users_map = {u: "User_Record_" + str(u) for u in user_ids if u != 102}
+print("Dictionary comprehension {u: 'User_Record_' + u for u in user_ids if u != 102}:")
+print(users_map)
+print("Access users_map['103']:", users_map["103"])
+
+# ----------------------------------------------------
+# 4. Native Networking & Web Microservice
+# ----------------------------------------------------
+print("\n--- 4. Native HTTP Networking & Microservice ---")
+
+SERVER_PORT = 19090
+print("Spinning up background Aether HTTP server on port:", SERVER_PORT)
+
+spawn:
+    Http.serve_response(SERVER_PORT, "{\"service\": \"Aether-Core\", \"version\": \"2.0\", \"status\": \"healthy\"}")
+
+# Allow port to bind
+Sys.sleep(0.08)
+
+# Client GET request
+print("Client making native HTTP GET request...")
+response = Http.get("http://127.0.0.1:19090/health")
+
+print("HTTP Response status code:", response["status"])
+print("HTTP Response ok boolean:", response["ok"])
+print("HTTP Response payload:", response["body"])
+
+print("\n====================================================")
+print("  All 4 Major Milestones Completed Successfully!    ")
+print("====================================================")

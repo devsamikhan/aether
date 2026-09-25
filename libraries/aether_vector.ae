@@ -1,0 +1,61 @@
+# ==============================================================================
+# AetherVector — Native N-Dimensional Vector Search & Semantic Embedding Engine
+# ==============================================================================
+
+def cosine_similarity(v1, v2):
+    let arr1 = _to_vec_array(v1)
+    let arr2 = _to_vec_array(v2)
+    return __native_vector.cosine_similarity(arr1, arr2)
+
+def euclidean_distance(v1, v2):
+    let arr1 = _to_vec_array(v1)
+    let arr2 = _to_vec_array(v2)
+    return __native_vector.euclidean_distance(arr1, arr2)
+
+def dot_product(v1, v2):
+    let arr1 = _to_vec_array(v1)
+    let arr2 = _to_vec_array(v2)
+    return __native_vector.dot_product(arr1, arr2)
+
+def normalize(v):
+    let arr = _to_vec_array(v)
+    return __native_vector.normalize(arr)
+
+def _to_vec_array(v):
+    if type(v) == "instance":
+        # Handle Tensor or Variable
+        if v.to_list != nil:
+            let list_val = v.to_list()
+            # If 2D (e.g. [[1, 2, 3]]), flatten first row
+            if len(list_val) > 0 and type(list_val[0]) == "array":
+                return list_val[0]
+            return list_val
+    return v
+
+class VectorStore:
+    def __init__(self, metric="cosine"):
+        self.metric = str(metric)
+        self.index_id = __native_vector.create_index()
+
+    def add(self, item_id, vector, metadata={}):
+        let vec_arr = _to_vec_array(vector)
+        return __native_vector.add(self.index_id, str(item_id), vec_arr, metadata)
+
+    def search(self, query_vector, top_k=5, metric=nil, filter_key=nil, filter_val=nil):
+        let q_arr = _to_vec_array(query_vector)
+        let m = self.metric
+        if metric != nil:
+            m = str(metric)
+        return __native_vector.search(self.index_id, q_arr, int(top_k), m, filter_key, filter_val)
+
+    def get(self, item_id):
+        return __native_vector.get(self.index_id, str(item_id))
+
+    def delete(self, item_id):
+        return __native_vector.delete(self.index_id, str(item_id))
+
+    def count(self):
+        return __native_vector.count(self.index_id)
+
+    def clear(self):
+        return __native_vector.clear(self.index_id)

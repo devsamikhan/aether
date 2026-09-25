@@ -1,0 +1,97 @@
+# ==============================================================================
+# AETHER Showcase 19: AetherTensor High-Performance Math & Machine Learning
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+println("==================================================================")
+println("   AETHER 2.0: AetherTensor N-Dimensional Math & ML Engine")
+println("==================================================================")
+
+# 1. Tensor Initializations & Shapes
+println("\n[1] Constructing Tensors (Matrix, Identity, Ones, Zeros)...")
+m1 = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+println("  • Matrix M1 (2x3):\n" + str(m1))
+
+ident = Tensor.eye(3)
+println("  • Identity Matrix I (3x3):\n" + str(ident))
+
+# 2. Linear Algebra: Matrix Multiplication & Transposition
+println("\n[2] Performing Linear Algebra (M1 @ I and Transposition)...")
+# M1 @ I should equal M1
+m1_ident = m1.matmul(ident)
+println("  • M1 @ I Result (2x3):\n" + str(m1_ident))
+
+m1_t = m1.transpose()
+println("  • M1 Transposed (3x2):\n" + str(m1_t))
+
+gram = m1.matmul(m1_t)
+println("  • Gram Matrix (M1 @ M1^T) (2x2):\n" + str(gram))
+
+# 3. Broadcasting & Element-wise Operations
+println("\n[3] Element-wise Arithmetic & Scalar Broadcasting...")
+scaled = m1 * 2.5
+println("  • M1 * 2.5:\n" + str(scaled))
+
+offset = m1 + 10.0
+println("  • M1 + 10.0 (Scalar Broadcast):\n" + str(offset))
+
+# 4. Neural Network Activations: ReLU, Sigmoid, Softmax
+println("\n[4] Neural Network Activation Functions...")
+raw_logits = Tensor([-3.0, -1.0, 0.0, 2.0, 4.5])
+println("  • Raw Logits:   " + str(raw_logits))
+
+activated_relu = raw_logits.relu()
+println("  • ReLU Output:  " + str(activated_relu))
+
+activated_sig = raw_logits.sigmoid()
+println("  • Sigmoid:      " + str(activated_sig))
+
+probs = raw_logits.softmax()
+println("  • Softmax Probabilities: " + str(probs))
+println("  • Softmax Sum (should be 1.0): " + str(Math.round(probs.sum(), 4)))
+
+# 5. Full 2-Layer Neural Network Forward Inference Pass
+println("\n[5] Simulating Multi-Layer Perceptron (MLP) Forward Pass...")
+
+# Batch of 2 samples, 3 input features each
+X = Tensor([
+    [0.5, -0.2, 0.9],
+    [-0.8, 1.2, 0.4]
+])
+println("  [Input Batch X] (2 samples x 3 features):\n" + str(X))
+
+# Layer 1: 3 inputs -> 4 hidden units
+W1 = Tensor([
+    [0.15, -0.4, 0.7, 0.2],
+    [0.3, 0.8, -0.5, 0.1],
+    [-0.6, 0.2, 0.9, -0.3]
+])
+b1 = Tensor([[0.1, 0.1, 0.1, 0.1]])
+
+# Hidden Layer computation: H = ReLU(X @ W1 + b1)
+H_linear = X.matmul(W1) + b1
+H = H_linear.relu()
+println("  [Hidden Layer H] (2 samples x 4 hidden units):\n" + str(H))
+
+# Layer 2: 4 hidden units -> 2 output classes
+W2 = Tensor([
+    [0.8, -0.5],
+    [-0.3, 0.7],
+    [0.4, -0.2],
+    [0.1, 0.6]
+])
+b2 = Tensor([[0.05, -0.05]])
+
+# Output Layer computation: Z = H @ W2 + b2
+Z = H.matmul(W2) + b2
+println("  [Logits Z] (2 samples x 2 classes):\n" + str(Z))
+
+# Softmax Prediction:
+P = Z.softmax()
+println("  [Softmax Prediction Probabilities P]:\n" + str(P))
+println("  Batch Mean Probability: " + str(Math.round(P.mean(), 4)))
+
+println("\n==================================================================")
+println("   AetherTensor Showcase Complete! High-Performance Math Verified.")
+println("==================================================================")

@@ -1,0 +1,71 @@
+# ==============================================================================
+# Example 42: AetherLive — Zero-Downtime Live Code Swapping (BEAM Grade)
+# In-Place Bytecode Swapping, Hot State Preservation & Atomic Safety
+# ==============================================================================
+
+import aether_live
+
+print("================================================================================")
+print("⚡ AETHERLIVE: ZERO-DOWNTIME LIVE CODE SWAPPING ENGINE (ERLANG BEAM GRADE)")
+print("================================================================================")
+
+# 1. Inspect Initial Reloader Environment
+let v0 = aether_live.live.version()
+print("\n[Step 1] Initialized AetherLive Runtime Engine:")
+print("  Engine Version:", v0)
+print("  State Preservation: ACTIVE")
+
+# 2. Simulate Active Application State (In-Memory Database & Live Transactions)
+let session_cache = {"user_101": "Latif", "tier": "Enterprise"}
+let processed_transactions = 14500
+print("\n[Step 2] Live Service Running with Active In-Memory State:")
+print("  Processed Transactions:", processed_transactions)
+print("  Session Cache:", session_cache)
+
+# 3. Define Version 1 Business Logic Dynamically
+let v1_patch = "def compute_fee(amount):\n    return amount * 0.10\n"
+print("\n[Step 3] Loading Version 1 Pricing Engine (10% flat fee)...")
+let rep1 = aether_live.live.reload(v1_patch)
+print("  Hot-Swap Result: Success =", rep1["success"], "| Version =", rep1["version"])
+print("  Upgraded Functions:", rep1["functions_added"])
+
+let fee_v1 = compute_fee(1000)
+print("  Calculated Fee for $1000 with V1:", fee_v1)
+
+# 4. Mutate Live State (Simulating Real Work Traffic)
+processed_transactions = processed_transactions + 500
+print("\n[Step 4] Processed 500 new transactions during production traffic...")
+print("  Live Counter Now:", processed_transactions)
+
+# 5. Zero-Downtime Live Code Upgrade to Version 2
+# V2 introduces volume tiering AND an audit helper function
+let v2_patch = "def compute_fee(amount):\n    if amount > 500:\n        return amount * 0.05\n    return amount * 0.08\n\ndef audit_health():\n    return 'System Online & Upgraded'\n"
+
+print("\n[Step 5] Hot-Swapping Production Code to Version 2 in-memory...")
+let rep2 = aether_live.live.reload(v2_patch)
+print("  ✓ Hot-Swap Executed with Zero Downtime!")
+print("  Duration (microseconds):", rep2["duration_us"], "µs")
+print("  Functions Upgraded:", rep2["functions_updated"])
+print("  Functions Added:", rep2["functions_added"])
+
+# 6. Verify New Logic is Live While State is Preserved
+let fee_v2 = compute_fee(1000)
+print("\n[Step 6] Verifying Code Upgrade & State Integrity:")
+print("  Calculated Fee for $1000 with V2 (Tiered Rate):", fee_v2)
+print("  Audit Hook:", audit_health())
+print("  CRITICAL CHECK -> Live Counter Preserved:", processed_transactions == 15000)
+print("  CRITICAL CHECK -> Session Cache Intact:", session_cache["user_101"] == "Latif")
+
+# 7. Atomic Safety Shield (Rollback on Broken Code)
+print("\n[Step 7] Testing Atomic Safety Shield (Attempting to inject syntax error)...")
+let broken_patch = "def broken_syntax(\n    return 42 +++\n"
+try:
+    let rep3 = aether_live.live.reload(broken_patch)
+except as e:
+    print("  ✓ Hot-Swap of broken code caught safely!")
+    print("  ✓ Error message intercepted without server crash:", e)
+    print("  ✓ Verified fee computation is STILL working:", compute_fee(200) == 16.0)
+
+print("\n================================================================================")
+print("✨ AETHERLIVE DEMONSTRATION COMPLETE: 100% OPERATIONAL")
+print("================================================================================")

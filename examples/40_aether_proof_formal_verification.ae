@@ -1,0 +1,56 @@
+# ==============================================================================
+# Example 40: AetherProof — Automated Formal Verification & Symbolic Execution
+# Mathematical Theorem Proving, Intent Contracts & Automated Counter-Examples
+# ==============================================================================
+
+from aether_proof import Verifier
+
+print("==================================================================")
+print("   🛡️ AETHER-PROOF: AUTOMATED FORMAL VERIFICATION ENGINE 🛡️")
+print("==================================================================")
+
+# 1. Target Script 1: Safety-Critical Financial Escrow Contract (Sound)
+let sound_contract_src = "intent secure_escrow_settle(balance, fee):\n" + "    require: balance >= 100\n" + "    require: fee >= 0\n" + "    require: fee <= 50\n" + "    ensure: result >= 50\n" + "    body:\n" + "        return balance - fee\n"
+
+print("[AetherProof] Analyzing Safety-Critical Escrow Contract...")
+let reports1 = Verifier.verify(sound_contract_src)
+for r in reports1:
+    let status_str = "VIOLATION ❌"
+    if r.is_valid():
+        status_str = "PROVED VALID ✅"
+    print("Function: '" + r.function + "'")
+    print("  Status: " + status_str)
+    print("  Explored Paths: " + str(r.paths))
+    print("  Diagnostic: " + r.diagnostic)
+
+# 2. Target Script 2: Flawed Algorithmic Lending Contract (Subtle Edge-Case Bug)
+# Developer assumed principal >= 0 implies principal + interest > 0, forgetting (0, 0)!
+let flawed_contract_src = "intent flawed_loan_disbursement(principal, interest):\n" + "    require: principal >= 0\n" + "    require: interest >= 0\n" + "    ensure: result > 0\n" + "    body:\n" + "        return principal + interest\n"
+
+print("\n[AetherProof] Analyzing Flawed Lending Contract...")
+let reports2 = Verifier.verify(flawed_contract_src)
+for r in reports2:
+    let status_str = "VIOLATION ❌"
+    if r.is_valid():
+        status_str = "PROVED VALID ✅"
+    print("Function: '" + r.function + "'")
+    print("  Status: " + status_str)
+    print("  Explored Paths: " + str(r.paths))
+    print("  Diagnostic: " + r.diagnostic)
+    if r.counter_example != nil:
+        print("  🚨 Concrete Counter-Example Found: " + str(r.counter_example))
+
+# 3. Target Script 3: Automated Static Vulnerability Detection (Division by Zero)
+let vuln_src = "def calculate_risk_ratio(assets, liability):\n" + "    let ratio = assets / 0\n" + "    return ratio\n"
+
+print("\n[AetherProof] Scanning for Critical Runtime Vulnerabilities...")
+let reports3 = Verifier.verify(vuln_src)
+for r in reports3:
+    print("Function: '" + r.function + "'")
+    for v in r.vulnerabilities:
+        print("  ⚠️ Detected Vulnerability: " + str(v))
+
+print("==================================================================")
+print("   ✅ AETHER-PROOF FORMAL VERIFICATION COMPLETED SUCCESSFULLY!")
+print("   Tip: Run 'aether verify <script.ae>' directly from your terminal!")
+print("==================================================================")
