@@ -6177,6 +6177,23 @@ fn main() {
             "ai" | "ai-context" => {
                 println!("{}", aether::mcp_server::generate_ai_system_context());
             }
+            "tour" => {
+                if args.len() > 2 {
+                    if args[2] == "list" || args[2] == "--list" {
+                        aether::tour::list_tour_lessons();
+                    } else if let Ok(id) = args[2].parse::<usize>() {
+                        if let Err(e) = aether::tour::run_tour_lesson(id) {
+                            eprintln!("Tour Error: {}", e);
+                        }
+                    } else {
+                        eprintln!("Usage: aether tour [lesson_number | list]");
+                    }
+                } else {
+                    if let Err(e) = aether::tour::run_tour_lesson(1) {
+                        eprintln!("Tour Error: {}", e);
+                    }
+                }
+            }
             "build" => {
                 if args.len() > 2 && args[2].ends_with(".ae") {
                     let source_path = Path::new(&args[2]);
