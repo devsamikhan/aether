@@ -1,49 +1,71 @@
 const samples = {
   hello: {
-    code: `// Hello World in AETHER
-intent HelloAether {
-    schema {
-        message: String = "Hello, Open Source World!";
-    }
+    code: `// 01. Hello World & Basic Arithmetic
+let greeting = "Hello, Developer!";
+let a = 15;
+let b = 27;
+let sum = a + b;
 
-    fn run() {
-        println(this.message);
-    }
-}`,
-    logs: `[Toolchain] Scaffolding AST nodes for HelloAether...
-[JIT Lowering] Lowering Statement to CPU: MOV
-Hello, Open Source World!`
+println(greeting);
+println("Sum of " + to_string(a) + " + " + to_string(b) + " = " + to_string(sum));`,
+    logs: `[AETHER VM] Parsing zero-ceremony script...
+Hello, Developer!
+Sum of 15 + 27 = 42
+[Execution finished in 0.8ms - Zero GC Pause]`
+  },
+  lists: {
+    code: `// 02. Lists & Python-Grade Comprehensions
+let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+// Square all even numbers concisely
+let even_squares = [x * x for x in numbers if x % 2 == 0];
+
+println("Original: " + to_string(numbers));
+println("Even Squares: " + to_string(even_squares));`,
+    logs: `[AETHER VM] Allocated contiguous dynamic list...
+Original: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+Even Squares: [4, 16, 36, 64, 100]
+[Execution finished in 1.1ms]`
+  },
+  functions: {
+    code: `// 03. Functions, Recursion & Clean Scopes
+fn fibonacci(n) {
+    if n <= 1 { return n; }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+println("Fibonacci(10): " + to_string(fibonacci(10)));`,
+    logs: `[AETHER JIT] Compiled fibonacci recursion...
+Fibonacci(10): 55
+[Call depth: 10 frames - Success]`
+  },
+  fibers: {
+    code: `// 04. M:N Green Fibers (1 Million Concurrent Tasks)
+let ch = channel();
+
+spawn(fn() {
+    let sum = 0;
+    for i in 0..50000 { sum = sum + i; }
+    ch.send(sum);
+});
+
+println("Received from background fiber: " + to_string(ch.recv()));`,
+    logs: `[Fiber Scheduler] Spawned green fiber on work-stealing pool...
+Received from background fiber: 1249975000
+[Concurrency throughput: 1.2M fibers/sec]`
   },
   quantum: {
-    code: `// Quantum superposition in AETHER
-intent QuantumRNG {
-    fn generate() {
-        qubit q;
-        superpose(q);
-        measure(q) => val;
-        return val;
-    }
-}`,
-    logs: `[Quantum Compiler] Qubit allocated at index 0
-[Quantum Compiler] Applied Hadamard Gate to Q0
-  -> Superposition state matrix loaded.
-[Quantum Compiler] Collapsing wave-function for Q0...
-  -> Random outcome eigenvalue collapse: 1`
-  },
-  multiverse: {
-    code: `// Multiverse pathfinding speculation
-intent specPath {
-    fn query() {
-        branch_reality {
-            ManyWorldsPathfind(graph: grid, dest: target);
-            observe_timeline(outcome);
-        };
-        merge_universe(outcome);
-    }
-}`,
-    logs: `[Multiverse JIT] Forked UCG graph into target speculation timelines...
-[Multiverse JIT] speculative traversal of 10,000 sub-routes completed.
-[Multiverse JIT] Selected timeline outcome based on min-cost selection.`
+    code: `// 05. Advanced: Post-Quantum Simulation
+let reg = QuantumRegister(2);
+reg.h(0);
+reg.cnot(0, 1);
+let outcome = reg.measure(0);
+println("Measured entangled Q0: " + to_string(outcome));`,
+    logs: `[Quantum Simulator] Initialized 2-qubit state vector |00⟩
+[Quantum Simulator] Applied Hadamard Gate to Q0
+[Quantum Simulator] Applied CNOT Gate (Control: Q0, Target: Q1)
+Measured entangled Q0: 1
+[Wavefunction collapsed via Born rule]`
   }
 };
 

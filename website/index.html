@@ -36,11 +36,11 @@
   <section class="hero">
     <div class="hero-container">
       <div class="hero-text">
-        <div class="badge">🚀 AETHER v2.0 Live — C++ Beaten in Concurrency & SIMD</div>
-        <h1>The Post-Quantum,<br><span class="gradient-text">Intent-Driven</span> Systems Language</h1>
-        <p>AETHER 2.0 is a modern systems language engineered in pure Rust with zero external dependencies. Combining Python-grade developer ergonomics with execution speeds that outperform modern C++ (<code>-O3</code>) in massive fiber concurrency and SIMD vector math.</p>
+        <div class="badge">🚀 AETHER v2.0 Live — Simple as Python, Faster than C++</div>
+        <h1>The High-Performance,<br><span class="gradient-text">Intent-Driven</span> Language</h1>
+        <p>AETHER is an ultra-fast, zero-dependency systems language engineered in pure Rust. Writing code is as friendly, readable, and clean as Python, with native execution speeds that outperform modern C++ in high-concurrency tasks and hardware SIMD vector crunching.</p>
         <div class="cta-buttons">
-          <a href="docs/index.html" class="btn btn-primary">Official Documentation 📖</a>
+          <a href="docs/index.html" class="btn btn-primary">Start Learning (Beginner to Pro) 📖</a>
           <a href="playground/index.html" class="btn btn-secondary">Interactive Sandbox ⚡</a>
           <a href="quantum_studio/index.html" class="btn btn-secondary">3D Quantum Studio 🌌</a>
         </div>
@@ -54,23 +54,16 @@
             <span class="preview-title">Aether 2.0 Native Execution</span>
           </div>
           <div class="preview-content">
-            <pre><code><span class="keyword">intent</span> <span class="type">QuantumLedger</span> {
-    <span class="keyword">schema</span> {
-        balance: <span class="type">Float</span>;
-        qubit_key: <span class="type">Qubit</span>;
-    }
+            <pre><code><span class="comment">// Clean, friendly, Python-like syntax with native speed</span>
+<span class="fn">fn</span> <span class="name">greet</span>(name) {
+    <span class="keyword">return</span> <span class="string">"Welcome to AETHER, "</span> + name + <span class="string">"!"</span>;
+}
 
-    <span class="keyword">require</span> {
-        <span class="keyword">this</span>.balance &gt;= <span class="number">0.0</span>;
-    }
+<span class="keyword">let</span> numbers = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];
+<span class="keyword">let</span> squares = [x * x <span class="keyword">for</span> x <span class="keyword">in</span> numbers];
 
-    <span class="fn">fn</span> <span class="name">settle_multiverse</span>() {
-        <span class="keyword">let</span> reg = <span class="type">QuantumRegister</span>(<span class="number">2</span>);
-        reg.<span class="fn">h</span>(<span class="number">0</span>);
-        reg.<span class="fn">cnot</span>(<span class="number">0</span>, <span class="number">1</span>);
-        <span class="keyword">return</span> reg.<span class="fn">measure</span>(<span class="number">0</span>);
-    }
-}</code></pre>
+<span class="fn">println</span>(<span class="name">greet</span>(<span class="string">"Developer"</span>));
+<span class="fn">println</span>(<span class="string">"Squares: "</span> + <span class="fn">to_string</span>(squares));</code></pre>
           </div>
         </div>
       </div>
@@ -198,9 +191,11 @@
     </div>
     <div class="playground">
       <div class="editor-tabs">
-        <button class="tab-btn active" onclick="switchTab('hello', event)">Hello World</button>
-        <button class="tab-btn" onclick="switchTab('quantum', event)">Quantum Superposition</button>
-        <button class="tab-btn" onclick="switchTab('multiverse', event)">Multiverse Routing</button>
+        <button class="tab-btn active" onclick="switchTab('hello', event)">🌱 Hello & Math</button>
+        <button class="tab-btn" onclick="switchTab('lists', event)">📦 Lists & Comprehensions</button>
+        <button class="tab-btn" onclick="switchTab('functions', event)">⚡ Functions & Logic</button>
+        <button class="tab-btn" onclick="switchTab('fibers', event)">🚀 Fibers Concurrency</button>
+        <button class="tab-btn" onclick="switchTab('quantum', event)">⚛️ Quantum (Advanced)</button>
       </div>
       <div class="playground-layout">
         <textarea id="code-editor" readonly class="code-area"></textarea>
