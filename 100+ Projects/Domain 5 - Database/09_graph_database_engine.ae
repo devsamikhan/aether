@@ -1,0 +1,51 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 09: Graph Database Engine & Dijkstra Traversal
+# ==============================================================================
+# Implements a graph database engine using AetherGraph. Indexes nodes,
+# labeled relational edges, and computes shortest path traversals.
+# ==============================================================================
+
+import aether_graph
+
+print("================================================================================")
+print("🕸️ [Domain 5 - Project 09] GRAPH DATABASE ENGINE")
+print("================================================================================")
+
+let g = aether_graph.Graph("SocialKnowledgeGraph")
+
+# Insert entity nodes
+let u_alice   = g.add_node("Alice")
+let u_bob     = g.add_node("Bob")
+let u_charlie = g.add_node("Charlie")
+let u_dave    = g.add_node("Dave")
+let u_eve     = g.add_node("Eve")
+
+print("Created 5 Graph Entity Nodes: Alice, Bob, Charlie, Dave, Eve")
+
+# Insert weighted relational edges:
+# Alice -> Bob (weight 1.5)
+# Bob -> Charlie (weight 2.0)
+# Alice -> Dave (weight 5.0)
+# Charlie -> Eve (weight 1.0)
+# Dave -> Eve (weight 1.2)
+g.add_edge(u_alice, u_bob, "FRIEND_OF", 1.5)
+g.add_edge(u_bob, u_charlie, "COLLABORATES_WITH", 2.0)
+g.add_edge(u_alice, u_dave, "WORKS_WITH", 5.0)
+g.add_edge(u_charlie, u_eve, "CONNECTED_TO", 1.0)
+g.add_edge(u_dave, u_eve, "ACQUAINTANCE_OF", 1.2)
+
+print("Indexed 5 Graph Relationships (Edges).")
+
+# Query shortest traversal path from Alice to Eve:
+# Path 1: Alice -> Bob -> Charlie -> Eve = 1.5 + 2.0 + 1.0 = 4.5
+# Path 2: Alice -> Dave -> Eve = 5.0 + 1.2 = 6.2
+print("\n[Graph Query: Shortest Path Traversal from Alice to Eve]")
+let path_result = g.shortest_path(u_alice, u_eve)
+
+print("  Shortest Route Node IDs: " + str(path_result["path"]))
+print("  Total Traversal Weight:   " + str(path_result["cost"]))
+
+assert(path_result["cost"] == 4.5, "Expected shortest path cost = 4.5 via Bob & Charlie")
+print("\n[SUCCESS] Graph Database Engine Traversal & Relationships Verified! ✅")
+print("================================================================================")

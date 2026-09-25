@@ -1,0 +1,33 @@
+// Project 5: Orbital Hohmann Transfer Trajectory
+// Calculates delta-v requirements for spacecraft transfer between two circular planetary orbits.
+
+fn main() {
+    let mu = 398600.0 // Standard gravitational parameter of Earth (km^3 / s^2)
+    let r1 = 6700.0   // LEO orbit radius (approx 320 km altitude)
+    let r2 = 42164.0  // GEO geostationary orbit radius
+    
+    // Circular velocities
+    let v1 = sqrt(mu / r1)
+    let v2 = sqrt(mu / r2)
+    
+    // Transfer ellipse semi-major axis
+    let a_trans = (r1 + r2) / 2.0
+    let v_trans_perigee = sqrt(mu * ((2.0 / r1) - (1.0 / a_trans)))
+    let v_trans_apogee  = sqrt(mu * ((2.0 / r2) - (1.0 / a_trans)))
+    
+    let delta_v1 = v_trans_perigee - v1
+    let delta_v2 = v2 - v_trans_apogee
+    let total_delta_v = delta_v1 + delta_v2
+    
+    println("🚀 Hohmann Transfer Calculation (LEO -> GEO):")
+    println("  LEO Velocity: " + str(v1) + " km/s")
+    println("  GEO Velocity: " + str(v2) + " km/s")
+    println("  Delta-V 1 (Injection): " + str(delta_v1) + " km/s")
+    println("  Delta-V 2 (Circularize): " + str(delta_v2) + " km/s")
+    println("  Total Mission Delta-V:  " + str(total_delta_v) + " km/s")
+    
+    assert(total_delta_v > 3.8 && total_delta_v < 4.2, "LEO to GEO delta-v must be ~3.93 km/s")
+    println("✅ Orbital Hohmann Transfer Verified.")
+}
+
+main()

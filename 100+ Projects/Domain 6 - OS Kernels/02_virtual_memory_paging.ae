@@ -1,0 +1,89 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 02: Virtual Memory MMU Paging & Translation
+# ==============================================================================
+# Simulates the OS Memory Management Unit (MMU): Virtual-to-physical address
+# translation, multi-level page table lookup, page faults, and swap management.
+# ==============================================================================
+
+print("================================================================================")
+print("🧠 [Domain 6 - Project 02] VIRTUAL MEMORY MMU PAGING ENGINE")
+print("================================================================================")
+
+let PAGE_SIZE = 256 # 256 bytes per page
+
+class PageTableEntry:
+    def __init__(self, pfn, valid, dirty):
+        self.pfn = pfn
+        self.valid = valid
+        self.dirty = dirty
+
+class MemoryManagementUnit:
+    def __init__(self, num_physical_frames):
+        self.page_table = {}
+        self.physical_ram = []
+        self.swap_disk = {}
+        self.next_free_frame = 0
+        self.max_frames = num_physical_frames
+
+        let f = 0
+        while f < num_physical_frames:
+            self.physical_ram.append("EMPTY_FRAME")
+            f = f + 1
+
+    def map_page(self, vpn, pfn):
+        self.page_table[str(vpn)] = PageTableEntry(pfn, true, false)
+
+    def handle_page_fault(self, vpn):
+        print("  ⚠️ MMU Interrupt: Page Fault on Virtual Page #" + str(vpn) + "! Paging in from Swap...")
+        let allocated_frame = self.next_free_frame
+        let page_data = "Swap_Payload_VPN_" + str(vpn)
+        self.next_free_frame = (self.next_free_frame + 1) % self.max_frames
+
+        if contains(self.swap_disk, str(vpn)):
+            page_data = self.swap_disk[str(vpn)]
+
+        self.physical_ram[allocated_frame] = page_data
+        self.page_table[str(vpn)] = PageTableEntry(allocated_frame, true, false)
+        print("  ✓ Allocated Physical Frame #" + str(allocated_frame) + " -> Updated Page Table Entry.")
+        return allocated_frame
+
+    def translate_address(self, virtual_address):
+        let vpn = virtual_address / PAGE_SIZE
+        let offset = virtual_address % PAGE_SIZE
+        let pfn = -1
+        let pte = nil
+        let physical_address = 0
+
+        if contains(self.page_table, str(vpn)):
+            pte = self.page_table[str(vpn)]
+            if pte.valid:
+                pfn = pte.pfn
+            else:
+                pfn = self.handle_page_fault(vpn)
+        else:
+            pfn = self.handle_page_fault(vpn)
+
+        physical_address = pfn * PAGE_SIZE + offset
+        print("  VA [0x" + str(virtual_address) + "] (VPN=" + str(vpn) + ", Off=" + str(offset) + ") -> PA [0x" + str(physical_address) + "] (PFN=" + str(pfn) + ")")
+        return physical_address
+
+
+let mmu = MemoryManagementUnit(4) # 4 physical frames
+
+print("Virtual Memory Initialized (Page Size = 256 bytes):")
+
+# Pre-map VPN 0 -> PFN 2
+mmu.map_page(0, 2)
+print("Pre-mapped VPN #0 -> Physical Frame #2.")
+
+print("\n[Access 1] Translating Resident Virtual Address 120 (VPN 0, Offset 120):")
+let pa1 = mmu.translate_address(120)
+assert(pa1 == 2 * 256 + 120, "Expected physical address 632")
+
+print("\n[Access 2] Translating Non-Resident Virtual Address 780 (VPN 3, Offset 12):")
+let pa2 = mmu.translate_address(780)
+assert(contains(mmu.page_table, "3"), "VPN 3 must now be mapped after page fault")
+
+print("\n[SUCCESS] Virtual Memory MMU Paging & Translation Verified! ✅")
+print("================================================================================")

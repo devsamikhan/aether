@@ -1,0 +1,46 @@
+// Project 9: Discrete Event Multiverse Queue (Airport Runway Traffic)
+// Tracks departure queues and runway occupancy across arrival schedules.
+
+fn main() {
+    let arrival_times = [2, 5, 8, 12, 14, 20]
+    let flight_ids = ["PK786", "EK601", "QR614", "BA054", "LH402", "SV700"]
+    let runway_service_time = 4
+    
+    let clock = 0
+    let runway_free_at = 0
+    let total_wait_time = 0
+    let i = 0
+    let arr = 0
+    let wait = 0
+    let dep = 0
+    let fid = ""
+    
+    println("🛫 Multiverse Runway Event Trace:")
+    while i < arrival_times.len() {
+        arr = arrival_times[i]
+        fid = flight_ids[i]
+        
+        if arr < runway_free_at {
+            wait = runway_free_at - arr
+            dep = runway_free_at + runway_service_time
+            runway_free_at = dep
+        } else {
+            wait = 0
+            dep = arr + runway_service_time
+            runway_free_at = dep
+        }
+        
+        total_wait_time = total_wait_time + wait
+        println("  Flight " + fid + " arrived at T=" + str(arr) + " -> Wait: " + str(wait) + "m | Cleared: T=" + str(dep))
+        i = i + 1
+    }
+    
+    let avg_wait = total_wait_time / arrival_times.len()
+    println("  Total Queued Delay: " + str(total_wait_time) + " min | Avg: " + str(avg_wait) + " min")
+    
+    assert(total_wait_time >= 0, "Delay time cannot be negative")
+    assert(runway_free_at >= 24, "Runway completion timeline mismatch")
+    println("✅ Discrete Event Simulation Verified.")
+}
+
+main()

@@ -1,0 +1,46 @@
+// Project 6: JSON Payload Schema Validator
+// Enforces presence and range contracts on incoming microservice API requests.
+
+fn validate_user_payload(payload) {
+    let errors = []
+    
+    if !payload.contains_key("user_id") {
+        errors.push("Missing user_id")
+    }
+    if !payload.contains_key("email") {
+        errors.push("Missing email")
+    }
+    if !payload.contains_key("age") {
+        errors.push("Missing age")
+    } else {
+        if payload["age"] < 18 || payload["age"] > 120 {
+            errors.push("Age out of range [18-120]")
+        }
+    }
+    return errors
+}
+
+fn main() {
+    let valid_payload = {
+        "user_id": "usr_100",
+        "email": "dev@aether.org",
+        "age": 28
+    }
+    
+    let invalid_payload = {
+        "user_id": "usr_101",
+        "age": 14
+    }
+    
+    let errs1 = validate_user_payload(valid_payload)
+    let errs2 = validate_user_payload(invalid_payload)
+    
+    println("📋 Payload 1 Validation Errors: " + str(errs1))
+    println("📋 Payload 2 Validation Errors: " + str(errs2))
+    
+    assert(errs1.len() == 0, "Valid payload flagged with errors")
+    assert(errs2.len() == 2, "Invalid payload must have exactly 2 errors (missing email, invalid age)")
+    println("✅ JSON Payload Schema Validator Verified.")
+}
+
+main()

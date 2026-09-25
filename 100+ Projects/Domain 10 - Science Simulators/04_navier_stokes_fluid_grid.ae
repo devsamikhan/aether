@@ -1,0 +1,31 @@
+// Project 4: Navier-Stokes Fluid Grid Relaxation
+// Simulates 2D incompressible fluid pressure Poisson relaxation pass.
+
+fn main() {
+    let w = 3
+    let h = 3
+    let pressure = [
+        0.0, 10.0, 0.0,
+        5.0, 0.0,  5.0,
+        0.0, 0.0,  0.0
+    ]
+    
+    // Gauss-Seidel pressure relaxation for center cell (x=1, y=1)
+    let left = pressure[1*w + 0]
+    let right = pressure[1*w + 2]
+    let top = pressure[0*w + 1]
+    let bottom = pressure[2*w + 1]
+    
+    let relaxed_center = (left + right + top + bottom) / 4.0
+    pressure[1*w + 1] = relaxed_center
+    
+    println("🌊 Navier-Stokes Pressure Field Relaxation:")
+    println("  Surrounding nodes: L=" + str(left) + ", R=" + str(right) + ", T=" + str(top) + ", B=" + str(bottom))
+    println("  Relaxed Center Pressure: " + str(relaxed_center))
+    
+    // (5 + 5 + 10 + 0) / 4 = 20 / 4 = 5.0
+    assert(relaxed_center == 5.0, "Pressure Poisson relaxation mismatch")
+    println("✅ Navier-Stokes Fluid Grid Verified.")
+}
+
+main()

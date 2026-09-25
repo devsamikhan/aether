@@ -1,0 +1,153 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 04: Transformer Multi-Head Self-Attention Layer
+# ==============================================================================
+# Implements the core Scaled Dot-Product Self-Attention mechanism from "Attention Is All You Need".
+# Computes Q, K, V matrix projections, scaled dot-product logits, row-wise softmax,
+# and weighted contextual embeddings.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("⚡ [Domain 3 - Project 04] TRANSFORMER SELF-ATTENTION MECHANISM")
+print("================================================================================")
+
+def matmul_2d(a, b, m, k, n):
+    let out = []
+    let i = 0
+    while i < m:
+        let row = []
+        let j = 0
+        while j < n:
+            let sum_val = 0.0
+            let p = 0
+            while p < k:
+                sum_val = sum_val + a[i][p] * b[p][j]
+                p = p + 1
+            row.append(sum_val)
+            j = j + 1
+        out.append(row)
+        i = i + 1
+    return out
+
+def transpose_2d(m, rows, cols):
+    let out = []
+    let c = 0
+    while c < cols:
+        let row = []
+        let r = 0
+        while r < rows:
+            row.append(m[r][c])
+            r = r + 1
+        out.append(row)
+        c = c + 1
+    return out
+
+def exp_approx(x):
+    if x < -5.0:
+        return 0.0067
+    let x2 = x * x
+    let x3 = x2 * x
+    return 1.0 + x + (x2 / 2.0) + (x3 / 6.0)
+
+def softmax_rows(m, rows, cols):
+    let out = []
+    let r = 0
+    while r < rows:
+        # 1. Find max for numerical stability
+        let max_val = m[r][0]
+        let c = 1
+        while c < cols:
+            if m[r][c] > max_val:
+                max_val = m[r][c]
+            c = c + 1
+
+        # 2. Exponentials and sum
+        let exp_row = []
+        let exp_sum = 0.0
+        c = 0
+        while c < cols:
+            let e_val = exp_approx(m[r][c] - max_val)
+            exp_row.append(e_val)
+            exp_sum = exp_sum + e_val
+            c = c + 1
+
+        # 3. Normalize
+        let norm_row = []
+        c = 0
+        while c < cols:
+            norm_row.append(exp_row[c] / exp_sum)
+            c = c + 1
+        out.append(norm_row)
+        r = r + 1
+    return out
+
+def run_self_attention():
+    # Sequence length T = 3 tokens ("Aether", "Post", "Quantum")
+    # Embedding dim d = 2
+    let tokens = ["Aether", "Post", "Quantum"]
+    let X = [
+        [1.0, 0.5],
+        [0.2, 0.9],
+        [0.8, 0.3]
+    ]
+    let T = 3
+    let D = 2
+
+    print("Input Sequence: " + str(tokens) + " (SeqLen=" + str(T) + ", Dim=" + str(D) + ")")
+
+    # Projection weights W_q, W_k, W_v
+    let W_q = [[1.0, 0.0], [0.0, 1.0]]
+    let W_k = [[0.8, 0.2], [0.2, 0.8]]
+    let W_v = [[1.5, 0.0], [0.0, 1.5]]
+
+    # 1. Project Q, K, V
+    let Q = matmul_2d(X, W_q, T, D, D)
+    let K = matmul_2d(X, W_k, T, D, D)
+    let V = matmul_2d(X, W_v, T, D, D)
+
+    # 2. Compute Q @ K^T / sqrt(D)
+    let K_T = transpose_2d(K, T, D)
+    let QK = matmul_2d(Q, K_T, T, D, T)
+    let scale = Math.sqrt(float(D))
+
+    let S = []
+    let i = 0
+    while i < T:
+        let row = []
+        let j = 0
+        while j < T:
+            row.append(QK[i][j] / scale)
+            j = j + 1
+        S.append(row)
+        i = i + 1
+
+    # 3. Softmax Attention Map
+    let Attention = softmax_rows(S, T, T)
+    print("\nAttention Weight Matrix A = softmax(Q * K^T / sqrt(d_k)):")
+    let r = 0
+    while r < T:
+        let line = "  [" + tokens[r] + "]: "
+        let c = 0
+        let row_sum = 0.0
+        while c < T:
+            line = line + str(Math.round(Attention[r][c], 3)) + "  "
+            row_sum = row_sum + Attention[r][c]
+            c = c + 1
+        print(line + "(Row sum = " + str(Math.round(row_sum, 2)) + ")")
+        assert(row_sum > 0.99 and row_sum < 1.01, "Attention distribution must sum to 1.0")
+        r = r + 1
+
+    # 4. Context Output O = Attention @ V
+    let Output = matmul_2d(Attention, V, T, T, D)
+    print("\nContextualized Output Embeddings (Shape: " + str(T) + "x" + str(D) + "):")
+    let o_idx = 0
+    while o_idx < T:
+        print("  " + tokens[o_idx] + " -> [" + str(Math.round(Output[o_idx][0], 3)) + ", " + str(Math.round(Output[o_idx][1], 3)) + "]")
+        o_idx = o_idx + 1
+
+    print("\n[SUCCESS] Transformer Self-Attention Layer Formulated & Computed! ✅")
+
+run_self_attention()
+print("================================================================================")

@@ -1,0 +1,32 @@
+// Project 2: Recursive Descent Parser
+// Parses infix binary expressions into an AST node representation: (left, op, right).
+
+fn parse_binary_expr(tokens) {
+    // Expects [IDENT, OP, NUMBER]
+    if tokens.len() == 3 {
+        return {
+            "type": "BinaryExpr",
+            "op": tokens[1],
+            "left": { "type": "Identifier", "name": tokens[0] },
+            "right": { "type": "Literal", "value": tokens[2] }
+        }
+    }
+    return { "type": "Error" }
+}
+
+fn main() {
+    let tokens = ["counter", "+", "10"]
+    let ast = parse_binary_expr(tokens)
+    
+    println("🌳 Parsed Abstract Syntax Tree (AST):")
+    println("  Root: " + ast["type"] + " [Op: " + ast["op"] + "]")
+    println("  Left:  " + ast["left"]["name"])
+    println("  Right: " + ast["right"]["value"])
+    
+    assert(ast["type"] == "BinaryExpr", "Root node must be BinaryExpr")
+    assert(ast["op"] == "+", "Operator must be '+'")
+    assert(ast["left"]["name"] == "counter", "LHS mismatch")
+    println("✅ Recursive Descent Parser Verified.")
+}
+
+main()

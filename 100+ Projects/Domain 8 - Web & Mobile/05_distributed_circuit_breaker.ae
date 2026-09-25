@@ -1,0 +1,48 @@
+// Project 5: Distributed Circuit Breaker (Hystrix Pattern)
+// Tripping state machine: CLOSED -> OPEN -> HALF-OPEN protecting downstream microservices.
+
+fn record_call(cb, is_success) {
+    if cb["state"] == "OPEN" {
+        return "FAIL_FAST_CIRCUIT_OPEN"
+    }
+    
+    if is_success {
+        cb["failure_count"] = 0
+        if cb["state"] == "HALF_OPEN" {
+            cb["state"] = "CLOSED"
+        }
+        return "SUCCESS"
+    } else {
+        cb["failure_count"] = cb["failure_count"] + 1
+        if cb["failure_count"] >= cb["threshold"] {
+            cb["state"] = "OPEN"
+        }
+        return "FAILURE"
+    }
+}
+
+fn main() {
+    let cb = {
+        "state": "CLOSED",
+        "failure_count": 0,
+        "threshold": 3
+    }
+    
+    println("🔌 Initial Circuit State: " + cb["state"])
+    record_call(cb, false) // 1st failure
+    record_call(cb, false) // 2nd failure
+    assert(cb["state"] == "CLOSED", "Circuit should still be closed under threshold")
+    
+    record_call(cb, false) // 3rd failure -> Tripped!
+    println("🔌 State after 3 consecutive failures: " + cb["state"])
+    assert(cb["state"] == "OPEN", "Circuit failed to trip to OPEN")
+    
+    // Fast-fail attempt
+    let fast_fail = record_call(cb, true)
+    println("🔌 Outgoing call while OPEN: " + fast_fail)
+    assert(fast_fail == "FAIL_FAST_CIRCUIT_OPEN", "Did not fast-fail during OPEN state")
+    
+    println("✅ Distributed Circuit Breaker Verified.")
+}
+
+main()

@@ -1,0 +1,87 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 07: Event Sourcing & CQRS State Store
+# ==============================================================================
+# Implements an append-only event stream store. State is never mutated in-place;
+# rather, current aggregate state is deterministically rehydrated by folding
+# domain events over time.
+# ==============================================================================
+
+print("================================================================================")
+print("📜 [Domain 5 - Project 07] EVENT SOURCING & CQRS STATE STORE")
+print("================================================================================")
+
+class Event:
+    def __init__(self, event_id, event_type, payload):
+        self.event_id = event_id
+        self.event_type = event_type
+        self.payload = payload
+
+class EventStore:
+    def __init__(self):
+        self.stream = []
+
+    def append_event(self, event_type, payload):
+        let event_id = len(self.stream) + 1
+        let evt = Event(event_id, event_type, payload)
+        self.stream.append(evt)
+        print("  [Event #" + str(event_id) + " Appended] " + event_type + " -> " + str(payload))
+        return evt
+
+    def rehydrate_account_balance(self, account_id):
+        # Fold all events for account_id
+        let balance = 0.0
+        let i = 0
+        while i < len(self.stream):
+            let evt = self.stream[i]
+            let p = evt.payload
+            if p["account_id"] == account_id:
+                if evt.event_type == "AccountOpened":
+                    balance = p["initial_deposit"]
+                if evt.event_type == "MoneyDeposited":
+                    balance = balance + p["amount"]
+                if evt.event_type == "MoneyWithdrawn":
+                    balance = balance - p["amount"]
+            i = i + 1
+        return balance
+
+    def time_travel_balance(self, account_id, up_to_event_id):
+        let balance = 0.0
+        let i = 0
+        while i < len(self.stream):
+            let evt = self.stream[i]
+            if evt.event_id > up_to_event_id:
+                break
+            let p = evt.payload
+            if p["account_id"] == account_id:
+                if evt.event_type == "AccountOpened":
+                    balance = p["initial_deposit"]
+                if evt.event_type == "MoneyDeposited":
+                    balance = balance + p["amount"]
+                if evt.event_type == "MoneyWithdrawn":
+                    balance = balance - p["amount"]
+            i = i + 1
+        return balance
+
+let store = EventStore()
+
+print("Publishing Financial Domain Events to Immutable Stream:")
+store.append_event("AccountOpened",   {"account_id": "ACC_100", "initial_deposit": 500.0})
+store.append_event("MoneyDeposited",  {"account_id": "ACC_100", "amount": 250.0})
+store.append_event("MoneyWithdrawn",  {"account_id": "ACC_100", "amount": 100.0})
+store.append_event("MoneyDeposited",  {"account_id": "ACC_100", "amount": 350.0})
+
+# 1. Current Rehydrated State
+let current_bal = store.rehydrate_account_balance("ACC_100")
+print("\n[State Rehydration]:")
+print("  Current Account Balance: $" + str(current_bal))
+assert(current_bal == 1000.0, "Expected balance $1000.0 (500 + 250 - 100 + 350)")
+
+# 2. Time-Travel Historical State at Event #2
+let historical_bal = store.time_travel_balance("ACC_100", 2)
+print("\n[Time-Travel Audit]:")
+print("  Historical Balance at Event #2: $" + str(historical_bal))
+assert(historical_bal == 750.0, "Expected balance $750.0 after event #2")
+
+print("\n[SUCCESS] Event Sourcing & CQRS State Store Verified! ✅")
+print("================================================================================")

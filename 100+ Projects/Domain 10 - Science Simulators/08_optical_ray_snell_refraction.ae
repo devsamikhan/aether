@@ -1,0 +1,25 @@
+// Project 8: Optical Ray Refraction Simulator (Snell's Law)
+// Simulates light ray bending through multilayered dielectric media (Air to Glass).
+
+fn main() {
+    let n1_air = 1.0
+    let n2_glass = 1.5
+    let theta1_deg = 30.0 // 30 degrees incident angle
+    let sin_theta1 = 0.5   // sin(30 deg)
+    
+    // Snell's Law: n1 * sin(theta1) = n2 * sin(theta2)
+    let sin_theta2 = (n1_air * sin_theta1) / n2_glass
+    
+    println("🔦 Optical Ray Tracing (Snell's Law):")
+    println("  Incident Medium n1: " + str(n1_air) + " (Air)")
+    println("  Refractive Medium n2: " + str(n2_glass) + " (Crown Glass)")
+    println("  sin(Theta1): " + str(sin_theta1))
+    println("  sin(Theta2): " + str(sin_theta2))
+    
+    // 0.5 / 1.5 = 1/3 = 0.333333
+    assert(abs(sin_theta2 - 0.333333) < 0.001, "Snell's angle refraction calculation error")
+    assert(sin_theta2 < sin_theta1, "Ray must bend towards normal when entering denser medium")
+    println("✅ Optical Ray Refraction Verified.")
+}
+
+main()

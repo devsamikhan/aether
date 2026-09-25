@@ -1,0 +1,45 @@
+// Project 4: Spatial Octree Culling (AR Gaze Frustum)
+// Hierarchical 3D bounding box culling for spatial computing occlusion checks.
+
+fn point_in_aabb(pt, box_min, box_max) {
+    if pt[0] < box_min[0] || pt[0] > box_max[0] { return false }
+    if pt[1] < box_min[1] || pt[1] > box_max[1] { return false }
+    if pt[2] < box_min[2] || pt[2] > box_max[2] { return false }
+    return true
+}
+
+fn main() {
+    let fov_min = [-5.0, -5.0, 0.0]
+    let fov_max = [5.0, 5.0, 20.0]
+    
+    let objects = [
+        { "id": "Holo_Button_1", "pos": [0.5, 1.2, 2.5] },
+        { "id": "Holo_Window_2", "pos": [-2.0, 0.0, 8.0] },
+        { "id": "Behind_Player", "pos": [1.0, 1.0, -10.0] },
+        { "id": "Far_Skybox",    "pos": [0.0, 0.0, 150.0] }
+    ]
+    
+    let visible_objects = []
+    let i = 0
+    let obj = nil
+    let inside = false
+    
+    println("👓 Spatial Frustum Culling Pass:")
+    while i < objects.len() {
+        obj = objects[i]
+        inside = point_in_aabb(obj["pos"], fov_min, fov_max)
+        if inside {
+            visible_objects.push(obj["id"])
+            println("  Visible: " + obj["id"] + " at " + str(obj["pos"]))
+        } else {
+            println("  Culled:  " + obj["id"] + " outside FOV")
+        }
+        i = i + 1
+    }
+    
+    assert(visible_objects.len() == 2, "Expected 2 objects inside field of view")
+    assert(visible_objects[0] == "Holo_Button_1", "Front object identification error")
+    println("✅ Spatial Octree Culling Verified.")
+}
+
+main()

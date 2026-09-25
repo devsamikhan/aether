@@ -1,0 +1,84 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 06: Hardware Interrupt Vector Table (IVT) & Dispatcher
+# ==============================================================================
+# Simulates hardware IRQ dispatching, Interrupt Service Routine (ISR) top-halves,
+# priority masking, and bottom-half Deferred Procedure Calls (DPCs).
+# ==============================================================================
+
+print("================================================================================")
+print("⚡ [Domain 6 - Project 06] HARDWARE INTERRUPT (IRQ) DISPATCHER")
+print("================================================================================")
+
+class InterruptVectorTable:
+    def __init__(self):
+        self.isrs = {}       # IRQ number -> Handler Name
+        self.dpc_queue = []  # Bottom-half deferred queue
+        self.masked_irqs = {}
+
+    def register_isr(self, irq_num, handler_name):
+        self.isrs[str(irq_num)] = handler_name
+        print("  [IVT Register] IRQ #" + str(irq_num) + " mapped to ISR handler '" + handler_name + "'")
+
+    def mask_irq(self, irq_num):
+        self.masked_irqs[str(irq_num)] = true
+
+    def unmask_irq(self, irq_num):
+        if contains(self.masked_irqs, str(irq_num)):
+            remove(self.masked_irqs, str(irq_num))
+
+    def trigger_irq(self, irq_num, context_payload):
+        # 1. Check if masked (disabled)
+        if contains(self.masked_irqs, str(irq_num)):
+            print("  ⚠️ IRQ #" + str(irq_num) + " is MASKED (Disabled). Ignored.")
+            return false
+
+        if !contains(self.isrs, str(irq_num)):
+            print("  🚨 Spurious Interrupt: Unmapped IRQ #" + str(irq_num))
+            return false
+
+        let handler = self.isrs[str(irq_num)]
+        # Top-Half execution: Fast acknowledgment
+        print("  [Hardware Pin Trigger] CPU Vector Jump -> Executing Top-Half ISR for IRQ #" + str(irq_num) + " (" + handler + ")")
+
+        # Schedule Bottom-Half DPC for heavy work
+        self.dpc_queue.append({"irq": irq_num, "data": context_payload})
+        return true
+
+    def drain_dpcs(self):
+        print("\n[Kernel DPC Scheduler] Draining Bottom-Half Work Queue:")
+        let processed = 0
+        let i = 0
+        while i < len(self.dpc_queue):
+            let dpc = self.dpc_queue[i]
+            print("  ✓ Completed Deferred Bottom-Half task for IRQ #" + str(dpc["irq"]) + " -> Payload: " + str(dpc["data"]))
+            processed = processed + 1
+            i = i + 1
+        self.dpc_queue = []
+        return processed
+
+let ivt = InterruptVectorTable()
+
+print("Configuring Kernel Interrupt Vector Table (IVT):")
+ivt.register_isr(0, "TIMER_TICK_ISR")
+ivt.register_isr(1, "KEYBOARD_STROKE_ISR")
+ivt.register_isr(4, "SERIAL_UART_ISR")
+ivt.register_isr(11, "NETWORK_NIC_PACKET_ISR")
+
+print("\n--- Triggering Hardware Interrupt Lines ---")
+ivt.trigger_irq(0, "monotonic_tick=1004")
+ivt.trigger_irq(1, "scancode=0x1E (Key 'A')")
+ivt.trigger_irq(11, "eth_frame_len=1518_bytes")
+
+# Test IRQ masking
+print("\n--- Masking Network IRQ 11 and Retesting ---")
+ivt.mask_irq(11)
+let masked_res = ivt.trigger_irq(11, "dropped_frame")
+assert(masked_res == false, "Masked IRQ must be ignored")
+
+# Drain deferred procedure calls
+let dpc_count = ivt.drain_dpcs()
+assert(dpc_count == 3, "Expected 3 bottom-half DPCs processed")
+
+print("\n[SUCCESS] Hardware Interrupt Vector Table & DPC Dispatcher Verified! ✅")
+print("================================================================================")

@@ -1,0 +1,47 @@
+// Project 4: Sliding Window Rate Limiter
+// Enforces request quotas within a rolling 60-second window per client IP.
+
+fn check_rate_limit(window_log, now_sec, max_reqs, window_size) {
+    let valid_calls = []
+    let i = 0
+    let ts = 0
+    while i < window_log.len() {
+        ts = window_log[i]
+        if (now_sec - ts) < window_size {
+            valid_calls.push(ts)
+        }
+        i = i + 1
+    }
+    
+    if valid_calls.len() < max_reqs {
+        valid_calls.push(now_sec)
+        return { "allowed": true, "log": valid_calls }
+    } else {
+        return { "allowed": false, "log": valid_calls }
+    }
+}
+
+fn main() {
+    let client_history = [10, 25, 45, 50] // Previous requests within last minute
+    let max_allowed = 5
+    let window_secs = 60
+    
+    // Request at t = 55s (should be 5th request -> allowed)
+    let res1 = check_rate_limit(client_history, 55, max_allowed, window_secs)
+    println("🚦 Rate Limit Check @ 55s: Allowed = " + str(res1["allowed"]))
+    
+    // Immediate subsequent request at t = 56s (should be 6th -> rejected)
+    let res2 = check_rate_limit(res1["log"], 56, max_allowed, window_secs)
+    println("🚦 Rate Limit Check @ 56s: Allowed = " + str(res2["allowed"]))
+    
+    // Request at t = 75s (old request at t=10 expired -> allowed)
+    let res3 = check_rate_limit(res2["log"], 75, max_allowed, window_secs)
+    println("🚦 Rate Limit Check @ 75s: Allowed = " + str(res3["allowed"]))
+    
+    assert(res1["allowed"] == true, "5th request should be allowed")
+    assert(res2["allowed"] == false, "6th request within window should be rejected")
+    assert(res3["allowed"] == true, "Request after expiry should be permitted")
+    println("✅ Sliding Window Rate Limiter Verified.")
+}
+
+main()

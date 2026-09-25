@@ -1,0 +1,75 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 08: Capability-Based Security Sandbox
+# ==============================================================================
+# Implements object capability security (Capsicum/WASI style). Untrusted processes
+# cannot access resources via global namespaces; they must present unforgeable
+# capability tokens with granular bitmask permissions.
+# ==============================================================================
+
+print("================================================================================")
+print("🛡️ [Domain 6 - Project 08] CAPABILITY-BASED SECURITY SANDBOX")
+print("================================================================================")
+
+# Bitmask rights
+let CAP_READ    = 1 # 0001
+let CAP_WRITE   = 2 # 0010
+let CAP_EXEC    = 4 # 0100
+let CAP_NETWORK = 8 # 1000
+
+class CapabilityToken:
+    def __init__(self, resource_id, rights):
+        self.resource_id = resource_id
+        self.rights = rights # Bitmask combination
+
+    def has_right(self, right):
+        # Bitwise AND check
+        let r = right
+        let w = self.rights
+        # In integer arithmetic: check if (w / r) % 2 == 1
+        return (w / r) % 2 == 1
+
+class KernelResourceGate:
+    def __init__(self):
+        self.resources = {
+            "file:/etc/shadow": "ROOT_HASHES",
+            "file:/tmp/sandbox.txt": "SANDBOX_DATA",
+            "net:api.aether.org": "REMOTE_GATEWAY"
+        }
+
+    def access_resource(self, token, requested_right, action_name):
+        if token == nil:
+            print("  🚨 ACCESS DENIED: Missing Capability Token for '" + action_name + "'")
+            return false
+
+        if !token.has_right(requested_right):
+            print("  🚨 SECURITY FAULT: Token lacks required capability bitmask for '" + action_name + "'")
+            return false
+
+        if !contains(self.resources, token.resource_id):
+            print("  🚨 ERROR: Unknown Resource ID")
+            return false
+
+        print("  ✓ CAPABILITY VERIFIED: Granted '" + action_name + "' on " + token.resource_id)
+        return true
+
+let gate = KernelResourceGate()
+
+# 1. Trusted Process Token: Has Read + Write on /tmp/sandbox.txt (1 | 2 = 3)
+let tmp_token = CapabilityToken("file:/tmp/sandbox.txt", 3)
+
+# 2. Untrusted Plugin: Attempting unauthorized operations
+print("1. Untrusted process reading /tmp/sandbox.txt with valid token:")
+let ok1 = gate.access_resource(tmp_token, CAP_READ, "READ_TMP")
+assert(ok1 == true, "Must allow read on granted capability")
+
+print("\n2. Untrusted process attempting to open Network connection with file token:")
+let ok2 = gate.access_resource(tmp_token, CAP_NETWORK, "OPEN_TCP_SOCKET")
+assert(ok2 == false, "Must deny network right not granted in bitmask")
+
+print("\n3. Rogue process attempting to access /etc/shadow with nil token:")
+let ok3 = gate.access_resource(nil, CAP_READ, "READ_ROOT_SECRETS")
+assert(ok3 == false, "Must deny resource access without capability token")
+
+print("\n[SUCCESS] Capability-Based Security Sandbox Verified! Zero Privilege Escalation! ✅")
+print("================================================================================")

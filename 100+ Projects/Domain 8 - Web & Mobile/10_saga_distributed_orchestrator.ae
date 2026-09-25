@@ -1,0 +1,43 @@
+// Project 10: Saga Distributed Transaction Orchestrator
+// Coordinates multi-service transactions with compensating backward rollbacks on failure.
+
+fn main() {
+    let order_status = "PENDING"
+    let inventory_reserved = false
+    let payment_charged = false
+    let shipping_scheduled = false
+    
+    // Step 1: Reserve Inventory (Success)
+    inventory_reserved = true
+    println("  [Step 1] Inventory Reserved: OK")
+    
+    // Step 2: Charge Payment (Success)
+    payment_charged = true
+    println("  [Step 2] Payment Charged: OK")
+    
+    // Step 3: Schedule Shipping (Simulate Out-of-Service Failure!)
+    let shipping_service_available = false
+    println("  [Step 3] Shipping Service Contact: FAILED")
+    
+    // Trigger Compensating Backward Transactions
+    println("🔄 Initiating Saga Compensating Rollback:")
+    if !shipping_service_available {
+        if payment_charged {
+            payment_charged = false
+            println("    -> Comp: Refunded Payment")
+        }
+        if inventory_reserved {
+            inventory_reserved = false
+            println("    -> Comp: Released Inventory Reservation")
+        }
+        order_status = "FAILED_ROLLED_BACK"
+    }
+    
+    println("📦 Final Transaction State: " + order_status)
+    assert(order_status == "FAILED_ROLLED_BACK", "Saga did not enter rolled back state")
+    assert(payment_charged == false, "Payment was not refunded in rollback")
+    assert(inventory_reserved == false, "Inventory lock was not released")
+    println("✅ Saga Distributed Orchestrator Verified.")
+}
+
+main()

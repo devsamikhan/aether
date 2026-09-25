@@ -1,0 +1,45 @@
+// Project 1: Branching Timeline Tree (Many-Worlds Forking)
+// Simulates divergent timelines branching at decision events with historical diffing.
+
+fn create_timeline(id, parent_id, event, state_val) {
+    return {
+        "id": id,
+        "parent_id": parent_id,
+        "event": event,
+        "val": state_val
+    }
+}
+
+fn main() {
+    let timelines = []
+    let root = create_timeline("T0", "ROOT", "Big Bang Genesis", 100)
+    timelines.push(root)
+    
+    // Fork Alpha: Accelerated Tech
+    let fork_alpha = create_timeline("T1_Alpha", "T0", "Quantum Computing Breakthrough", 150)
+    timelines.push(fork_alpha)
+    
+    // Fork Beta: Resource Scarcity
+    let fork_beta = create_timeline("T2_Beta", "T0", "Global Drought", 75)
+    timelines.push(fork_beta)
+    
+    // Sub-fork Alpha-1
+    let sub_alpha = create_timeline("T1_1", "T1_Alpha", "Interstellar Probe Launch", 220)
+    timelines.push(sub_alpha)
+    
+    println("🌌 Multiverse Timeline Tree Initialized:")
+    let i = 0
+    let t = nil
+    while i < timelines.len() {
+        t = timelines[i]
+        println("  -> Timeline [" + t["id"] + "] Parent: " + t["parent_id"] + " | Event: " + t["event"] + " | State: " + str(t["val"]))
+        i = i + 1
+    }
+    
+    // Assertions
+    assert(timelines.len() == 4, "Expected 4 parallel timeline nodes")
+    assert(sub_alpha["val"] == 220, "Sub-timeline state validation failed")
+    println("✅ Branching Timeline Tree Verified.")
+}
+
+main()

@@ -1,0 +1,42 @@
+// Project 3: 1D Heat Diffusion PDE Solver (FTCS Finite Difference)
+// Solves du/dt = alpha * d2u/dx2 along a thermal conductor rod with Dirichlet boundary conditions.
+
+fn step_heat_1d(u, alpha, dt, dx) {
+    let r = alpha * dt / (dx * dx)
+    let next_u = []
+    next_u.push(u[0]) // Fixed left Dirichlet boundary (e.g. 100C)
+    
+    let i = 1
+    let temp = 0.0
+    while i < (u.len() - 1) {
+        temp = u[i] + r * (u[i + 1] - 2.0 * u[i] + u[i - 1])
+        next_u.push(temp)
+        i = i + 1
+    }
+    next_u.push(u[u.len() - 1]) // Fixed right boundary (e.g. 0C)
+    return next_u
+}
+
+fn main() {
+    let rod_temp = [100.0, 0.0, 0.0, 0.0, 0.0]
+    let alpha = 0.5
+    let dt = 0.1
+    let dx = 1.0
+    
+    println("🔥 Thermal Heat Diffusion Along Rod:")
+    println("  Initial: " + str(rod_temp))
+    
+    let iter = 0
+    while iter < 5 {
+        rod_temp = step_heat_1d(rod_temp, alpha, dt, dx)
+        iter = iter + 1
+    }
+    
+    println("  After 5 ticks: " + str(rod_temp))
+    assert(rod_temp[0] == 100.0, "Left boundary condition violated")
+    assert(rod_temp[1] > 0.0, "Heat failed to conduct to interior nodes")
+    assert(rod_temp[4] == 0.0, "Right cold boundary altered")
+    println("✅ Heat Diffusion PDE Solver Verified.")
+}
+
+main()

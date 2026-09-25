@@ -1,0 +1,110 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 01: ACID Key-Value Store with Write-Ahead Logging (WAL)
+# ==============================================================================
+# Implements an in-memory transactional database with append-only Write-Ahead
+# Log (WAL) journaling and crash replay recovery.
+# ==============================================================================
+
+print("================================================================================")
+print("💾 [Domain 5 - Project 01] ACID WAL KEY-VALUE STORE")
+print("================================================================================")
+
+class WalEntry:
+    def __init__(self, tx_id, op, key, val):
+        self.tx_id = tx_id
+        self.op = op # "PUT" or "DELETE" or "COMMIT"
+        self.key = key
+        self.val = val
+
+class AcidKVStore:
+    def __init__(self):
+        self.data = {}
+        self.wal = []
+        self.current_tx = 1
+
+    def begin_tx(self):
+        let tx = self.current_tx
+        self.current_tx = self.current_tx + 1
+        return tx
+
+    def put(self, tx_id, key, value):
+        # 1. Append to WAL before modifying state (Write-Ahead)
+        let entry = WalEntry(tx_id, "PUT", key, value)
+        self.wal.append(entry)
+
+    def delete(self, tx_id, key):
+        let entry = WalEntry(tx_id, "DELETE", key, nil)
+        self.wal.append(entry)
+
+    def commit(self, tx_id):
+        let commit_entry = WalEntry(tx_id, "COMMIT", "", nil)
+        self.wal.append(commit_entry)
+        
+        # Apply all unapplied operations for this tx_id to state
+        let w_idx = 0
+        while w_idx < len(self.wal):
+            let e = self.wal[w_idx]
+            if e.tx_id == tx_id:
+                if e.op == "PUT":
+                    self.data[e.key] = e.val
+                if e.op == "DELETE":
+                    if contains(self.data, e.key):
+                        remove(self.data, e.key)
+            w_idx = w_idx + 1
+
+    def recover_from_wal(self, external_wal):
+        print("\n[Crash Recovery] Replaying WAL journal...")
+        self.data = {}
+        self.wal = external_wal
+
+        # 1. Identify committed transactions
+        let committed_txs = []
+        let i = 0
+        while i < len(external_wal):
+            let item = external_wal[i]
+            if item.op == "COMMIT":
+                committed_txs.append(item.tx_id)
+            i = i + 1
+
+        print("  Committed Transactions Identified: " + str(committed_txs))
+
+        # 2. Replay only committed operations
+        let j = 0
+        while j < len(external_wal):
+            let op_item = external_wal[j]
+            if contains(committed_txs, op_item.tx_id):
+                if op_item.op == "PUT":
+                    self.data[op_item.key] = op_item.val
+                if op_item.op == "DELETE":
+                    if contains(self.data, op_item.key):
+                        remove(self.data, op_item.key)
+            j = j + 1
+        print("  Recovery Complete. Active Keys in Memory: " + str(len(self.data)))
+
+let db = AcidKVStore()
+
+# Tx 1: Put alice, bob and COMMIT
+let tx1 = db.begin_tx()
+db.put(tx1, "user:1", "Alice")
+db.put(tx1, "user:2", "Bob")
+db.commit(tx1)
+
+# Tx 2: Put charlie, but simulate CRASH BEFORE COMMIT
+let tx2 = db.begin_tx()
+db.put(tx2, "user:3", "Charlie (Uncommitted)")
+
+print("State before crash: " + str(db.data))
+print("WAL Entries Count: " + str(len(db.wal)))
+
+# Simulate system crash and recovery using persisted WAL
+let recovered_db = AcidKVStore()
+recovered_db.recover_from_wal(db.wal)
+
+print("Recovered State: " + str(recovered_db.data))
+assert(contains(recovered_db.data, "user:1"), "Alice must be recovered")
+assert(contains(recovered_db.data, "user:2"), "Bob must be recovered")
+assert(!contains(recovered_db.data, "user:3"), "Uncommitted Charlie must NOT be recovered")
+
+print("\n[SUCCESS] ACID KV-Store WAL Journaling & Crash Recovery Verified! ✅")
+print("================================================================================")

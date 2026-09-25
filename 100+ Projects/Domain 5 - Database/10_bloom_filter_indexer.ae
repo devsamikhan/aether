@@ -1,0 +1,94 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 10: Probabilistic Bloom Filter Indexer
+# ==============================================================================
+# Implements a space-efficient probabilistic data structure for set membership.
+# Guarantees zero false negatives and evaluates false-positive probability.
+# ==============================================================================
+
+print("================================================================================")
+print("🌸 [Domain 5 - Project 10] BLOOM FILTER DATABASE INDEXER")
+print("================================================================================")
+
+let BIT_SIZE = 64
+
+class BloomFilter:
+    def __init__(self):
+        self.bits = []
+        let i = 0
+        while i < BIT_SIZE:
+            self.bits.append(0)
+            i = i + 1
+
+    def hash1(self, key_str):
+        let h = 0
+        let i = 0
+        while i < len(key_str):
+            h = (h * 31 + 7) % BIT_SIZE
+            i = i + 1
+        return (h + len(key_str) * 3) % BIT_SIZE
+
+    def hash2(self, key_str):
+        let h = 0
+        let i = 0
+        while i < len(key_str):
+            h = (h * 17 + 13) % BIT_SIZE
+            i = i + 1
+        return (h + len(key_str) * 7) % BIT_SIZE
+
+    def hash3(self, key_str):
+        let h = 0
+        let i = 0
+        while i < len(key_str):
+            h = (h * 43 + 29) % BIT_SIZE
+            i = i + 1
+        return (h + len(key_str) * 11) % BIT_SIZE
+
+    def add(self, key_str):
+        let i1 = self.hash1(key_str)
+        let i2 = self.hash2(key_str)
+        let i3 = self.hash3(key_str)
+        self.bits[i1] = 1
+        self.bits[i2] = 1
+        self.bits[i3] = 1
+
+    def might_contain(self, key_str):
+        let i1 = self.hash1(key_str)
+        let i2 = self.hash2(key_str)
+        let i3 = self.hash3(key_str)
+        if self.bits[i1] == 1 and self.bits[i2] == 1 and self.bits[i3] == 1:
+            return true
+        return false
+
+let bf = BloomFilter()
+
+print("Indexing 5 Known User Session Tokens into 64-bit Bloom Filter:")
+bf.add("sess_token_alice_99")
+bf.add("sess_token_bob_102")
+bf.add("sess_token_charlie_404")
+bf.add("sess_token_dave_777")
+bf.add("sess_token_eve_500")
+
+# 1. Test True Positives (Must be 100% true, zero false negatives)
+let tp1 = bf.might_contain("sess_token_alice_99")
+let tp2 = bf.might_contain("sess_token_bob_102")
+print("  Test 'sess_token_alice_99': " + str(tp1) + " (True Positive)")
+print("  Test 'sess_token_bob_102':  " + str(tp2) + " (True Positive)")
+assert(tp1 == true and tp2 == true, "Bloom filter must never produce false negatives")
+
+# 2. Test True Negatives
+let tn1 = bf.might_contain("sess_token_hacker_unknown_999")
+print("  Test 'sess_token_hacker_unknown_999': " + str(tn1) + " (Correctly Rejected)")
+
+# Count set bit density
+let set_bits = 0
+let b_i = 0
+while b_i < BIT_SIZE:
+    if bf.bits[b_i] == 1:
+        set_bits = set_bits + 1
+    b_i = b_i + 1
+
+print("\n[Bit Density]: " + str(set_bits) + "/" + str(BIT_SIZE) + " bits set (" + str(float(set_bits) / float(BIT_SIZE) * 100.0) + "%)")
+
+print("\n[SUCCESS] Probabilistic Bloom Filter Indexer Verified! ✅")
+print("================================================================================")

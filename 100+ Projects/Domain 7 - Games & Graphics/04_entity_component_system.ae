@@ -1,0 +1,95 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 04: Entity Component System (ECS) Architecture
+# ==============================================================================
+# Implements a high-throughput game engine ECS architecture. Decouples state
+# into flat Component arrays and executes cache-friendly Systems across Entities.
+# ==============================================================================
+
+print("================================================================================")
+print("👾 [Domain 7 - Project 04] ENTITY COMPONENT SYSTEM (ECS)")
+print("================================================================================")
+
+class PositionComponent:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class VelocityComponent:
+    def __init__(self, vx, vy):
+        self.vx = vx
+        self.vy = vy
+
+class HealthComponent:
+    def __init__(self, hp, max_hp):
+        self.hp = hp
+        self.max_hp = max_hp
+
+class ECSWorld:
+    def __init__(self):
+        self.next_entity_id = 1
+        self.positions = {}
+        self.velocities = {}
+        self.healths = {}
+
+    def create_entity(self):
+        let e = self.next_entity_id
+        self.next_entity_id = self.next_entity_id + 1
+        return e
+
+    def movement_system(self, dt):
+        # Queries all entities with both Position and Velocity
+        let e_id = 1
+        let pos = nil
+        let vel = nil
+
+        while e_id < self.next_entity_id:
+            if contains(self.positions, str(e_id)) and contains(self.velocities, str(e_id)):
+                pos = self.positions[str(e_id)]
+                vel = self.velocities[str(e_id)]
+                pos.x = pos.x + vel.vx * dt
+                pos.y = pos.y + vel.vy * dt
+            e_id = e_id + 1
+
+    def damage_system(self, target_entity, damage_amount):
+        if contains(self.healths, str(target_entity)):
+            let h = self.healths[str(target_entity)]
+            h.hp = h.hp - damage_amount
+            if h.hp < 0:
+                h.hp = 0
+            print("  [CombatSystem] Entity #" + str(target_entity) + " took " + str(damage_amount) + " damage! HP: " + str(h.hp) + "/" + str(h.max_hp))
+
+let world = ECSWorld()
+
+# Entity 1: Player (has Position, Velocity, Health)
+let player = world.create_entity()
+world.positions[str(player)] = PositionComponent(10.0, 20.0)
+world.velocities[str(player)] = VelocityComponent(5.0, -2.0)
+world.healths[str(player)] = HealthComponent(100, 100)
+
+# Entity 2: Enemy Boss
+let enemy = world.create_entity()
+world.positions[str(enemy)] = PositionComponent(80.0, 50.0)
+world.velocities[str(enemy)] = VelocityComponent(-1.0, 0.0)
+world.healths[str(enemy)] = HealthComponent(500, 500)
+
+print("Created 2 ECS Entities: Player (ID " + str(player) + "), Enemy Boss (ID " + str(enemy) + ")")
+print("Initial Player Position: (" + str(world.positions[str(player)].x) + ", " + str(world.positions[str(player)].y) + ")")
+
+# Run 3 Movement System simulation ticks (dt = 1.0)
+print("\n[Simulating 3 Engine Ticks of MovementSystem]:")
+let tick = 1
+while tick <= 3:
+    world.movement_system(1.0)
+    let p_pos = world.positions[str(player)]
+    print("  Tick " + str(tick) + " -> Player Pos: (" + str(p_pos.x) + ", " + str(p_pos.y) + ")")
+    tick = tick + 1
+
+# Combat system attack
+print("\n[Simulating CombatSystem]:")
+world.damage_system(enemy, 150)
+assert(world.healths[str(enemy)].hp == 350, "Enemy HP must be 350")
+assert(world.positions[str(player)].x == 25.0, "Player X should have moved to 25.0 (10 + 5*3)")
+
+print("\n[SUCCESS] Entity Component System (ECS) Architecture Verified! ✅")
+print("================================================================================")

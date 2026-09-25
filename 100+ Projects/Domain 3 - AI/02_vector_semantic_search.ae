@@ -1,0 +1,47 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 02: High-Dimensional Vector Semantic Search Engine
+# ==============================================================================
+# Builds an in-memory Vector Database using AetherVector for semantic retrieval.
+# Demonstrates cosine similarity nearest neighbor search and metadata filtering.
+# ==============================================================================
+
+from aether_vector import VectorStore, cosine_similarity, normalize
+import Math
+
+print("================================================================================")
+print("🔍 [Domain 3 - Project 02] VECTOR SEMANTIC SEARCH ENGINE")
+print("================================================================================")
+
+let store = VectorStore("cosine")
+
+# Index knowledge base documents with dense 4D embeddings
+store.add("doc_ai_1", [0.95, 0.20, 0.05, 0.02], {"title": "Deep Neural Networks in Aether", "domain": "AI"})
+store.add("doc_ai_2", [0.91, 0.35, 0.10, 0.08], {"title": "Transformer Attention Layers", "domain": "AI"})
+store.add("doc_quant_1", [0.05, 0.10, 0.95, 0.20], {"title": "Quantum Teleportation & Qubits", "domain": "Quantum"})
+store.add("doc_quant_2", [0.12, 0.15, 0.88, 0.30], {"title": "Shor Integer Factorization", "domain": "Quantum"})
+store.add("doc_db_1", [0.20, 0.85, 0.15, 0.40], {"title": "Distributed Raft Consensus WAL", "domain": "Database"})
+
+print("VectorStore Initialized: 5 documents indexed with embeddings.")
+
+# Semantic query: "Machine Learning / Neural Networks" (embedding oriented toward AI subspace)
+let query_embedding = [0.93, 0.25, 0.08, 0.04]
+print("\nExecuting Semantic Nearest Neighbor Query for 'Neural Network Architectures'...")
+
+let results = store.search(query_embedding, 3)
+
+print("\nTop 3 Nearest Semantic Matches:")
+let idx = 0
+while idx < len(results):
+    let match_doc = results[idx]
+    let doc_id = match_doc["id"]
+    let score = match_doc["score"]
+    let meta = match_doc["metadata"]
+    print("  [" + str(idx + 1) + "] Score: " + str(Math.round(score, 4)) + " | " + doc_id + " - " + meta["title"])
+    idx = idx + 1
+
+# Top match must be doc_ai_1
+let top_id = results[0]["id"]
+assert(top_id == "doc_ai_1", "Expected doc_ai_1 to have highest semantic similarity")
+print("\n[SUCCESS] Vector Semantic Search Query Successfully Ranked Relevant Docs! ✅")
+print("================================================================================")

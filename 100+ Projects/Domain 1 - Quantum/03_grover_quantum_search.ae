@@ -1,0 +1,67 @@
+# ==============================================================================
+# Domain 1: Quantum Computing & Cryptography
+# Project 03: Grover's Quantum Search Algorithm
+# ==============================================================================
+# Demonstrates quadratic quantum speedup O(sqrt(N)) over classical O(N) search.
+# For N = 16 states (4 qubits), finds target index w using Oracle phase inversion
+# and Grover Diffusion Operator (Amplitude Amplification).
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🔍 [Domain 1 - Project 03] GROVER'S QUANTUM SEARCH ALGORITHM")
+print("================================================================================")
+
+def run_grovers_algorithm(n_qubits, target_index):
+    let n_states = 16 # 2^4
+    print("Database Space N: " + str(n_states) + " items (" + str(n_qubits) + " qubits)")
+    print("Secret Target Key: Item #" + str(target_index))
+    
+    # 1. Initialize uniform superposition: |s> = (1/sqrt(N)) sum |x>
+    let init_amp = 1.0 / Math.sqrt(float(n_states))
+    let amplitudes = []
+    let i = 0
+    while i < n_states:
+        amplitudes.append(init_amp)
+        i = i + 1
+
+    let init_prob = init_amp * init_amp * 100.0
+    print("Initial Uniform Probability for target: " + str(Math.round(init_prob, 2)) + "%")
+
+    # Optimal Grover iterations: R = round(pi/4 * sqrt(N))
+    # For N=16: pi/4 * 4 = 3.14 => ~3 iterations
+    let max_iterations = 3
+    let step = 1
+    
+    while step <= max_iterations:
+        # A. Oracle Phase Inversion: flip sign of target amplitude
+        amplitudes[target_index] = 0.0 - amplitudes[target_index]
+
+        # B. Grover Diffusion Operator (Inversion about mean)
+        # Compute mean amplitude
+        let sum_amp = 0.0
+        let j = 0
+        while j < n_states:
+            sum_amp = sum_amp + amplitudes[j]
+            j = j + 1
+        let mean_amp = sum_amp / float(n_states)
+
+        # Invert each amplitude about the mean: a_new = 2 * mean - a_old
+        let k = 0
+        while k < n_states:
+            amplitudes[k] = 2.0 * mean_amp - amplitudes[k]
+            k = k + 1
+
+        let target_prob = amplitudes[target_index] * amplitudes[target_index] * 100.0
+        print("  Iteration " + str(step) + "/" + str(max_iterations) + " -> Target Probability: " + str(Math.round(target_prob, 2)) + "%")
+        step = step + 1
+
+    let final_prob = amplitudes[target_index] * amplitudes[target_index]
+    print("\n[Final Measurement] Probability of collapsed target state: " + str(Math.round(final_prob * 100.0, 2)) + "%")
+    assert(final_prob > 0.90, "Grover amplification must exceed 90% confidence")
+    print("[SUCCESS] Target Item #" + str(target_index) + " Located in O(sqrt(N)) Steps! ✅")
+
+# Run search for target #11 in 16-element quantum register
+run_grovers_algorithm(4, 11)
+print("================================================================================")

@@ -143,15 +143,31 @@ impl WorkGroupScheduler {
             return Ok(());
         }
 
-        // Snapshot input buffer data for concurrent reads
-        let in_snapshots: Vec<Vec<f64>> = inputs
-            .iter()
-            .map(|b| b.lock().unwrap().data.clone())
-            .collect();
+        // Check if any input buffer aliases the output buffer
+        let aliases_output = inputs.iter().any(|b| Arc::ptr_eq(b, output));
+
         let in_dims: Vec<[usize; 3]> = inputs
             .iter()
             .map(|b| b.lock().unwrap().dims)
             .collect();
+
+        // Either snapshot if aliasing output, or take zero-copy read guards
+        let in_snapshots: Vec<Vec<f64>>;
+        let in_guards: Vec<std::sync::MutexGuard<'_, ComputeBuffer>>;
+        let in_slices: Vec<&[f64]>;
+
+        if aliases_output {
+            in_snapshots = inputs
+                .iter()
+                .map(|b| b.lock().unwrap().data.clone())
+                .collect();
+            in_slices = in_snapshots.iter().map(|v| v.as_slice()).collect();
+            in_guards = Vec::new();
+        } else {
+            in_guards = inputs.iter().map(|b| b.lock().unwrap()).collect();
+            in_slices = in_guards.iter().map(|g| g.data.as_slice()).collect();
+            in_snapshots = Vec::new();
+        }
 
         // Lock output buffer and get raw slice access
         let mut out_guard = output.lock().unwrap();
@@ -163,60 +179,105 @@ impl WorkGroupScheduler {
         // Dispatch based on kernel name
         match kernel {
             "vec_add" => {
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("vec_add requires 2 input buffers".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
                 let n = gx.min(out_data.len()).min(a.len()).min(b.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
-                        chunk[local_idx] = a[i] + b[i];
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    let mut i = 0;
+                    let clen = chunk.len();
+                    while i + 8 <= clen {
+                        let s = start + i;
+                        chunk[i + 0] = a[s + 0] + b[s + 0];
+                        chunk[i + 1] = a[s + 1] + b[s + 1];
+                        chunk[i + 2] = a[s + 2] + b[s + 2];
+                        chunk[i + 3] = a[s + 3] + b[s + 3];
+                        chunk[i + 4] = a[s + 4] + b[s + 4];
+                        chunk[i + 5] = a[s + 5] + b[s + 5];
+                        chunk[i + 6] = a[s + 6] + b[s + 6];
+                        chunk[i + 7] = a[s + 7] + b[s + 7];
+                        i += 8;
+                    }
+                    while i < clen {
+                        chunk[i] = a[start + i] + b[start + i];
+                        i += 1;
                     }
                 }, out_data);
             }
 
             "vec_sub" => {
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("vec_sub requires 2 input buffers".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
                 let n = gx.min(out_data.len()).min(a.len()).min(b.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
-                        chunk[local_idx] = a[i] - b[i];
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    let mut i = 0;
+                    let clen = chunk.len();
+                    while i + 8 <= clen {
+                        let s = start + i;
+                        chunk[i + 0] = a[s + 0] - b[s + 0];
+                        chunk[i + 1] = a[s + 1] - b[s + 1];
+                        chunk[i + 2] = a[s + 2] - b[s + 2];
+                        chunk[i + 3] = a[s + 3] - b[s + 3];
+                        chunk[i + 4] = a[s + 4] - b[s + 4];
+                        chunk[i + 5] = a[s + 5] - b[s + 5];
+                        chunk[i + 6] = a[s + 6] - b[s + 6];
+                        chunk[i + 7] = a[s + 7] - b[s + 7];
+                        i += 8;
+                    }
+                    while i < clen {
+                        chunk[i] = a[start + i] - b[start + i];
+                        i += 1;
                     }
                 }, out_data);
             }
 
             "vec_mul" => {
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("vec_mul requires 2 input buffers".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
                 let n = gx.min(out_data.len()).min(a.len()).min(b.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
-                        chunk[local_idx] = a[i] * b[i];
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    let mut i = 0;
+                    let clen = chunk.len();
+                    while i + 8 <= clen {
+                        let s = start + i;
+                        chunk[i + 0] = a[s + 0] * b[s + 0];
+                        chunk[i + 1] = a[s + 1] * b[s + 1];
+                        chunk[i + 2] = a[s + 2] * b[s + 2];
+                        chunk[i + 3] = a[s + 3] * b[s + 3];
+                        chunk[i + 4] = a[s + 4] * b[s + 4];
+                        chunk[i + 5] = a[s + 5] * b[s + 5];
+                        chunk[i + 6] = a[s + 6] * b[s + 6];
+                        chunk[i + 7] = a[s + 7] * b[s + 7];
+                        i += 8;
+                    }
+                    while i < clen {
+                        chunk[i] = a[start + i] * b[start + i];
+                        i += 1;
                     }
                 }, out_data);
             }
 
             "vec_div" => {
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("vec_div requires 2 input buffers".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
                 let n = gx.min(out_data.len()).min(a.len()).min(b.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    for (local_idx, i) in (start.._end).enumerate() {
                         chunk[local_idx] = if b[i] == 0.0 { 0.0 } else { a[i] / b[i] };
                     }
                 }, out_data);
@@ -224,76 +285,106 @@ impl WorkGroupScheduler {
 
             "fma" => {
                 // Fused Multiply-Add: out[i] = a[i] * b[i] + c[i]
-                if in_snapshots.len() < 3 {
+                if in_slices.len() < 3 {
                     return Err("fma requires 3 input buffers (a, b, c)".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
-                let c = &in_snapshots[2];
+                let a = in_slices[0];
+                let b = in_slices[1];
+                let c = in_slices[2];
                 let n = gx.min(out_data.len()).min(a.len()).min(b.len()).min(c.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
-                        chunk[local_idx] = a[i].mul_add(b[i], c[i]);
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    let mut i = 0;
+                    let clen = chunk.len();
+                    while i + 8 <= clen {
+                        let s = start + i;
+                        chunk[i + 0] = a[s + 0].mul_add(b[s + 0], c[s + 0]);
+                        chunk[i + 1] = a[s + 1].mul_add(b[s + 1], c[s + 1]);
+                        chunk[i + 2] = a[s + 2].mul_add(b[s + 2], c[s + 2]);
+                        chunk[i + 3] = a[s + 3].mul_add(b[s + 3], c[s + 3]);
+                        chunk[i + 4] = a[s + 4].mul_add(b[s + 4], c[s + 4]);
+                        chunk[i + 5] = a[s + 5].mul_add(b[s + 5], c[s + 5]);
+                        chunk[i + 6] = a[s + 6].mul_add(b[s + 6], c[s + 6]);
+                        chunk[i + 7] = a[s + 7].mul_add(b[s + 7], c[s + 7]);
+                        i += 8;
+                    }
+                    while i < clen {
+                        chunk[i] = a[start + i].mul_add(b[start + i], c[start + i]);
+                        i += 1;
                     }
                 }, out_data);
             }
 
             "scale_bias" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("scale_bias requires 1 input buffer".into());
                 }
                 let scale = push_constants.first().copied().unwrap_or(1.0);
                 let bias = push_constants.get(1).copied().unwrap_or(0.0);
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = gx.min(out_data.len()).min(a.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
-                        chunk[local_idx] = a[i] * scale + bias;
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    let mut i = 0;
+                    let clen = chunk.len();
+                    while i + 8 <= clen {
+                        let s = start + i;
+                        chunk[i + 0] = a[s + 0].mul_add(scale, bias);
+                        chunk[i + 1] = a[s + 1].mul_add(scale, bias);
+                        chunk[i + 2] = a[s + 2].mul_add(scale, bias);
+                        chunk[i + 3] = a[s + 3].mul_add(scale, bias);
+                        chunk[i + 4] = a[s + 4].mul_add(scale, bias);
+                        chunk[i + 5] = a[s + 5].mul_add(scale, bias);
+                        chunk[i + 6] = a[s + 6].mul_add(scale, bias);
+                        chunk[i + 7] = a[s + 7].mul_add(scale, bias);
+                        i += 8;
+                    }
+                    while i < clen {
+                        chunk[i] = a[start + i].mul_add(scale, bias);
+                        i += 1;
                     }
                 }, out_data);
             }
 
             "clamp" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("clamp requires 1 input buffer".into());
                 }
                 let min_val = push_constants.first().copied().unwrap_or(0.0);
                 let max_val = push_constants.get(1).copied().unwrap_or(1.0);
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = gx.min(out_data.len()).min(a.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    for (local_idx, i) in (start.._end).enumerate() {
                         chunk[local_idx] = a[i].clamp(min_val, max_val);
                     }
                 }, out_data);
             }
 
             "relu" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("relu requires 1 input buffer".into());
                 }
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = gx.min(out_data.len()).min(a.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    for (local_idx, i) in (start.._end).enumerate() {
                         chunk[local_idx] = if a[i] > 0.0 { a[i] } else { 0.0 };
                     }
                 }, out_data);
             }
 
             "sigmoid" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("sigmoid requires 1 input buffer".into());
                 }
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = gx.min(out_data.len()).min(a.len());
 
-                Self::parallel_chunked(n, num_workers, |start, end, chunk| {
-                    for (local_idx, i) in (start..end).enumerate() {
+                Self::parallel_chunked(n, num_workers, |start, _end, chunk| {
+                    for (local_idx, i) in (start.._end).enumerate() {
                         chunk[local_idx] = 1.0 / (1.0 + (-a[i]).exp());
                     }
                 }, out_data);
@@ -301,7 +392,7 @@ impl WorkGroupScheduler {
 
             "matmul" => {
                 // A: [M, K], B: [K, N], Out: [M, N]
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("matmul requires 2 input buffers (A, B)".into());
                 }
                 let m = in_dims[0][1].max(1);
@@ -315,8 +406,8 @@ impl WorkGroupScheduler {
                     ));
                 }
 
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
 
                 // Parallelize over rows M across CPU workers
                 thread::scope(|s| {
@@ -345,7 +436,7 @@ impl WorkGroupScheduler {
 
             "conv2d" => {
                 // Input 0: Image [W, H, 1], Input 1: Kernel [KW, KH, 1]
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("conv2d requires image buffer and kernel buffer".into());
                 }
                 let img_w = in_dims[0][0];
@@ -359,8 +450,8 @@ impl WorkGroupScheduler {
 
                 let pad_x = (kern_w / 2) as isize;
                 let pad_y = (kern_h / 2) as isize;
-                let img = &in_snapshots[0];
-                let kernel_weights = &in_snapshots[1];
+                let img = in_slices[0];
+                let kernel_weights = in_slices[1];
 
                 // Parallelize rows of the 2D image across CPU workers
                 thread::scope(|s| {
@@ -401,17 +492,36 @@ impl WorkGroupScheduler {
             }
 
             "parallel_sum" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("parallel_sum requires 1 input buffer".into());
                 }
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = a.len();
                 let chunk_size = (n + num_workers - 1) / num_workers;
 
                 let partial_sums: Vec<f64> = thread::scope(|s| {
                     let mut handles = Vec::new();
                     for chunk in a.chunks(chunk_size) {
-                        handles.push(s.spawn(move || chunk.iter().sum::<f64>()));
+                        handles.push(s.spawn(move || {
+                            let mut acc0 = 0.0;
+                            let mut acc1 = 0.0;
+                            let mut acc2 = 0.0;
+                            let mut acc3 = 0.0;
+                            let mut i = 0;
+                            let clen = chunk.len();
+                            while i + 4 <= clen {
+                                acc0 += chunk[i + 0];
+                                acc1 += chunk[i + 1];
+                                acc2 += chunk[i + 2];
+                                acc3 += chunk[i + 3];
+                                i += 4;
+                            }
+                            while i < clen {
+                                acc0 += chunk[i];
+                                i += 1;
+                            }
+                            (acc0 + acc1) + (acc2 + acc3)
+                        }));
                     }
                     handles.into_iter().map(|h| h.join().unwrap()).collect()
                 });
@@ -423,10 +533,10 @@ impl WorkGroupScheduler {
             }
 
             "parallel_max" => {
-                if in_snapshots.is_empty() {
+                if in_slices.is_empty() {
                     return Err("parallel_max requires 1 input buffer".into());
                 }
-                let a = &in_snapshots[0];
+                let a = in_slices[0];
                 let n = a.len();
                 let chunk_size = (n + num_workers - 1) / num_workers;
 
@@ -447,11 +557,11 @@ impl WorkGroupScheduler {
             }
 
             "dot_product" => {
-                if in_snapshots.len() < 2 {
+                if in_slices.len() < 2 {
                     return Err("dot_product requires 2 input buffers".into());
                 }
-                let a = &in_snapshots[0];
-                let b = &in_snapshots[1];
+                let a = in_slices[0];
+                let b = in_slices[1];
                 let n = a.len().min(b.len());
                 let chunk_size = (n + num_workers - 1) / num_workers;
 
@@ -462,7 +572,20 @@ impl WorkGroupScheduler {
 
                     for (ac, bc) in a_chunks.zip(b_chunks) {
                         handles.push(s.spawn(move || {
-                            ac.iter().zip(bc).map(|(&x, &y)| x * y).sum::<f64>()
+                            let mut acc0 = 0.0;
+                            let mut acc1 = 0.0;
+                            let mut i = 0;
+                            let clen = ac.len();
+                            while i + 2 <= clen {
+                                acc0 += ac[i + 0] * bc[i + 0];
+                                acc1 += ac[i + 1] * bc[i + 1];
+                                i += 2;
+                            }
+                            while i < clen {
+                                acc0 += ac[i] * bc[i];
+                                i += 1;
+                            }
+                            acc0 + acc1
                         }));
                     }
                     handles.into_iter().map(|h| h.join().unwrap()).collect()
@@ -492,6 +615,10 @@ impl WorkGroupScheduler {
         F: Fn(usize, usize, &mut [f64]) + Send + Sync,
     {
         if total_len == 0 {
+            return;
+        }
+        if total_len < 32768 || num_workers <= 1 {
+            kernel_fn(0, total_len, &mut out_slice[..total_len]);
             return;
         }
         let chunk_size = (total_len + num_workers - 1) / num_workers;

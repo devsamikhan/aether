@@ -1,0 +1,35 @@
+// Project 8: Haptic Force Feedback (Virtual Spring-Damper)
+// Calculates 3D repulsive force vector and damping when a virtual hand penetrates a boundary.
+
+fn main() {
+    let k_stiffness = 250.0 // N/m
+    let b_damping = 15.0    // N*s/m
+    let wall_z = 0.0
+    
+    // Virtual stylus position and velocity
+    let probe_z = -0.04 // Penetrated 4 cm inside virtual wall
+    let probe_vel_z = -0.5 // Moving deeper into wall
+    
+    let penetration = 0.0
+    let spring_force = 0.0
+    let damper_force = 0.0
+    let total_force = 0.0
+    
+    if probe_z < wall_z {
+        penetration = wall_z - probe_z
+        spring_force = k_stiffness * penetration
+        damper_force = -b_damping * probe_vel_z
+        total_force = spring_force + damper_force
+    }
+    
+    println("🖐️ Haptic Boundary Impedance Response:")
+    println("  Wall Penetration: " + str(penetration * 100.0) + " cm")
+    println("  Spring Restoring Force: " + str(spring_force) + " N")
+    println("  Damper Resisting Force: " + str(damper_force) + " N")
+    println("  Total Restoring Feedback: " + str(total_force) + " N")
+    
+    assert(total_force > 15.0, "Haptic repulsive force too weak for tactile collision")
+    println("✅ Haptic Force Feedback Verified.")
+}
+
+main()

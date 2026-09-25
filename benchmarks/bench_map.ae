@@ -1,0 +1,16 @@
+let n = 20000
+let t0 = time()
+let m = {}
+let i = 0
+while i < n:
+    m["key_" + str(i)] = i * 2
+    i = i + 1
+
+let sum = 0
+let j = 0
+while j < n:
+    sum = sum + m["key_" + str(j)]
+    j = j + 1
+let t1 = time()
+println("Map Sum:", sum)
+println("Time:", (t1 - t0) * 1000.0, "ms")

@@ -1,0 +1,62 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 10: Fixed-Timestep Arcade Game Loop & Accumulator
+# ==============================================================================
+# Implements the standard "Fix Your Timestep" deterministic game loop architecture.
+# Accumulates real-world delta time, executes discrete physics updates at 60 Hz,
+# and computes render interpolation alpha.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🕹️ [Domain 7 - Project 10] DETERMINISTIC FIXED-TIMESTEP GAME LOOP")
+print("================================================================================")
+
+class ArcadeGameCore:
+    def __init__(self, target_fps):
+        self.dt = 1.0 / float(target_fps) # e.g. 0.01667s for 60Hz
+        self.accumulator = 0.0
+        self.total_physics_ticks = 0
+        self.total_rendered_frames = 0
+        self.player_x = 0.0
+        self.player_vx = 100.0 # 100 pixels / second
+
+    def process_frame(self, frame_delta_time):
+        self.total_rendered_frames = self.total_rendered_frames + 1
+        self.accumulator = self.accumulator + frame_delta_time
+
+        # Consume accumulator in discrete fixed dt steps
+        while self.accumulator >= self.dt:
+            # Physics tick update
+            self.player_x = self.player_x + self.player_vx * self.dt
+            self.total_physics_ticks = self.total_physics_ticks + 1
+            self.accumulator = self.accumulator - self.dt
+
+        # Render interpolation factor alpha in [0.0, 1.0)
+        let alpha = self.accumulator / self.dt
+        return alpha
+
+let game = ArcadeGameCore(60) # 60 Hz physics
+
+print("Game Loop Initialized: Fixed Physics Timestep dt = " + str(Math.round(game.dt * 1000.0, 2)) + " ms (60 Hz)")
+print("Player Velocity: " + str(game.player_vx) + " px/sec")
+
+# Simulate variable frame rendering (e.g. 33.3ms, 16.6ms, 50.0ms)
+print("\n[Simulating Variable Frame Rate Inputs]:")
+# Frame 1: 0.0333s (~30 FPS spike) -> Should run 2 physics ticks
+let a1 = game.process_frame(0.03333)
+print("  Render Frame 1 (dt=33.3ms) -> Physics Ticks: " + str(game.total_physics_ticks) + " | Alpha: " + str(Math.round(a1, 2)) + " | Player X: " + str(Math.round(game.player_x, 1)) + "px")
+
+# Frame 2: 0.01667s (steady 60 FPS) -> Should run 1 physics tick
+let a2 = game.process_frame(0.01667)
+print("  Render Frame 2 (dt=16.7ms) -> Physics Ticks: " + str(game.total_physics_ticks) + " | Alpha: " + str(Math.round(a2, 2)) + " | Player X: " + str(Math.round(game.player_x, 1)) + "px")
+
+# Frame 3: 0.0500s (lag spike) -> Should run 3 physics ticks
+let a3 = game.process_frame(0.05000)
+print("  Render Frame 3 (dt=50.0ms) -> Physics Ticks: " + str(game.total_physics_ticks) + " | Alpha: " + str(Math.round(a3, 2)) + " | Player X: " + str(Math.round(game.player_x, 1)) + "px")
+
+assert(game.total_rendered_frames == 3, "Expected 3 rendered frames")
+assert(game.total_physics_ticks == 6, "Expected exactly 6 fixed physics ticks executed")
+print("\n[SUCCESS] Deterministic Fixed-Timestep Arcade Game Loop Verified! ✅")
+print("================================================================================")

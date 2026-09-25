@@ -1,0 +1,79 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 10: Real-Time OS Monotonic Timer Wheel & Alarms
+# ==============================================================================
+# Implements a timing wheel timer facility for real-time operating systems (RTOS).
+# Schedules deadline callbacks with O(1) insertion, delta lists, and tick dispatch.
+# ==============================================================================
+
+print("================================================================================")
+print("⏱️ [Domain 6 - Project 10] REAL-TIME OS TIMING WHEEL & DEADLINE ALARMS")
+print("================================================================================")
+
+let WHEEL_SLOTS = 8
+
+class TimerAlarm:
+    def __init__(self, id, name, expire_tick):
+        self.id = id
+        self.name = name
+        self.expire_tick = expire_tick
+
+class TimingWheel:
+    def __init__(self):
+        self.current_tick = 0
+        self.slots = []
+        let i = 0
+        while i < WHEEL_SLOTS:
+            self.slots.append([])
+            i = i + 1
+        self.fired_alarms = []
+
+    def set_timeout(self, alarm_id, name, delay_ticks):
+        let expire = self.current_tick + delay_ticks
+        let slot_idx = expire % WHEEL_SLOTS
+        let alarm = TimerAlarm(alarm_id, name, expire)
+        self.slots[slot_idx].append(alarm)
+        print("  [Timer Set] Alarm #" + str(alarm_id) + " ('" + name + "') scheduled for Tick " + str(expire) + " (Wheel Slot " + str(slot_idx) + ")")
+
+    def tick(self):
+        self.current_tick = self.current_tick + 1
+        let slot_idx = self.current_tick % WHEEL_SLOTS
+        let slot_items = self.slots[slot_idx]
+        
+        # Check expired alarms in this slot
+        let remaining_in_slot = []
+        let i = 0
+        while i < len(slot_items):
+            let alarm = slot_items[i]
+            if alarm.expire_tick <= self.current_tick:
+                print("  🔔 [ALARM FIRED at Tick " + str(self.current_tick) + "] Handler Triggered: '" + alarm.name + "'")
+                self.fired_alarms.append(alarm.name)
+            else:
+                remaining_in_slot.append(alarm)
+            i = i + 1
+        self.slots[slot_idx] = remaining_in_slot
+
+let wheel = TimingWheel()
+
+print("Registering RTOS System Deadline Alarms (Current Tick = 0):")
+wheel.set_timeout(1, "WATCHDOG_HEARTBEAT_KICK", 2)
+wheel.set_timeout(2, "SENSOR_SAMPLE_POLL",      4)
+wheel.set_timeout(3, "TCP_RETRANSMIT_TIMEOUT",   6)
+
+print("\n--- Advancing Monotonic RTOS Clock Ticks ---")
+let step = 1
+while step <= 6:
+    print("RTOS Clock Tick: " + str(step))
+    wheel.tick()
+    step = step + 1
+
+print("\n[Summary] Total Fired Real-Time Alarms: " + str(len(wheel.fired_alarms)))
+print("  Fired Sequence: " + str(wheel.fired_alarms))
+
+assert(len(wheel.fired_alarms) == 3, "All 3 scheduled alarms must fire")
+assert(wheel.fired_alarms[0] == "WATCHDOG_HEARTBEAT_KICK", "Watchdog must fire first at tick 2")
+assert(wheel.fired_alarms[1] == "SENSOR_SAMPLE_POLL", "Sensor poll must fire second at tick 4")
+assert(wheel.fired_alarms[2] == "TCP_RETRANSMIT_TIMEOUT", "TCP timeout must fire third at tick 6")
+
+print("\n[SUCCESS] Real-Time OS Timing Wheel & Alarms Verified! ✅")
+print("================================================================================")

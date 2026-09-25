@@ -1,0 +1,97 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 01: Preemptive Priority Process Scheduler (MLFQ)
+# ==============================================================================
+# Simulates an operating system kernel thread scheduler with Task Control Blocks (TCBs),
+# dynamic priority queues, time quantum slices, and preemptive context switching.
+# ==============================================================================
+
+print("================================================================================")
+print("⚙️ [Domain 6 - Project 01] PREEMPTIVE MULTI-LEVEL PROCESS SCHEDULER")
+print("================================================================================")
+
+class TaskControlBlock:
+    def __init__(self, pid, name, priority, burst_remaining):
+        self.pid = pid
+        self.name = name
+        self.priority = priority # 1 (High) to 3 (Low)
+        self.burst_remaining = burst_remaining
+        self.state = "READY" # "READY", "RUNNING", "TERMINATED"
+
+class KernelScheduler:
+    def __init__(self, time_slice):
+        self.time_slice = time_slice
+        self.ready_queue = []
+        self.completed = []
+
+    def add_process(self, pid, name, priority, burst):
+        let p = TaskControlBlock(pid, name, priority, burst)
+        self.ready_queue.append(p)
+        print("  [Kernel] Created Process #" + str(pid) + " (" + name + ") | Priority: " + str(priority) + " | Burst: " + str(burst) + " ticks")
+
+    def run_schedule(self):
+        print("\nStarting Preemptive Round-Robin Scheduling (Quantum = " + str(self.time_slice) + " ticks):")
+        let clock = 0
+        let p = nil
+        let exec_time = 0
+        let s = 0
+        let i = 0
+        let j = 0
+        let tmp = nil
+
+        while len(self.ready_queue) > 0:
+            # Sort ready queue by priority (higher priority first)
+            i = 0
+            while i < len(self.ready_queue):
+                j = i + 1
+                while j < len(self.ready_queue):
+                    if self.ready_queue[j].priority < self.ready_queue[i].priority:
+                        tmp = self.ready_queue[i]
+                        self.ready_queue[i] = self.ready_queue[j]
+                        self.ready_queue[j] = tmp
+                    j = j + 1
+                i = i + 1
+
+
+            p = self.ready_queue[0]
+            p.state = "RUNNING"
+
+            exec_time = self.time_slice
+            if p.burst_remaining < exec_time:
+                exec_time = p.burst_remaining
+
+            clock = clock + exec_time
+            p.burst_remaining = p.burst_remaining - exec_time
+            print("  [Tick " + str(clock) + "] Dispatched PID #" + str(p.pid) + " (" + p.name + ") for " + str(exec_time) + " ticks. Remaining: " + str(p.burst_remaining))
+
+            # Pop from ready queue
+            s = 0
+            while s < len(self.ready_queue) - 1:
+                self.ready_queue[s] = self.ready_queue[s + 1]
+                s = s + 1
+            self.ready_queue.pop()
+
+            if p.burst_remaining > 0:
+                p.state = "READY"
+                self.ready_queue.append(p)
+            else:
+                p.state = "TERMINATED"
+                self.completed.append(p)
+                print("  ✓ PID #" + str(p.pid) + " (" + p.name + ") TERMINATED cleanly.")
+
+        print("\nKernel Execution Completed. All " + str(len(self.completed)) + " Processes Terminated.")
+        return clock
+
+let sched = KernelScheduler(3) # 3-tick time slice
+
+print("Ingesting Processes into Kernel Ready Queue:")
+sched.add_process(1, "Kernel_Network_Driver", 1, 4)
+sched.add_process(2, "Audio_Server",          2, 6)
+sched.add_process(3, "Background_Indexer",    3, 5)
+
+let total_ticks = sched.run_schedule()
+assert(len(sched.completed) == 3, "All 3 processes must terminate")
+assert(total_ticks == 15, "Total execution time must equal total burst sum (4 + 6 + 5 = 15)")
+
+print("\n[SUCCESS] Preemptive Multi-Level Process Scheduler Verified! ✅")
+print("================================================================================")

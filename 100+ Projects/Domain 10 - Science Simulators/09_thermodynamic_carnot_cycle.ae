@@ -1,0 +1,27 @@
+// Project 9: Thermodynamic Carnot Heat Engine Cycle
+// Evaluates reversible thermodynamic cycle and theoretical maximum thermal efficiency limit.
+
+fn main() {
+    let t_hot = 600.0  // Hot reservoir temperature (Kelvin)
+    let t_cold = 300.0 // Cold reservoir temperature (Kelvin)
+    
+    // Carnot maximum thermal efficiency: eta = 1 - (Tc / Th)
+    let eta_carnot = 1.0 - (t_cold / t_hot)
+    
+    let heat_in = 1000.0 // Joules
+    let max_work_out = heat_in * eta_carnot
+    let waste_heat_rejected = heat_in - max_work_out
+    
+    println("🔥 Carnot Thermal Heat Engine:")
+    println("  Hot Reservoir Th:   " + str(t_hot) + " K")
+    println("  Cold Reservoir Tc:  " + str(t_cold) + " K")
+    println("  Carnot Efficiency:  " + str(eta_carnot * 100.0) + " %")
+    println("  Work Generated:     " + str(max_work_out) + " J")
+    println("  Waste Heat To Sink: " + str(waste_heat_rejected) + " J")
+    
+    assert(eta_carnot == 0.5, "Carnot efficiency for 600K/300K must be exactly 50%")
+    assert(max_work_out == 500.0, "First law conservation of energy mismatch")
+    println("✅ Thermodynamic Carnot Cycle Verified.")
+}
+
+main()

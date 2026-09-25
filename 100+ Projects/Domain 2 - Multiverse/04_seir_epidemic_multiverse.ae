@@ -1,0 +1,43 @@
+// Project 4: SEIR Epidemic Multiverse Model
+// Evaluates infection progression across two alternative intervention universes.
+
+fn simulate_universe(beta_rate, days) {
+    let s = 990.0
+    let e = 10.0
+    let inf = 0.0
+    let r = 0.0
+    let sigma = 0.2
+    let gamma = 0.1
+    let day = 0
+    let new_inf = 0.0
+    let new_rec = 0.0
+    let new_exp = 0.0
+    
+    while day < days {
+        new_exp = (beta_rate * s * inf) / (s + e + inf + r + 0.001)
+        if day == 0 && inf == 0.0 { new_exp = 5.0 } // Initial transmission
+        new_inf = sigma * e
+        new_rec = gamma * inf
+        
+        s = s - new_exp
+        e = e + new_exp - new_inf
+        inf = inf + new_inf - new_rec
+        r = r + new_rec
+        day = day + 1
+    }
+    return { "S": s, "E": e, "I": inf, "R": r }
+}
+
+fn main() {
+    let universe_no_lockdown = simulate_universe(0.5, 30)
+    let universe_strict_lockdown = simulate_universe(0.15, 30)
+    
+    println("🦠 Epidemic Multiverse Comparison (Day 30):")
+    println("  Universe A (No Intervention) -> Recovered/Infected: " + str(universe_no_lockdown["R"]) + " / " + str(universe_no_lockdown["I"]))
+    println("  Universe B (Strict Lockdown) -> Recovered/Infected: " + str(universe_strict_lockdown["R"]) + " / " + str(universe_strict_lockdown["I"]))
+    
+    assert(universe_strict_lockdown["I"] < universe_no_lockdown["I"] || universe_strict_lockdown["R"] < universe_no_lockdown["R"], "Intervention must reduce caseload")
+    println("✅ SEIR Epidemic Multiverse Verified.")
+}
+
+main()

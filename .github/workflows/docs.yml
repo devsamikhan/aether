@@ -30,10 +30,13 @@ jobs:
       - name: Prepare Documentation
         run: |
           mkdir -p public
+          # Deploy full website assets (Landing, Docs portal, Playground, Quantum Studio)
           cp -r website/* public/
           cp README.md public/
           cp -r logo public/logo 2>/dev/null || true
-          cp -r docs public/docs 2>/dev/null || true
+          # Sync book & markdown docs into public/docs/ cleanly without directory nesting
+          cp docs/*.md public/docs/ 2>/dev/null || true
+          cp -r docs/book public/docs/book 2>/dev/null || true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

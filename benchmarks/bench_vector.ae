@@ -1,0 +1,23 @@
+from aether_compute import Buffer, parallel_sum, vec_fma
+
+let n = 100000
+let arr_a = []
+let arr_b = []
+let arr_c = []
+let i = 0
+while i < n:
+    arr_a.append(i * 1.5)
+    arr_b.append(i * 2.0)
+    arr_c.append(10.0)
+    i = i + 1
+
+let buf_a = Buffer.from_array(arr_a)
+let buf_b = Buffer.from_array(arr_b)
+let buf_c = Buffer.from_array(arr_c)
+
+let t0 = time()
+let fma_out = vec_fma(buf_a, buf_b, buf_c)
+let total = parallel_sum(fma_out)
+let t1 = time()
+println("Vector FMA Sum:", total)
+println("Time:", (t1 - t0) * 1000.0, "ms")

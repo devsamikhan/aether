@@ -1,0 +1,101 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 08: LRU Buffer Page Cache & Dirty Page Flusher
+# ==============================================================================
+# Manages database page frames in memory with Least-Recently-Used (LRU) eviction
+# and Write-Back dirty page synchronization to simulated disk storage.
+# ==============================================================================
+
+print("================================================================================")
+print("💽 [Domain 5 - Project 08] LRU BUFFER PAGE CACHE")
+print("================================================================================")
+
+class PageFrame:
+    def __init__(self, page_id, data, is_dirty):
+        self.page_id = page_id
+        self.data = data
+        self.is_dirty = is_dirty
+
+class LruPageCache:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.pages = [] # Ordered: index 0 = LRU, index (len-1) = MRU
+        self.disk = {}  # Persistent disk storage
+
+    def access_page(self, page_id):
+        let found_idx = -1
+        let i = 0
+        let pg = nil
+        let shift = 0
+        let lru_page = nil
+        let s = 0
+        let loaded_data = ""
+        let new_page = nil
+
+        while i < len(self.pages):
+            if self.pages[i].page_id == page_id:
+                found_idx = i
+                break
+            i = i + 1
+
+        if found_idx != -1:
+            # Cache Hit: move page to end (MRU)
+            pg = self.pages[found_idx]
+            shift = found_idx
+            while shift < len(self.pages) - 1:
+                self.pages[shift] = self.pages[shift + 1]
+                shift = shift + 1
+            self.pages[len(self.pages) - 1] = pg
+            return pg
+
+        # Cache Miss: Evict LRU page if at capacity
+        if len(self.pages) == self.capacity:
+            lru_page = self.pages[0]
+            if lru_page.is_dirty:
+                print("  [Eviction Flush] Page #" + str(lru_page.page_id) + " was dirty -> Flushed to Persistent Disk.")
+                self.disk[str(lru_page.page_id)] = lru_page.data
+
+            # Shift all pages left
+            s = 0
+            while s < len(self.pages) - 1:
+                self.pages[s] = self.pages[s + 1]
+                s = s + 1
+            self.pages.pop()
+
+        # Load from disk (or create blank) and insert at MRU
+        loaded_data = "Data_Page_" + str(page_id)
+        if contains(self.disk, str(page_id)):
+            loaded_data = self.disk[str(page_id)]
+
+        new_page = PageFrame(page_id, loaded_data, false)
+        self.pages.append(new_page)
+        print("  [Cache Miss] Loaded Page #" + str(page_id) + " into Buffer Pool.")
+        return new_page
+
+    def write_page(self, page_id, new_data):
+        let pg = self.access_page(page_id)
+        pg.data = new_data
+        pg.is_dirty = true
+        print("  [Write] Modified Page #" + str(page_id) + " (Marked Dirty)")
+
+let cache = LruPageCache(3) # 3-page memory capacity
+
+print("Testing Page Access & LRU Eviction:")
+cache.access_page(101)
+cache.write_page(102, "Modified_Records_102")
+cache.access_page(103)
+
+# Cache is now full: [101, 102, 103]. Accessing 101 moves it to MRU -> [102, 103, 101]
+print("\nRe-accessing Page #101 (Promoting to MRU):")
+cache.access_page(101)
+
+# Accessing 104 must evict Page #102, which is dirty, triggering flush to disk!
+print("\nAccessing Page #104 (Triggering LRU Eviction of Page #102):")
+cache.access_page(104)
+
+assert(contains(cache.disk, "102"), "Page 102 must have been flushed to disk upon eviction")
+assert(cache.disk["102"] == "Modified_Records_102", "Disk content must match modified dirty page")
+
+
+print("\n[SUCCESS] LRU Buffer Page Cache & Dirty Page Flushing Verified! ✅")
+print("================================================================================")

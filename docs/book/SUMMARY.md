@@ -1,0 +1,18 @@
+# Summary
+
+- [Introduction](README.md)
+- [Chapter 1: Getting Started & Toolchain Setup](ch01_getting_started.md)
+- [Chapter 2: Variables, Mutability & Primitive Data Types](ch02_variables_and_types.md)
+- [Chapter 3: Collections & Composite Data Structures](ch03_collections.md)
+- [Chapter 4: Control Flow, Loops & Exhaustive Pattern Matching](ch04_control_flow.md)
+- [Chapter 5: Functions, Closures, Scopes & Unpacking](ch05_functions_and_scopes.md)
+- [Chapter 6: Object-Oriented Programming & Zero-Cost Structs](ch06_classes_and_structs.md)
+- [Chapter 7: Error Handling, Exceptions & Modular Architecture](ch07_error_handling_and_modules.md)
+- [Chapter 8: The Core Paradigm: Declarative Intent Contracts](ch08_intent_contracts.md)
+- [Chapter 9: Concurrency with Green Fibers & CSP Channels](ch09_concurrency_fibers.md)
+- [Chapter 10: Native Deep Learning, Tensors & Reverse-Mode Autograd](ch10_tensors_and_autograd.md)
+- [Chapter 11: Post-Quantum Computing & State Vector Simulation](ch11_quantum_simulation.md)
+- [Chapter 12: AetherGraph: In-Memory Property Graphs & Knowledge Traversal](ch12_knowledge_graphs.md)
+- [Chapter 13: Distributed Swarms & Conflict-Free Replicated Data Types (CRDTs)](ch13_crdt_swarms.md)
+- [Chapter 14: Erlang-Grade Live Code Swapping & Zero-Downtime Reloading](ch14_live_reloading.md)
+- [Chapter 15: Developer Toolchain, Package Management & AI Pair-Programming (MCP)](ch15_toolchain_and_ecosystem.md)

@@ -1,0 +1,72 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 01: Deep Learning Multi-Layer Perceptron (Autograd Engine)
+# ==============================================================================
+# Demonstrates reverse-mode automatic differentiation training a neural network
+# with Linear layer, forward prediction, MSE loss, and SGD gradient updates.
+# ==============================================================================
+
+from aether_autograd import Variable, Linear, SGD, mse_loss
+import Math
+
+print("================================================================================")
+print("🧠 [Domain 3 - Project 01] AUTOGRAD DEEP NEURAL NETWORK")
+print("================================================================================")
+
+# Training dataset: Feature regression y = 2.0*x1 - 1.5*x2 + 0.5
+let X_train = Variable([
+    [1.0, 0.5],
+    [2.0, 1.0],
+    [0.0, 2.0],
+    [3.0, 1.0],
+    [2.5, 0.0]
+])
+
+let Y_train = Variable([
+    [1.75],
+    [3.00],
+    [-2.50],
+    [5.00],
+    [5.50]
+])
+
+print("Dataset: 5 samples, 2 input features -> 1 output prediction.")
+
+# Linear layer: 2 inputs -> 1 output with bias
+let model = Linear(2, 1, true)
+let learning_rate = 0.03
+let optimizer = SGD(model.parameters(), learning_rate)
+
+let epochs = 60
+let initial_loss = 0.0
+let final_loss = 0.0
+
+let epoch = 0
+while epoch <= epochs:
+    optimizer.zero_grad()
+    
+    # Forward pass
+    let pred = model.forward(X_train)
+    let loss = mse_loss(pred, Y_train)
+    
+    let current_loss = loss.data.to_list()[0]
+    if epoch == 0:
+        initial_loss = current_loss
+        print("Epoch 0 Initial Loss: " + str(Math.round(initial_loss, 4)))
+
+    if epoch == epochs:
+        final_loss = current_loss
+        print("Epoch " + str(epochs) + " Final Converged Loss: " + str(Math.round(final_loss, 4)))
+
+    # Backward pass & gradient descent step
+    loss.backward()
+    optimizer.step()
+    
+    epoch = epoch + 1
+
+let loss_reduction = (initial_loss - final_loss) / initial_loss * 100.0
+print("Loss Reduction: " + str(Math.round(loss_reduction, 2)) + "%")
+
+assert(final_loss < initial_loss, "Model loss must decrease over epochs")
+print("\n[SUCCESS] AetherAutograd Neural Network Successfully Trained! ✅")
+print("================================================================================")

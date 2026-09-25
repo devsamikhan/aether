@@ -1,0 +1,77 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 07: Skeletal Animation Keyframe LERP & Forward Kinematics
+# ==============================================================================
+# Interpolates skeletal bone transforms across keyframes using Linear Interpolation (LERP).
+# Computes forward kinematics (FK) joint positions along the bone hierarchy.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🦴 [Domain 7 - Project 07] SKELETAL ANIMATION LERP & KINEMATICS")
+print("================================================================================")
+
+def lerp(a, b, t):
+    return (1.0 - t) * a + t * b
+
+class JointTransform:
+    def __init__(self, angle_deg, length):
+        self.angle_deg = angle_deg
+        self.length = length
+
+def deg_to_rad(deg):
+    return deg * 3.14159265 / 180.0
+
+def forward_kinematics(shoulder_angle_deg, elbow_angle_deg, l1, l2):
+    # Joint 1: Shoulder at (0, 0)
+    # Joint 2: Elbow position
+    let rad1 = deg_to_rad(shoulder_angle_deg)
+    let elbow_x = l1 * Math.cos(rad1)
+    let elbow_y = l1 * Math.sin(rad1)
+
+    # Joint 3: Hand / End-Effector position
+    let total_rad = deg_to_rad(shoulder_angle_deg + elbow_angle_deg)
+    let hand_x = elbow_x + l2 * Math.cos(total_rad)
+    let hand_y = elbow_y + l2 * Math.sin(total_rad)
+
+    return {"elbow": [elbow_x, elbow_y], "hand": [hand_x, hand_y]}
+
+# Animation Track: Keyframe 0 (Resting arm) -> Keyframe 1 (Punched arm)
+let kf0_shoulder = 0.0   # Arm pointing straight along X
+let kf0_elbow    = 0.0
+
+let kf1_shoulder = 45.0  # Raised 45 degrees
+let kf1_elbow    = 30.0  # Bent 30 degrees
+
+let bone_length1 = 10.0 # Upper arm length
+let bone_length2 = 8.0  # Forearm length
+
+print("Animation Clip: Rest Pose -> Punch Pose (Duration = 1.0s):")
+print("  Upper Arm Bone Length: " + str(bone_length1))
+print("  Forearm Bone Length:   " + str(bone_length2))
+
+print("\n[Sampling Animation Track at 5 Time Normalized Slices (t = 0.0 to 1.0)]:")
+let step = 0
+let t = 0.0
+let curr_shoulder = 0.0
+let curr_elbow = 0.0
+let fk = nil
+
+while step <= 4:
+    t = float(step) * 0.25
+    curr_shoulder = lerp(kf0_shoulder, kf1_shoulder, t)
+    curr_elbow = lerp(kf0_elbow, kf1_elbow, t)
+
+    fk = forward_kinematics(curr_shoulder, curr_elbow, bone_length1, bone_length2)
+    let hand = fk["hand"]
+
+    print("  t = " + str(t) + " -> Shoulder: " + str(Math.round(curr_shoulder, 1)) + "°, Elbow: " + str(Math.round(curr_elbow, 1)) + "° | Hand Pos: (" + str(Math.round(hand[0], 2)) + ", " + str(Math.round(hand[1], 2)) + ")")
+    step = step + 1
+
+# At t=0.0, hand position must be (18.0, 0.0) (10 + 8)
+let rest_fk = forward_kinematics(kf0_shoulder, kf0_elbow, bone_length1, bone_length2)
+assert(Math.round(rest_fk["hand"][0], 1) == 18.0, "Expected rest hand x = 18.0")
+
+print("\n[SUCCESS] Skeletal Animation Keyframe LERP & Forward Kinematics Verified! ✅")
+print("================================================================================")

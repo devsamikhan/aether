@@ -1,0 +1,74 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 05: Virtual File System (VFS) Path Trie & Inode Manager
+# ==============================================================================
+# Implements a hierarchical Unix-style Virtual File System (VFS).
+# Manages Inodes, directory entry tries, permission bitmasks, and path resolution.
+# ==============================================================================
+
+print("================================================================================")
+print("📂 [Domain 6 - Project 05] VIRTUAL FILE SYSTEM (VFS) INODE TRIE")
+print("================================================================================")
+
+class Inode:
+    def __init__(self, inode_id, name, is_dir, permissions):
+        self.inode_id = inode_id
+        self.name = name
+        self.is_dir = is_dir
+        self.permissions = permissions # e.g. 755 (dir) or 644 (file)
+        self.children = {} # Name -> Inode
+        self.content = ""
+
+class VirtualFileSystem:
+    def __init__(self):
+        self.next_inode = 1
+        self.root = Inode(self.next_inode, "/", true, 755)
+
+    def mkdir(self, parent_inode, dir_name):
+        self.next_inode = self.next_inode + 1
+        let new_dir = Inode(self.next_inode, dir_name, true, 755)
+        parent_inode.children[dir_name] = new_dir
+        print("  [mkdir] Created directory '/" + dir_name + "' (Inode #" + str(new_dir.inode_id) + ", mode 0755)")
+        return new_dir
+
+    def touch(self, dir_inode, file_name, content):
+        self.next_inode = self.next_inode + 1
+        let new_file = Inode(self.next_inode, file_name, false, 644)
+        new_file.content = content
+        dir_inode.children[file_name] = new_file
+        print("  [touch] Created file '" + file_name + "' (Inode #" + str(new_file.inode_id) + ", " + str(len(content)) + " bytes)")
+        return new_file
+
+    def resolve_path(self, path_parts):
+        let curr = self.root
+        let i = 0
+        while i < len(path_parts):
+            let part = path_parts[i]
+            if !contains(curr.children, part):
+                return nil
+            curr = curr.children[part]
+            i = i + 1
+        return curr
+
+let vfs = VirtualFileSystem()
+
+print("Building VFS Directory Hierarchy:")
+# /etc/aether/kernel.conf
+let etc_dir = vfs.mkdir(vfs.root, "etc")
+let aether_dir = vfs.mkdir(etc_dir, "aether")
+let conf_file = vfs.touch(aether_dir, "kernel.conf", "quantum_threads=8\nmemory_limit_mb=4096\n")
+
+# /var/log/syslog
+let var_dir = vfs.mkdir(vfs.root, "var")
+let log_dir = vfs.mkdir(var_dir, "log")
+let syslog_file = vfs.touch(log_dir, "syslog", "[KERNEL BOOT] AETHER Microkernel Initialized OK.\n")
+
+print("\n[Path Resolution Query: '/etc/aether/kernel.conf']")
+let resolved = vfs.resolve_path(["etc", "aether", "kernel.conf"])
+assert(resolved != nil, "Path must resolve successfully")
+assert(resolved.is_dir == false, "Must resolve to a file inode")
+print("  ✓ Found Inode #" + str(resolved.inode_id) + " (" + resolved.name + ") with permissions mode: " + str(resolved.permissions))
+print("  ✓ Content Preview: " + resolved.content)
+
+print("\n[SUCCESS] Virtual File System Path Trie & Inode Resolution Verified! ✅")
+print("================================================================================")

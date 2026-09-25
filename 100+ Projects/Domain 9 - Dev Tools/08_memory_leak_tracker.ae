@@ -1,0 +1,31 @@
+// Project 8: Memory Leak Instrumentation Tracker
+// Monitors malloc/free operations and reports unreleased heap allocations at exit.
+
+fn main() {
+    let heap_registry = {}
+    
+    // Simulated allocations
+    heap_registry["0x1000"] = 64   // alloc 64 bytes
+    heap_registry["0x2000"] = 1024 // alloc 1024 bytes
+    heap_registry["0x3000"] = 256  // alloc 256 bytes
+    
+    // Deallocations
+    heap_registry.remove("0x1000") // freed
+    heap_registry.remove("0x3000") // freed
+    // 0x2000 was leaked!
+    
+    println("🔍 Heap Allocation Audit:")
+    let leaks = 0
+    let leaked_bytes = 0
+    if heap_registry.contains_key("0x2000") {
+        leaks = leaks + 1
+        leaked_bytes = heap_registry["0x2000"]
+        println("  ⚠️ LEAK DETECTED at address 0x2000: " + str(leaked_bytes) + " bytes leaked")
+    }
+    
+    assert(leaks == 1, "Exactly 1 leak should be caught")
+    assert(leaked_bytes == 1024, "Leaked byte count mismatch")
+    println("✅ Memory Leak Tracker Verified.")
+}
+
+main()

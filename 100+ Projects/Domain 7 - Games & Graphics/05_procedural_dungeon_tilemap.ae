@@ -1,0 +1,111 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 05: Procedural Dungeon Cave Generator (Cellular Automata)
+# ==============================================================================
+# Synthesizes organic subterranean dungeon caves via 2D Cellular Automata.
+# Executes 4-5 neighbor smoothing passes to carve navigable rooms and corridors.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🏰 [Domain 7 - Project 05] PROCEDURAL DUNGEON GENERATOR")
+print("================================================================================")
+
+let MAP_W = 10
+let MAP_H = 10
+
+def count_wall_neighbors(grid, r, c):
+    let count = 0
+    let dr = -1
+    let dc = -1
+    let nr = 0
+    let nc = 0
+
+    while dr <= 1:
+        dc = -1
+        while dc <= 1:
+            if !(dr == 0 and dc == 0):
+                nr = r + dr
+                nc = c + dc
+                if nr < 0 or nr >= MAP_H or nc < 0 or nc >= MAP_W:
+                    count = count + 1 # Borders count as walls
+                else:
+                    if grid[nr][nc] == 1:
+                        count = count + 1
+            dc = dc + 1
+        dr = dr + 1
+    return count
+
+def generate_cave(iterations):
+    # 1. Initialize with 45% wall probability
+    let grid = []
+    let r = 0
+    let c = 0
+    while r < MAP_H:
+        let row = []
+        c = 0
+        while c < MAP_W:
+            if r == 0 or r == MAP_H - 1 or c == 0 or c == MAP_W - 1:
+                row.append(1) # Solid outer perimeter
+            else:
+                if Math.random() < 0.45:
+                    row.append(1)
+                else:
+                    row.append(0)
+            c = c + 1
+        grid.append(row)
+        r = r + 1
+
+    print("Initial 10x10 Noise Map Initialized.")
+
+    # 2. Cellular Automata Smoothing Iterations
+    let it = 1
+    let new_grid = []
+    let walls = 0
+
+    while it <= iterations:
+        new_grid = []
+        r = 0
+        while r < MAP_H:
+            let next_row = []
+            c = 0
+            while c < MAP_W:
+                if r == 0 or r == MAP_H - 1 or c == 0 or c == MAP_W - 1:
+                    next_row.append(1)
+                else:
+                    walls = count_wall_neighbors(grid, r, c)
+                    if walls >= 5:
+                        next_row.append(1)
+                    else:
+                        next_row.append(0)
+                c = c + 1
+            new_grid.append(next_row)
+            r = r + 1
+        grid = new_grid
+        print("  Pass " + str(it) + "/" + str(iterations) + " Cellular Automata Smoothing complete.")
+        it = it + 1
+
+    print("\nRendered Dungeon Cave ASCII View (# = Wall, . = Floor):")
+    let pr = 0
+    let pc = 0
+    let floor_count = 0
+    while pr < MAP_H:
+        let line = "  "
+        pc = 0
+        while pc < MAP_W:
+            if grid[pr][pc] == 1:
+                line = line + "# "
+            else:
+                line = line + ". "
+                floor_count = floor_count + 1
+            pc = pc + 1
+        print(line)
+        pr = pr + 1
+
+    print("\nNavigable Floor Space: " + str(floor_count) + " / " + str(MAP_W * MAP_H) + " tiles.")
+    assert(floor_count > 10, "Procedural dungeon must contain open navigable floor space")
+    print("\n[SUCCESS] Procedural Dungeon Cave Generator Verified! ✅")
+
+generate_cave(3)
+print("================================================================================")

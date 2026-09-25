@@ -1,0 +1,120 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 01: 2D Verlet Numerical Integration Physics Engine
+# ==============================================================================
+# Simulates particle dynamics using Verlet position integration (x_new = 2*x - x_old + a*dt^2).
+# Features elastic distance constraints (rope/cloth link) and boundary collision.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🕹️ [Domain 7 - Project 01] 2D VERLET PHYSICS ENGINE")
+print("================================================================================")
+
+class Particle2D:
+    def __init__(self, x, y, pinned):
+        self.x = x
+        self.y = y
+        self.old_x = x
+        self.old_y = y
+        self.pinned = pinned
+
+class DistanceConstraint:
+    def __init__(self, p1, p2, target_length):
+        self.p1 = p1
+        self.p2 = p2
+        self.target_length = target_length
+
+class VerletWorld:
+    def __init__(self, gravity, ground_y):
+        self.particles = []
+        self.constraints = []
+        self.gravity = gravity
+        self.ground_y = ground_y
+
+    def add_particle(self, x, y, pinned):
+        let p = Particle2D(x, y, pinned)
+        self.particles.append(p)
+        return p
+
+    def add_constraint(self, p1, p2, target_dist):
+        let c = DistanceConstraint(p1, p2, target_dist)
+        self.constraints.append(c)
+        return c
+
+    def update(self, dt):
+        # 1. Verlet position update for all particles
+        let i = 0
+        let p = nil
+        let vx = 0.0
+        let vy = 0.0
+
+        while i < len(self.particles):
+            p = self.particles[i]
+            if !p.pinned:
+                vx = p.x - p.old_x
+                vy = p.y - p.old_y
+                p.old_x = p.x
+                p.old_y = p.y
+                p.x = p.x + vx
+                p.y = p.y + vy + self.gravity * (dt * dt)
+
+                # Ground collision clamp
+                if p.y > self.ground_y:
+                    p.y = self.ground_y
+                    p.old_y = self.ground_y + vy * 0.5 # restitution bounce
+            i = i + 1
+
+        # 2. Relax distance constraints
+        let c_idx = 0
+        let c = nil
+        let dx = 0.0
+        let dy = 0.0
+        let dist = 0.0
+        let diff = 0.0
+        let percent = 0.0
+        let off_x = 0.0
+        let off_y = 0.0
+
+        while c_idx < len(self.constraints):
+            c = self.constraints[c_idx]
+            dx = c.p2.x - c.p1.x
+            dy = c.p2.y - c.p1.y
+            dist = Math.sqrt(dx * dx + dy * dy)
+            if dist > 0.001:
+                diff = (dist - c.target_length) / dist
+                off_x = dx * 0.5 * diff
+                off_y = dy * 0.5 * diff
+
+                if !c.p1.pinned:
+                    c.p1.x = c.p1.x + off_x
+                    c.p1.y = c.p1.y + off_y
+                if !c.p2.pinned:
+                    c.p2.x = c.p2.x - off_x
+                    c.p2.y = c.p2.y - off_y
+            c_idx = c_idx + 1
+
+let world = VerletWorld(9.8, 100.0) # gravity = 9.8, ground at y = 100.0
+
+# Create a pendulum: Point A is pinned at (50, 0), Point B hangs at (50, 20) with length 20
+let anchor = world.add_particle(50.0, 0.0, true)
+let bob    = world.add_particle(70.0, 0.0, false) # Pulled right by 20 units
+world.add_constraint(anchor, bob, 20.0)
+
+print("Initialized Verlet Pendulum: Anchor at (50, 0), Bob at (70, 0) with target link length 20.0")
+
+# Simulate 5 physics frames
+let step = 1
+while step <= 5:
+    world.update(0.1)
+    let dx = bob.x - anchor.x
+    let dy = bob.y - anchor.y
+    let link_len = Math.sqrt(dx * dx + dy * dy)
+    print("  Frame " + str(step) + " -> Bob Position: (" + str(Math.round(bob.x, 2)) + ", " + str(Math.round(bob.y, 2)) + ") | Link Length: " + str(Math.round(link_len, 2)))
+    # Link length must be maintained by constraint solver within 1.0 margin
+    assert(link_len >= 19.0 and link_len <= 21.0, "Spring distance constraint violated")
+    step = step + 1
+
+print("\n[SUCCESS] 2D Verlet Numerical Integration & Distance Constraints Verified! ✅")
+print("================================================================================")

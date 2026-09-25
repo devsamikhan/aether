@@ -1,0 +1,86 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 06: 2D Particle FX Physics Emitter
+# ==============================================================================
+# Simulates a dynamic particle explosion/smoke FX emitter.
+# Simulates particle life cycles, gravity acceleration, velocity dampening,
+# and dead particle pool reclamation.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("✨ [Domain 7 - Project 06] 2D PARTICLE FX PHYSICS EMITTER")
+print("================================================================================")
+
+class Particle:
+    def __init__(self, x, y, vx, vy, lifespan):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.lifespan = lifespan
+        self.age = 0.0
+
+class ParticleEmitter:
+    def __init__(self, origin_x, origin_y, gravity):
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.gravity = gravity
+        self.particles = []
+
+    def burst(self, count):
+        let i = 0
+        let vx = 0.0
+        let vy = 0.0
+        let life = 0.0
+
+        while i < count:
+            # Radial burst velocity
+            vx = float(Math.random_int(0, 11) - 5)
+            vy = float(Math.random_int(0, 11) - 10) # Shoot upwards
+            life = 3.0 + Math.random() * 2.0
+            self.particles.append(Particle(self.origin_x, self.origin_y, vx, vy, life))
+            i = i + 1
+        print("  [Emitter Burst] Spawned " + str(count) + " particles at (" + str(self.origin_x) + ", " + str(self.origin_y) + ")")
+
+    def update(self, dt):
+        let surviving = []
+        let i = 0
+        let p = nil
+
+        while i < len(self.particles):
+            p = self.particles[i]
+            p.age = p.age + dt
+
+            if p.age < p.lifespan:
+                # Physics integration
+                p.vy = p.vy + self.gravity * dt
+                p.x = p.x + p.vx * dt
+                p.y = p.y + p.vy * dt
+                surviving.append(p)
+            i = i + 1
+
+        self.particles = surviving
+
+let emitter = ParticleEmitter(100.0, 100.0, 9.8)
+
+# Burst 10 particles
+emitter.burst(10)
+print("Initial Active Particle Pool: " + str(len(emitter.particles)))
+
+# Simulate 4 update ticks (dt = 0.5s)
+let step = 1
+while step <= 4:
+    emitter.update(0.5)
+    print("  Tick " + str(step) + " (t=" + str(float(step) * 0.5) + "s) -> Active Particles: " + str(len(emitter.particles)) + " | Lead Particle Pos: (" + str(Math.round(emitter.particles[0].x, 1)) + ", " + str(Math.round(emitter.particles[0].y, 1)) + ")")
+    step = step + 1
+
+# Advance time by 5.0 seconds to test particle death and cleanup
+print("\nAdvancing time by 5.0s (testing particle lifespan expiration)...")
+emitter.update(5.0)
+print("Remaining Active Particles: " + str(len(emitter.particles)) + " (All expired particles culled)")
+
+assert(len(emitter.particles) == 0, "All particles should have expired after 5s")
+print("\n[SUCCESS] 2D Particle FX Physics Emitter & Memory Culling Verified! ✅")
+print("================================================================================")

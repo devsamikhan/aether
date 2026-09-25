@@ -1,0 +1,100 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 08: Unsupervised Anomaly Detection Autoencoder
+# ==============================================================================
+# Compresses high-dimensional server telemetry into a low-dimensional bottleneck
+# latent space and evaluates reconstruction loss to flag zero-day cyber anomalies.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🛡️ [Domain 3 - Project 08] ANOMALY DETECTION AUTOENCODER")
+print("================================================================================")
+
+# Encoder weights: 4 inputs -> 2 latent bottleneck dimensions
+let W_enc = [
+    [0.5, 0.2],
+    [0.4, 0.3],
+    [0.1, 0.6],
+    [0.2, 0.5]
+]
+
+# Decoder weights: 2 latent -> 4 reconstructed outputs
+let W_dec = [
+    [0.6, 0.3, 0.1, 0.2],
+    [0.3, 0.4, 0.7, 0.6]
+]
+
+def encode(x):
+    let z = [0.0, 0.0]
+    let i = 0
+    while i < 4:
+        z[0] = z[0] + x[i] * W_enc[i][0]
+        z[1] = z[1] + x[i] * W_enc[i][1]
+        i = i + 1
+    return z
+
+def decode(z):
+    let x_hat = [0.0, 0.0, 0.0, 0.0]
+    let j = 0
+    while j < 4:
+        x_hat[j] = z[0] * W_dec[0][j] + z[1] * W_dec[1][j]
+        j = j + 1
+    return x_hat
+
+def reconstruction_loss(x, x_hat):
+    let mse = 0.0
+    let k = 0
+    while k < 4:
+        let diff = x[k] - x_hat[k]
+        mse = mse + diff * diff
+        k = k + 1
+    return mse / 4.0
+
+def run_autoencoder():
+    print("Autoencoder Topology: 4-D Telemetry -> 2-D Latent Bottleneck -> 4-D Reconstruction")
+    
+    # Normal server telemetry baseline (CPU, Memory, Disk, Network)
+    let normal_samples = [
+        [0.25, 0.30, 0.20, 0.35],
+        [0.28, 0.32, 0.22, 0.33],
+        [0.24, 0.29, 0.19, 0.36]
+    ]
+
+    print("\n[Baseline Evaluation] Computing Normal Operating Reconstruction Loss:")
+    let n_idx = 0
+    let max_normal_loss = 0.0
+    while n_idx < len(normal_samples):
+        let norm_x = normal_samples[n_idx]
+        let z = encode(norm_x)
+        let x_rec = decode(z)
+        let loss = reconstruction_loss(norm_x, x_rec)
+        print("  Sample #" + str(n_idx + 1) + " Loss: " + str(Math.round(loss, 5)))
+        if loss > max_normal_loss:
+            max_normal_loss = loss
+        n_idx = n_idx + 1
+
+    # Anomaly detection threshold set at 3x normal baseline
+    let threshold = max_normal_loss * 2.5
+    print("Calibrated Anomaly Threshold: " + str(Math.round(threshold, 5)))
+
+    # Injected DDoS / Cryptomining Anomaly
+    let anomaly_sample = [0.98, 0.95, 0.10, 0.99]
+    print("\n[Testing Incoming Telemetry Stream]:")
+    print("  Incoming Vector: " + str(anomaly_sample))
+    let anom_z = encode(anomaly_sample)
+    let anom_rec = decode(anom_z)
+    let anom_loss = reconstruction_loss(anomaly_sample, anom_rec)
+    print("  Reconstruction Loss: " + str(Math.round(anom_loss, 5)))
+
+    if anom_loss > threshold:
+        print("  🚨 ANOMALY CONFIRMED: Loss exceeds threshold by " + str(Math.round(anom_loss / threshold, 1)) + "x! Isolating node...")
+    else:
+        print("  Normal traffic pattern.")
+
+    assert(anom_loss > threshold, "Autoencoder must flag anomaly sample")
+    print("\n[SUCCESS] Unsupervised Anomaly Autoencoder Correctly Flagged Intrusion! ✅")
+
+run_autoencoder()
+print("================================================================================")

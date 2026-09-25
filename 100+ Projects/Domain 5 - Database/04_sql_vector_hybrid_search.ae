@@ -1,0 +1,124 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 04: Hybrid Relational-SQL & Vector Search Engine
+# ==============================================================================
+# Executes two-stage hybrid queries: Combines deterministic SQL predicates
+# (WHERE category = 'hardware' AND price <= 100) with semantic vector similarity ranking.
+# ==============================================================================
+
+from aether_vector import cosine_similarity
+import Math
+
+print("================================================================================")
+print("⚡ [Domain 5 - Project 04] HYBRID SQL-VECTOR DATABASE ENGINE")
+print("================================================================================")
+
+# Relational Catalog: Products with structured metadata and 3D semantic embeddings
+let catalog = [
+    {
+        "id": 1,
+        "name": "Quantum Optical Sensor",
+        "category": "quantum",
+        "price": 250.0,
+        "in_stock": true,
+        "embedding": [0.95, 0.10, 0.20]
+    },
+    {
+        "id": 2,
+        "name": "Cryogenic Dilution Refrigerator",
+        "category": "quantum",
+        "price": 850.0,
+        "in_stock": false,
+        "embedding": [0.90, 0.25, 0.15]
+    },
+    {
+        "id": 3,
+        "name": "Qubit Stabilizer Shield",
+        "category": "quantum",
+        "price": 310.0,
+        "in_stock": true,
+        "embedding": [0.88, 0.15, 0.30]
+    },
+    {
+        "id": 4,
+        "name": "High-Speed SSD Storage",
+        "category": "storage",
+        "price": 120.0,
+        "in_stock": true,
+        "embedding": [0.15, 0.90, 0.30]
+    },
+    {
+        "id": 5,
+        "name": "NVMe Flash Array",
+        "category": "storage",
+        "price": 450.0,
+        "in_stock": true,
+        "embedding": [0.10, 0.95, 0.25]
+    }
+]
+
+def hybrid_query(sql_category, max_price, query_vector):
+    print("Executing Hybrid Query:")
+    print("  SQL Predicate: WHERE category = '" + sql_category + "' AND price <= $" + str(max_price) + " AND in_stock = true")
+    print("  Vector Ranking: ORDER BY cosine_similarity(query_emb, item_emb) DESC")
+
+    # Stage 1: Relational Filter Scan
+    let filtered_candidates = []
+    let i = 0
+    while i < len(catalog):
+        let item = catalog[i]
+        if item["category"] == sql_category:
+            if item["price"] <= max_price:
+                if item["in_stock"] == true:
+                    filtered_candidates.append(item)
+        i = i + 1
+
+    print("\n[Stage 1: SQL Filter] Filtered Candidates: " + str(len(filtered_candidates)) + " items match criteria.")
+
+    # Stage 2: Vector Similarity Ranking
+    let ranked_results = []
+    let j = 0
+    while j < len(filtered_candidates):
+        let cand = filtered_candidates[j]
+        let sim = cosine_similarity(query_vector, cand["embedding"])
+        ranked_results.append({
+            "id": cand["id"],
+            "name": cand["name"],
+            "price": cand["price"],
+            "similarity": sim
+        })
+        j = j + 1
+
+    # Sort candidates by similarity (bubble sort for small result set)
+    let temp = nil
+    let p = 0
+    let q = 0
+    while p < len(ranked_results):
+        q = p + 1
+        while q < len(ranked_results):
+            if ranked_results[q]["similarity"] > ranked_results[p]["similarity"]:
+                temp = ranked_results[p]
+                ranked_results[p] = ranked_results[q]
+                ranked_results[q] = temp
+            q = q + 1
+        p = p + 1
+
+
+    print("\n[Stage 2: Semantic Re-Ranking Results]:")
+    let r_i = 0
+    while r_i < len(ranked_results):
+        let res = ranked_results[r_i]
+        print("  #" + str(r_i + 1) + " [" + str(Math.round(res["similarity"], 4)) + "] " + res["name"] + " ($" + str(res["price"]) + ")")
+        r_i = r_i + 1
+
+    return ranked_results
+
+# Search for "quantum photonics measurement" near [0.92, 0.12, 0.18] under $400
+let query_emb = [0.92, 0.12, 0.18]
+let search_results = hybrid_query("quantum", 400.0, query_emb)
+
+assert(len(search_results) == 2, "Expected 2 items after SQL filter")
+assert(search_results[0]["id"] == 1, "Quantum Optical Sensor should be top rank")
+
+print("\n[SUCCESS] Hybrid Relational-SQL & Vector Search Successfully Completed! ✅")
+print("================================================================================")

@@ -1,0 +1,59 @@
+// Project 1: Lexer & Tokenizer Engine
+// Tokenizes source code strings into a structured stream of typed tokens.
+
+fn tokenize(source) {
+    let tokens = []
+    let i = 0
+    let ch = ""
+    let word = ""
+    
+    while i < source.len() {
+        ch = source[i]
+        
+        if ch == " " || ch == "\t" || ch == "\n" {
+            // Skip whitespace
+            i = i + 1
+        } else if ch == "+" || ch == "-" || ch == "*" || ch == "/" || ch == "=" {
+            tokens.push({ "type": "OPERATOR", "val": ch })
+            i = i + 1
+        } else if ch == "(" || ch == ")" || ch == "{" || ch == "}" {
+            tokens.push({ "type": "PUNCT", "val": ch })
+            i = i + 1
+        } else {
+            // Accumulate alphanumeric token
+            word = ""
+            while i < source.len() && source[i] != " " && source[i] != "+" && source[i] != "-" && source[i] != "*" && source[i] != "/" && source[i] != "=" && source[i] != "(" && source[i] != ")" {
+                word = word + source[i]
+                i = i + 1
+            }
+            if word == "let" || word == "fn" || word == "return" {
+                tokens.push({ "type": "KEYWORD", "val": word })
+            } else {
+                tokens.push({ "type": "IDENT", "val": word })
+            }
+        }
+    }
+    return tokens
+}
+
+fn main() {
+    let code = "let total = a + 42"
+    let stream = tokenize(code)
+    
+    println("🔍 Tokenized Stream:")
+    let i = 0
+    let tok = nil
+    while i < stream.len() {
+        tok = stream[i]
+        println("  [" + tok["type"] + "] '" + tok["val"] + "'")
+        i = i + 1
+    }
+    
+    assert(stream.len() == 5, "Expected exactly 5 tokens")
+    assert(stream[0]["type"] == "KEYWORD", "Token 0 must be KEYWORD let")
+    assert(stream[1]["val"] == "total", "Token 1 identifier mismatch")
+    assert(stream[2]["type"] == "OPERATOR", "Token 2 must be '=' operator")
+    println("✅ Lexer & Tokenizer Verified.")
+}
+
+main()

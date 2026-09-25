@@ -1,0 +1,91 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 03: M:N Fiber Work-Stealing Task Scheduler
+# ==============================================================================
+# Implements the Chase-Lev style work-stealing algorithm across virtual CPU cores.
+# Idle cores steal pending fiber fibers from the victim core's deque.
+# ==============================================================================
+
+print("================================================================================")
+print("⚡ [Domain 6 - Project 03] M:N FIBER WORK-STEALING TASK SCHEDULER")
+print("================================================================================")
+
+class CoreWorker:
+    def __init__(self, core_id):
+        self.core_id = core_id
+        self.deque = []
+        self.executed_count = 0
+
+    def push_task(self, task_name):
+        self.deque.append(task_name)
+
+    def pop_local(self):
+        # LIFO local execution for cache locality
+        if len(self.deque) > 0:
+            let task = self.deque[len(self.deque) - 1]
+            self.deque.pop()
+            self.executed_count = self.executed_count + 1
+            return task
+        return nil
+
+    def steal_task(self):
+        # FIFO work-stealing from opposite end
+        if len(self.deque) > 0:
+            let task = self.deque[0]
+            let s = 0
+            while s < len(self.deque) - 1:
+                self.deque[s] = self.deque[s + 1]
+                s = s + 1
+            self.deque.pop()
+            return task
+        return nil
+
+def run_work_stealing_simulation():
+    let core0 = CoreWorker(0)
+    let core1 = CoreWorker(1)
+
+    print("Populating Core 0 with 6 Work-Heavy Fibers (Core 1 is Idle):")
+    core0.push_task("Fiber_Task_A")
+    core0.push_task("Fiber_Task_B")
+    core0.push_task("Fiber_Task_C")
+    core0.push_task("Fiber_Task_D")
+    core0.push_task("Fiber_Task_E")
+    core0.push_task("Fiber_Task_F")
+
+    print("  Core 0 Backlog: " + str(len(core0.deque)) + " tasks")
+    print("  Core 1 Backlog: " + str(len(core1.deque)) + " tasks (Starved)")
+
+    print("\n[Scheduler Dispatch Loop with Dynamic Work Stealing]:")
+    let round = 1
+    let t_c0 = nil
+    let t_c1 = nil
+    let stolen = nil
+
+    while len(core0.deque) > 0 or len(core1.deque) > 0:
+        # Core 0 executes local task
+        t_c0 = core0.pop_local()
+        if t_c0 != nil:
+            print("  [Round " + str(round) + "] Core 0 executed local task: '" + t_c0 + "'")
+
+        # Core 1 checks local deque; if empty, steals from Core 0
+        t_c1 = core1.pop_local()
+        if t_c1 == nil:
+            # Work Stealing
+            stolen = core0.steal_task()
+            if stolen != nil:
+                core1.executed_count = core1.executed_count + 1
+                print("  [Round " + str(round) + "] Core 1 STOLE & executed task: '" + stolen + "' from Core 0!")
+        round = round + 1
+
+    print("\n[Execution Statistics]:")
+    print("  Core 0 Executed Tasks: " + str(core0.executed_count))
+    print("  Core 1 Executed Tasks: " + str(core1.executed_count))
+
+    assert(core0.executed_count > 0, "Core 0 must execute tasks")
+    assert(core1.executed_count > 0, "Core 1 must have stolen and executed tasks")
+    assert(core0.executed_count + core1.executed_count == 6, "All 6 tasks must complete")
+
+    print("\n[SUCCESS] M:N Fiber Work-Stealing Task Scheduler Verified! ✅")
+
+run_work_stealing_simulation()
+print("================================================================================")

@@ -1,0 +1,93 @@
+// Project 3: Cellular Automata Universe (2D Life Simulator)
+// Models an evolving grid universe following Conway local transition rules.
+
+fn count_neighbors(grid, w, h, x, y) {
+    let count = 0
+    let dx = -1
+    let dy = -1
+    let nx = 0
+    let ny = 0
+    while dx <= 1 {
+        dy = -1
+        while dy <= 1 {
+            if !(dx == 0 && dy == 0) {
+                nx = x + dx
+                ny = y + dy
+                if nx >= 0 && nx < w && ny >= 0 && ny < h {
+                    if grid[ny * w + nx] == 1 {
+                        count = count + 1
+                    }
+                }
+            }
+            dy = dy + 1
+        }
+        dx = dx + 1
+    }
+    return count
+}
+
+fn step_universe(grid, w, h) {
+    let next_grid = []
+    let y = 0
+    let x = 0
+    let n = 0
+    let cell = 0
+    while y < h {
+        x = 0
+        while x < w {
+            cell = grid[y * w + x]
+            n = count_neighbors(grid, w, h, x, y)
+            if cell == 1 {
+                if n == 2 || n == 3 {
+                    next_grid.push(1)
+                } else {
+                    next_grid.push(0)
+                }
+            } else {
+                if n == 3 {
+                    next_grid.push(1)
+                } else {
+                    next_grid.push(0)
+                }
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+    return next_grid
+}
+
+fn main() {
+    let w = 5
+    let h = 5
+    let grid = [
+        0, 0, 0, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 0, 0
+    ] // Blinker oscillator
+    
+    let gen = 0
+    let active_cells = 0
+    let i = 0
+    while gen < 2 {
+        grid = step_universe(grid, w, h)
+        gen = gen + 1
+    }
+    
+    i = 0
+    while i < grid.len() {
+        if grid[i] == 1 { active_cells = active_cells + 1 }
+        i = i + 1
+    }
+    
+    println("🧬 Cellular Automata Universe (Blinker Period 2):")
+    println("  Generation 2 Active Cells: " + str(active_cells))
+    
+    // Blinker should maintain 3 active cells after 2 ticks
+    assert(active_cells == 3, "Oscillator active cells mismatch")
+    println("✅ Cellular Automata Universe Verified.")
+}
+
+main()

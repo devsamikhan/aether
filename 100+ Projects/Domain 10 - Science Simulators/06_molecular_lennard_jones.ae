@@ -1,0 +1,28 @@
+// Project 6: Molecular Dynamics Lennard-Jones Potential
+// Calculates inter-atomic van der Waals forces via standard 12-6 potential: V(r) = 4*eps*((sig/r)^12 - (sig/r)^6).
+
+fn main() {
+    let epsilon = 1.0
+    let sigma = 1.0
+    let r = 1.122462 // Minimum potential equilibrium distance (2^(1/6) * sigma)
+    
+    let s_over_r = sigma / r
+    let sr6 = pow(s_over_r, 6)
+    let sr12 = sr6 * sr6
+    
+    let potential_v = 4.0 * epsilon * (sr12 - sr6)
+    
+    // Force F = -dV/dr = 24*eps/r * (2*(sig/r)^12 - (sig/r)^6)
+    let force_f = (24.0 * epsilon / r) * (2.0 * sr12 - sr6)
+    
+    println("⚛️ Lennard-Jones Molecular Interaction:")
+    println("  Inter-atomic distance r: " + str(r))
+    println("  Potential Energy V(r):   " + str(potential_v))
+    println("  Restoring Force F(r):    " + str(force_f))
+    
+    assert(abs(potential_v - (-1.0)) < 0.01, "Equilibrium potential should reach minimum -epsilon = -1.0")
+    assert(abs(force_f) < 0.05, "Equilibrium net inter-atomic force should be close to 0")
+    println("✅ Molecular Lennard-Jones Verified.")
+}
+
+main()

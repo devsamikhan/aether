@@ -1,0 +1,84 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 09: IPv4 CIDR Network Packet Router (LPM)
+# ==============================================================================
+# Simulates an IP packet routing core. Implements Longest Prefix Match (LPM)
+# forwarding, Next-Hop gateway resolution, and hop-by-hop TTL decrementing.
+# ==============================================================================
+
+print("================================================================================")
+print("🌐 [Domain 6 - Project 09] IPV4 CIDR PACKET ROUTER (LPM)")
+print("================================================================================")
+
+class RouteEntry:
+    def __init__(self, prefix, mask_bits, next_hop, iface):
+        self.prefix = prefix
+        self.mask_bits = mask_bits
+        self.next_hop = next_hop
+        self.iface = iface
+
+class PacketRouter:
+    def __init__(self):
+        self.routes = []
+
+    def add_route(self, prefix, mask_bits, next_hop, iface):
+        self.routes.append(RouteEntry(prefix, mask_bits, next_hop, iface))
+        print("  [Route Installed] " + prefix + "/" + str(mask_bits) + " via " + next_hop + " (" + iface + ")")
+
+    def route_packet(self, dest_ip, ttl):
+        print("\nRouting Packet to " + dest_ip + " (TTL = " + str(ttl) + "):")
+        
+        # 1. TTL Check
+        if ttl <= 1:
+            print("  🚨 TTL EXPIRED in Transit! Dropped (ICMP Time-to-Live Exceeded).")
+            return nil
+        
+        let new_ttl = ttl - 1
+
+        # 2. Longest Prefix Match: find matching route with maximum mask_bits
+        let best_route = nil
+        let best_mask = -1
+        let i = 0
+
+        while i < len(self.routes):
+            let r = self.routes[i]
+            # Match prefix string
+            if contains(dest_ip, r.prefix) or r.prefix == "0.0.0.0":
+                if r.mask_bits > best_mask:
+                    best_mask = r.mask_bits
+                    best_route = r
+            i = i + 1
+
+        if best_route != nil:
+            print("  ✓ LPM Matched: " + best_route.prefix + "/" + str(best_route.mask_bits) + " -> Outgoing Interface '" + best_route.iface + "' (Next-Hop: " + best_route.next_hop + ", New TTL: " + str(new_ttl) + ")")
+            return best_route
+        else:
+            print("  🚨 No Route to Host!")
+            return nil
+
+let router = PacketRouter()
+
+print("Populating Kernel Forwarding Information Base (FIB):")
+router.add_route("192.168.1.", 24, "192.168.1.1", "eth0 (Local LAN)")
+router.add_route("192.168.",   16, "192.168.0.1", "eth1 (Enterprise Subnet)")
+router.add_route("10.",        8,  "10.0.0.1",    "wg0 (VPN Tunnel)")
+router.add_route("0.0.0.0",    0,  "172.16.1.1",  "wan0 (Default Gateway)")
+
+# Route 1: Specific Local LAN 192.168.1.50 -> Should match /24 (eth0), not /16
+let r1 = router.route_packet("192.168.1.50", 64)
+assert(r1.iface == "eth0 (Local LAN)", "Expected LPM match on /24")
+
+# Route 2: Enterprise Subnet 192.168.5.10 -> Should match /16 (eth1)
+let r2 = router.route_packet("192.168.5.10", 64)
+assert(r2.iface == "eth1 (Enterprise Subnet)", "Expected LPM match on /16")
+
+# Route 3: Public IP 8.8.8.8 -> Should match Default Gateway /0 (wan0)
+let r3 = router.route_packet("8.8.8.8", 64)
+assert(r3.iface == "wan0 (Default Gateway)", "Expected default gateway match")
+
+# Route 4: Packet with TTL=1 -> Dropped
+let r4 = router.route_packet("192.168.1.50", 1)
+assert(r4 == nil, "Packet with TTL <= 1 must be dropped")
+
+print("\n[SUCCESS] IPv4 CIDR Longest Prefix Match Packet Router Verified! ✅")
+print("================================================================================")

@@ -1,0 +1,28 @@
+// Project 7: Constant Folding Optimizer
+// Evaluates compile-time deterministic arithmetic expressions into immediate constants.
+
+fn fold_add(a_is_const, a_val, b_is_const, b_val) {
+    if a_is_const && b_is_const {
+        return { "is_const": true, "val": a_val + b_val }
+    }
+    return { "is_const": false, "val": 0 }
+}
+
+fn main() {
+    // Expression: 10 + 25 (both known constants)
+    let res1 = fold_add(true, 10, true, 25)
+    
+    // Expression: x + 15 (x is runtime variable)
+    let res2 = fold_add(false, 0, true, 15)
+    
+    println("⚡ Constant Folding Pass:")
+    println("  Folded constant: " + str(res1["val"]) + " (is_const: " + str(res1["is_const"]) + ")")
+    println("  Dynamic fallback: is_const = " + str(res2["is_const"]))
+    
+    assert(res1["is_const"] == true, "Expression should fold at compile time")
+    assert(res1["val"] == 35, "Constant addition result incorrect")
+    assert(res2["is_const"] == false, "Dynamic variable fold must remain runtime")
+    println("✅ Constant Folding Optimizer Verified.")
+}
+
+main()

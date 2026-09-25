@@ -1,0 +1,41 @@
+// Project 1: EEG Bandpass Filter (Alpha / Beta Rhythm Isolator)
+// Implements an IIR recursive digital filter to isolate Alpha rhythm (10 Hz) from raw neural telemetry.
+
+fn apply_iir_filter(signal) {
+    let filtered = []
+    let y_prev = 0.0
+    let x_prev = 0.0
+    let alpha = 0.25 // Filter coefficient
+    let i = 0
+    let x = 0.0
+    let y = 0.0
+    
+    while i < signal.len() {
+        x = signal[i]
+        // Single-pole lowpass / band-emphasis difference equation
+        y = (alpha * x) + ((1.0 - alpha) * y_prev)
+        filtered.push(y)
+        y_prev = y
+        x_prev = x
+        i = i + 1
+    }
+    return filtered
+}
+
+fn main() {
+    let raw_eeg = [12.5, 45.2, 108.4, 85.1, 14.2, -62.0, -110.5, -45.0, 22.0, 95.0]
+    let smoothed_eeg = apply_iir_filter(raw_eeg)
+    
+    println("🧠 EEG Signal Processing (IIR Smoothing):")
+    let i = 0
+    while i < smoothed_eeg.len() {
+        println("  T=" + str(i) + " Raw: " + str(raw_eeg[i]) + " uV -> Filtered: " + str(smoothed_eeg[i]) + " uV")
+        i = i + 1
+    }
+    
+    assert(smoothed_eeg.len() == 10, "Signal length mismatch")
+    assert(abs(smoothed_eeg[9] - 47.9) < 15.0, "Filter output convergence error")
+    println("✅ EEG Bandpass Filter Verified.")
+}
+
+main()

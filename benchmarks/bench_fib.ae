@@ -1,0 +1,10 @@
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+let t0 = time()
+let res = fib(30)
+let t1 = time()
+println("Fib Result:", res)
+println("Time:", (t1 - t0) * 1000.0, "ms")

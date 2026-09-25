@@ -1,0 +1,75 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 04: Lock-Free Circular Ring-Buffer IPC Pipe
+# ==============================================================================
+# Simulates a high-throughput kernel Inter-Process Communication (IPC) pipe.
+# Implements circular ring-buffer semantics, head/tail wrap-around arithmetic,
+# and non-blocking backpressure handling.
+# ==============================================================================
+
+print("================================================================================")
+print("🔄 [Domain 6 - Project 04] CIRCULAR RING-BUFFER IPC PIPE")
+print("================================================================================")
+
+class RingBufferPipe:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.buffer = []
+        let i = 0
+        while i < capacity:
+            self.buffer.append(nil)
+            i = i + 1
+        self.head = 0 # Read pointer
+        self.tail = 0 # Write pointer
+        self.count = 0
+
+    def write(self, packet):
+        if self.count == self.capacity:
+            print("  ⚠️ Pipe Backpressure: Buffer Full (" + str(self.count) + "/" + str(self.capacity) + "). Dropping packet '" + packet + "'")
+            return false
+
+        self.buffer[self.tail] = packet
+        self.tail = (self.tail + 1) % self.capacity
+        self.count = self.count + 1
+        print("  [Producer -> Pipe] Wrote '" + packet + "' (Queue Depth: " + str(self.count) + "/" + str(self.capacity) + ")")
+        return true
+
+    def read(self):
+        if self.count == 0:
+            return nil
+
+        let packet = self.buffer[self.head]
+        self.buffer[self.head] = nil
+        self.head = (self.head + 1) % self.capacity
+        self.count = self.count - 1
+        print("  [Consumer <- Pipe] Read '" + packet + "' (Remaining: " + str(self.count) + ")")
+        return packet
+
+let pipe = RingBufferPipe(4) # 4-packet ring buffer
+
+print("1. Producer writing 4 packets to fill capacity:")
+pipe.write("Packet_1: TCP_SYN")
+pipe.write("Packet_2: TLS_HELLO")
+pipe.write("Packet_3: HTTP_GET")
+pipe.write("Packet_4: DATA_CHUNK")
+
+# Attempt overflow write
+print("\n2. Attempting write to full buffer (Backpressure test):")
+let ok = pipe.write("Packet_5: OVERFLOW_DROP")
+assert(ok == false, "Overflow write must be rejected")
+
+# Consumer reads 2 packets
+print("\n3. Consumer drains 2 packets:")
+let p1 = pipe.read()
+let p2 = pipe.read()
+assert(p1 == "Packet_1: TCP_SYN", "FIFO order must be preserved")
+assert(p2 == "Packet_2: TLS_HELLO", "FIFO order must be preserved")
+
+# Producer writes 2 more packets, testing wrap-around pointers
+print("\n4. Producer writes 2 more packets (testing ring wrap-around):")
+pipe.write("Packet_6: ACK")
+pipe.write("Packet_7: FIN")
+
+assert(pipe.count == 4, "Pipe count must now be 4")
+print("\n[SUCCESS] Circular Ring-Buffer IPC Pipe Semantics Verified! ✅")
+print("================================================================================")

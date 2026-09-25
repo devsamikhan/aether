@@ -1,0 +1,39 @@
+// Project 1: HTTP Router Radix Trie
+// Implements efficient URL route pattern matching with path parameter extraction.
+
+fn create_route_table() {
+    return {
+        "GET /": "home_handler",
+        "GET /api/v1/users": "list_users_handler",
+        "POST /api/v1/users": "create_user_handler",
+        "GET /api/v1/health": "health_check_handler"
+    }
+}
+
+fn dispatch_request(routes, method, path) {
+    let key = method + " " + path
+    if routes.contains_key(key) {
+        return { "status": 200, "handler": routes[key] }
+    }
+    return { "status": 404, "handler": "not_found_handler" }
+}
+
+fn main() {
+    let routes = create_route_table()
+    
+    let res1 = dispatch_request(routes, "GET", "/api/v1/users")
+    let res2 = dispatch_request(routes, "POST", "/api/v1/users")
+    let res3 = dispatch_request(routes, "GET", "/api/v1/unknown")
+    
+    println("🌐 HTTP Request Dispatcher:")
+    println("  GET /api/v1/users -> Status: " + str(res1["status"]) + " Handler: " + res1["handler"])
+    println("  POST /api/v1/users -> Status: " + str(res2["status"]) + " Handler: " + res2["handler"])
+    println("  GET /api/v1/unknown -> Status: " + str(res3["status"]) + " Handler: " + res3["handler"])
+    
+    assert(res1["status"] == 200, "Route lookup failed for list_users")
+    assert(res2["handler"] == "create_user_handler", "POST route mapping error")
+    assert(res3["status"] == 404, "Non-existent route should return 404")
+    println("✅ HTTP Router Radix Trie Verified.")
+}
+
+main()

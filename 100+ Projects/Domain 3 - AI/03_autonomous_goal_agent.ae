@@ -1,0 +1,96 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 03: Autonomous Goal-Seeking Planning Agent (GOAP)
+# ==============================================================================
+# Implements Goal-Oriented Action Planning (GOAP) for autonomous agents.
+# Formulates action preconditions, symbolic state transitions, and resolves
+# a multi-step causal plan to reach target goal states.
+# ==============================================================================
+
+print("================================================================================")
+print("🤖 [Domain 3 - Project 03] AUTONOMOUS GOAL-SEEKING AGENT")
+print("================================================================================")
+
+class Action:
+    def __init__(self, name, cost, preconditions, effects):
+        self.name = name
+        self.cost = cost
+        self.preconditions = preconditions
+        self.effects = effects
+
+def can_execute(action, state):
+    let pre = action.preconditions
+    let keys = ["has_axe", "has_wood", "has_matches", "fire_lit", "warm"]
+    let i = 0
+    while i < len(keys):
+        let k = keys[i]
+        if contains(pre, k):
+            if state[k] != pre[k]:
+                return false
+        i = i + 1
+    return true
+
+def apply_effects(action, state):
+    let eff = action.effects
+    let keys = ["has_axe", "has_wood", "has_matches", "fire_lit", "warm"]
+    let i = 0
+    while i < len(keys):
+        let k = keys[i]
+        if contains(eff, k):
+            state[k] = eff[k]
+        i = i + 1
+
+def run_planner():
+    # Initial World State
+    let state = {
+        "has_axe": false,
+        "has_wood": false,
+        "has_matches": true,
+        "fire_lit": false,
+        "warm": false
+    }
+
+    # Action library
+    let actions = [
+        Action("Craft_Axe", 2, {"has_axe": false}, {"has_axe": true}),
+        Action("Chop_Wood", 3, {"has_axe": true, "has_wood": false}, {"has_wood": true}),
+        Action("Ignite_Campfire", 1, {"has_wood": true, "has_matches": true, "fire_lit": false}, {"fire_lit": true}),
+        Action("Warm_Up", 1, {"fire_lit": true, "warm": false}, {"warm": true})
+    ]
+
+    print("Initial World State: " + str(state))
+    print("Target Goal State:  warm = true")
+
+    print("\nSynthesizing Autonomous Action Sequence:")
+    let plan = []
+    let step = 0
+    while step < 10:
+        if state["warm"] == true:
+            break
+
+        # Greedy action selector: pick first executable valid action
+        let act_idx = 0
+        let executed = false
+        while act_idx < len(actions):
+            let act = actions[act_idx]
+            if can_execute(act, state):
+                apply_effects(act, state)
+                plan.append(act.name)
+                print("  Step " + str(len(plan)) + ": Executed '" + act.name + "' -> Updated State: warm=" + str(state["warm"]) + ", has_wood=" + str(state["has_wood"]))
+
+                executed = true
+                break
+            act_idx = act_idx + 1
+
+        if !executed:
+            print("  🚨 Planner Stalled: No executable action found.")
+            break
+
+        step = step + 1
+
+    print("\nGenerated Plan: " + str(plan))
+    assert(state["warm"] == true, "Agent must achieve goal state warm=true")
+    print("\n[SUCCESS] Autonomous Agent Successfully Formulated Plan & Achieved Goal! ✅")
+
+run_planner()
+print("================================================================================")

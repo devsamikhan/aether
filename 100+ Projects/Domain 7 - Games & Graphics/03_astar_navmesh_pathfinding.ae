@@ -1,0 +1,139 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 03: A* (A-Star) NavMesh Pathfinding Engine
+# ==============================================================================
+# Implements the A* heuristic search algorithm on an obstacle navigation mesh.
+# Computes Manhattan distance heuristics, manages open/closed priority sets,
+# and reconstructs the optimal collision-free waypoint trajectory.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🗺️ [Domain 7 - Project 03] A* (A-STAR) NAVMESH PATHFINDER")
+print("================================================================================")
+
+# 5x5 Grid: 0 = Walkable, 1 = Wall Obstacle
+let grid = [
+    [0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0], # Wall barrier across row 1
+    [0, 0, 0, 1, 0],
+    [1, 1, 0, 1, 0],
+    [0, 0, 0, 0, 0]
+]
+let GRID_SIZE = 5
+
+def manhattan_h(r, c, target_r, target_c):
+    let dr = target_r - r
+    let dc = target_c - c
+    if dr < 0:
+        dr = 0 - dr
+    if dc < 0:
+        dc = 0 - dc
+    return dr + dc
+
+def run_astar(start_r, start_c, target_r, target_c):
+    print("NavMesh Map: 5x5 Grid (Obstacles Marked)")
+    print("Start Waypoint:  (" + str(start_r) + ", " + str(start_c) + ")")
+    print("Target Objective: (" + str(target_r) + ", " + str(target_c) + ")")
+
+    let open_set = [[start_r, start_c, 0, manhattan_h(start_r, start_c, target_r, target_c)]]
+    let closed_set = {}
+    let came_from = {}
+
+    let found_target = false
+    let current = nil
+    let best_idx = 0
+    let best_f = 999999
+    let i = 0
+    let r = 0
+    let c = 0
+    let g = 0
+    let key = ""
+    let neighbors = []
+    let n_idx = 0
+    let nr = 0
+    let nc = 0
+    let n_key = ""
+    let tentative_g = 0
+    let h = 0
+
+    while len(open_set) > 0:
+        # Find node with lowest f = g + h in open_set
+        best_idx = 0
+        best_f = open_set[0][2] + open_set[0][3]
+        i = 1
+        while i < len(open_set):
+            let f_val = open_set[i][2] + open_set[i][3]
+            if f_val < best_f:
+                best_f = f_val
+                best_idx = i
+            i = i + 1
+
+        current = open_set[best_idx]
+        r = current[0]
+        c = current[1]
+        g = current[2]
+
+        # Pop best_idx
+        let s = best_idx
+        while s < len(open_set) - 1:
+            open_set[s] = open_set[s + 1]
+            s = s + 1
+        open_set.pop()
+
+        if r == target_r and c == target_c:
+            found_target = true
+            break
+
+        key = str(r) + "," + str(c)
+        closed_set[key] = true
+
+        # Explore 4 orthogonal neighbors: (r-1, c), (r+1, c), (r, c-1), (r, c+1)
+        neighbors = [
+            [r - 1, c],
+            [r + 1, c],
+            [r, c - 1],
+            [r, c + 1]
+        ]
+        n_idx = 0
+        while n_idx < len(neighbors):
+            nr = neighbors[n_idx][0]
+            nc = neighbors[n_idx][1]
+            n_key = str(nr) + "," + str(nc)
+
+            # In bounds and not wall
+            if nr >= 0 and nr < GRID_SIZE and nc >= 0 and nc < GRID_SIZE:
+                if grid[nr][nc] == 0 and !contains(closed_set, n_key):
+                    tentative_g = g + 1
+                    h = manhattan_h(nr, nc, target_r, target_c)
+                    open_set.append([nr, nc, tentative_g, h])
+                    came_from[n_key] = [r, c]
+            n_idx = n_idx + 1
+
+    print("\n[A* Path Reconstruction]:")
+    assert(found_target, "A* must find path to target")
+    
+    # Reconstruct path from target back to start
+    let path = []
+    let curr_pt = [target_r, target_c]
+    path.append(curr_pt)
+
+    while curr_pt[0] != start_r or curr_pt[1] != start_c:
+        let p_k = str(curr_pt[0]) + "," + str(curr_pt[1])
+        if contains(came_from, p_k):
+            curr_pt = came_from[p_k]
+            path.append(curr_pt)
+        else:
+            break
+
+    print("  Optimal Waypoint Trajectory (" + str(len(path)) + " steps):")
+    let p_i = len(path) - 1
+    while p_i >= 0:
+        print("    -> (" + str(path[p_i][0]) + ", " + str(path[p_i][1]) + ")")
+        p_i = p_i - 1
+
+    print("\n[SUCCESS] A* NavMesh Pathfinding Engine Found Optimal Route Around Walls! ✅")
+
+run_astar(0, 0, 4, 4)
+print("================================================================================")

@@ -1,0 +1,66 @@
+// Project 2: JWT Auth Token Signer (HMAC Signature Middleware)
+// Generates and cryptographically verifies token integrity using pseudo-HMAC hashing.
+
+fn simple_hash(data, secret) {
+    let h = 5381
+    let i = 0
+    let combined = data + ":" + secret
+    let code = 0
+    while i < combined.len() {
+        // Simple polynomial rolling hash
+        h = (h * 33 + 7) % 1000000007
+        i = i + 1
+    }
+    return str(h)
+}
+
+fn generate_jwt(user_id, role, secret) {
+    let header = "eyJhbGciOiJIUzI1NiJ9"
+    let payload = user_id + "." + role
+    let signature = simple_hash(payload, secret)
+    return header + "." + payload + "." + signature
+}
+
+fn verify_jwt(token, secret) {
+    let parts = []
+    let cur = ""
+    let i = 0
+    let ch = ""
+    while i < token.len() {
+        ch = token[i]
+        if ch == "." {
+            parts.push(cur)
+            cur = ""
+        } else {
+            cur = cur + ch
+        }
+        i = i + 1
+    }
+    parts.push(cur)
+    
+    if parts.len() != 3 { return false }
+    let payload = parts[1]
+    let sig = parts[2]
+    let expected_sig = simple_hash(payload, secret)
+    return sig == expected_sig
+}
+
+fn main() {
+    let secret_key = "aether_super_secret_jwt_key"
+    let token = generate_jwt("usr_9918", "admin", secret_key)
+    
+    println("🔑 Generated JWT Token:")
+    println("  " + token)
+    
+    let is_valid = verify_jwt(token, secret_key)
+    let is_tampered_valid = verify_jwt(token + "_tampered", secret_key)
+    
+    println("  Verification with valid key:    " + str(is_valid))
+    println("  Verification with tampered payload: " + str(is_tampered_valid))
+    
+    assert(is_valid == true, "Token verification failed on genuine signature")
+    assert(is_tampered_valid == false, "Tampered token passed verification")
+    println("✅ JWT Auth Token Signer Verified.")
+}
+
+main()

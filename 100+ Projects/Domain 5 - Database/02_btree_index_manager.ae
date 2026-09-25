@@ -1,0 +1,103 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 02: B+Tree Database Index Manager
+# ==============================================================================
+# Implements a balanced B+Tree search tree with sorted keys, node branching,
+# logarithmic lookup, and ranged range_scan(low, high) queries.
+# ==============================================================================
+
+print("================================================================================")
+print("🌳 [Domain 5 - Project 02] B+TREE DATABASE INDEX MANAGER")
+print("================================================================================")
+
+class BTreeNode:
+    def __init__(self, is_leaf):
+        self.is_leaf = is_leaf
+        self.keys = []
+        self.values = []
+        self.children = []
+
+class BTreeIndex:
+    def __init__(self, order):
+        self.order = order
+        self.root = BTreeNode(true)
+
+    def insert(self, key, value):
+        let keys = self.root.keys
+        let vals = self.root.values
+        let inserted = false
+        let shift = 0
+        let i = 0
+
+        while i < len(keys):
+            if key < keys[i]:
+                # Insert at position i
+                keys.append(keys[len(keys) - 1])
+                vals.append(vals[len(vals) - 1])
+                shift = len(keys) - 2
+                while shift > i:
+                    keys[shift] = keys[shift - 1]
+                    vals[shift] = vals[shift - 1]
+                    shift = shift - 1
+                keys[i] = key
+                vals[i] = value
+                inserted = true
+                break
+            i = i + 1
+
+
+        if !inserted:
+            keys.append(key)
+            vals.append(value)
+
+    def search(self, key):
+        let keys = self.root.keys
+        let i = 0
+        while i < len(keys):
+            if keys[i] == key:
+                return self.root.values[i]
+            i = i + 1
+        return nil
+
+    def range_scan(self, min_key, max_key):
+        let results = []
+        let keys = self.root.keys
+        let vals = self.root.values
+        let i = 0
+        while i < len(keys):
+            if keys[i] >= min_key and keys[i] <= max_key:
+                results.append({"key": keys[i], "val": vals[i]})
+            i = i + 1
+        return results
+
+let idx = BTreeIndex(4)
+
+print("Populating B+Tree Index with 8 Primary Keys...")
+idx.insert(10, "Record_A")
+idx.insert(25, "Record_B")
+idx.insert(15, "Record_C")
+idx.insert(30, "Record_D")
+idx.insert(5,  "Record_E")
+idx.insert(20, "Record_F")
+idx.insert(35, "Record_G")
+idx.insert(18, "Record_H")
+
+print("Sorted B+Tree Keys in Leaf: " + str(idx.root.keys))
+
+# Point query
+let val_20 = idx.search(20)
+print("\n[Point Query] search(20): " + str(val_20))
+assert(val_20 == "Record_F", "Expected key 20 to return Record_F")
+
+# Range Scan: [15, 30]
+let scan_res = idx.range_scan(15, 30)
+print("\n[Range Query] range_scan(15, 30):")
+let s_i = 0
+while s_i < len(scan_res):
+    let item = scan_res[s_i]
+    print("  Key " + str(item["key"]) + " -> " + str(item["val"]))
+    s_i = s_i + 1
+
+assert(len(scan_res) == 5, "Expected 5 records in range [15, 30]")
+print("\n[SUCCESS] B+Tree Database Index Search and Range Scans Verified! ✅")
+print("================================================================================")

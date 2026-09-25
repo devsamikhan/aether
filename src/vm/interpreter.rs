@@ -1494,14 +1494,18 @@ impl VM {
                     OpCode::BuildMap => {
                         let count = frame.function.chunk.read_u16(frame.ip) as usize;
                         frame.ip += 2;
-                        let mut map = HashMap::new();
+                        let mut map = HashMap::with_capacity(count);
                         let start = self.stack.len() - (count * 2);
-                        let pairs: Vec<Value> = self.stack.drain(start..).collect();
-                        for chunk in pairs.chunks(2) {
-                            let k = format!("{}", chunk[0]);
-                            let v = chunk[1].clone();
-                            map.insert(k, v);
+                        for i in 0..count {
+                            let k_val = &self.stack[start + i * 2];
+                            let v_val = &self.stack[start + i * 2 + 1];
+                            let k = match k_val {
+                                Value::String(s) => (**s).clone(),
+                                other => format!("{}", other),
+                            };
+                            map.insert(k, v_val.clone());
                         }
+                        self.stack.truncate(start);
                         self.stack.push(Value::map(map));
                     }
                     OpCode::IndexGet => {
@@ -1581,16 +1585,33 @@ impl VM {
                                 }
                             }
                             (Value::Map(m), key) => {
-                                let k = format!("{}", key);
                                 let map = m.lock();
-                                if !map.contains_key(&k) && matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len") {
-                                    self.stack.push(Value::BoundMethod {
-                                        receiver: Arc::new(Value::Map(m.clone())),
-                                        method: k,
-                                    });
-                                } else {
-                                    let val = map.get(&k).cloned().unwrap_or(Value::Nil);
-                                    self.stack.push(val);
+                                match &key {
+                                    Value::String(s) => {
+                                        if let Some(val) = map.get(s.as_str()) {
+                                            self.stack.push(val.clone());
+                                        } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len") {
+                                            self.stack.push(Value::BoundMethod {
+                                                receiver: Arc::new(Value::Map(m.clone())),
+                                                method: (**s).clone(),
+                                            });
+                                        } else {
+                                            self.stack.push(Value::Nil);
+                                        }
+                                    }
+                                    other => {
+                                        let k = format!("{}", other);
+                                        if let Some(val) = map.get(&k) {
+                                            self.stack.push(val.clone());
+                                        } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len") {
+                                            self.stack.push(Value::BoundMethod {
+                                                receiver: Arc::new(Value::Map(m.clone())),
+                                                method: k,
+                                            });
+                                        } else {
+                                            self.stack.push(Value::Nil);
+                                        }
+                                    }
                                 }
                             }
                             (Value::StructInstance(inst), key) => {

@@ -1,0 +1,38 @@
+// Project 7: Spatial Kalman Sensor Fusion (IMU + Optical Pose)
+// Fuses high-frequency IMU acceleration with low-frequency optical tracking for low-latency VR.
+
+fn main() {
+    let x_est = 0.0 // Position estimate
+    let p_cov = 1.0 // Estimate uncertainty
+    let q_proc_noise = 0.05 // Process noise
+    let r_meas_noise = 0.2 // Measurement noise
+    
+    // Optical position observations
+    let optical_obs = [1.02, 1.98, 3.05, 4.01, 4.95]
+    let i = 0
+    let z = 0.0
+    let k_gain = 0.0
+    
+    println("🛰️ Kalman 1D Spatial Pose Fusion:")
+    while i < optical_obs.len() {
+        z = optical_obs[i]
+        
+        // Predict step (assuming velocity = 1.0 unit / step)
+        x_est = x_est + 1.0
+        p_cov = p_cov + q_proc_noise
+        
+        // Update step
+        k_gain = p_cov / (p_cov + r_meas_noise)
+        x_est = x_est + k_gain * (z - x_est)
+        p_cov = (1.0 - k_gain) * p_cov
+        
+        println("  Step " + str(i + 1) + " -> Obs: " + str(z) + " | Filtered Pose: " + str(x_est) + " | Cov: " + str(p_cov))
+        i = i + 1
+    }
+    
+    assert(abs(x_est - 5.0) < 0.2, "Kalman state estimate drifted")
+    assert(p_cov < 0.15, "Kalman covariance must decrease with observations")
+    println("✅ Spatial Kalman Fusion Verified.")
+}
+
+main()

@@ -1,0 +1,49 @@
+// Project 3: Bytecode Disassembler
+// Translates raw virtual machine opcode bytes and operands into human-readable assembly.
+
+fn disassemble_instruction(opcodes, offset) {
+    let op = opcodes[offset]
+    let desc = ""
+    let next_offset = offset + 1
+    
+    if op == 1 {
+        desc = "LOAD_CONST #" + str(opcodes[offset + 1])
+        next_offset = offset + 2
+    } else if op == 2 {
+        desc = "STORE_FAST slot=" + str(opcodes[offset + 1])
+        next_offset = offset + 2
+    } else if op == 3 {
+        desc = "ADD"
+        next_offset = offset + 1
+    } else if op == 4 {
+        desc = "RETURN_VAL"
+        next_offset = offset + 1
+    } else {
+        desc = "UNKNOWN_OP"
+    }
+    
+    return { "desc": desc, "next": next_offset }
+}
+
+fn main() {
+    // Bytecode stream: [LOAD_CONST 10, STORE_FAST 0, RETURN_VAL]
+    let code_bytes = [1, 10, 2, 0, 4]
+    
+    println("⚙️ Disassembled VM Bytecode:")
+    let pc = 0
+    let res = nil
+    let instr_count = 0
+    
+    while pc < code_bytes.len() {
+        res = disassemble_instruction(code_bytes, pc)
+        println("  0x" + str(pc) + ": " + res["desc"])
+        pc = res["next"]
+        instr_count = instr_count + 1
+    }
+    
+    assert(instr_count == 3, "Expected 3 disassembled instructions")
+    assert(pc == 5, "Program counter should land at end of byte array")
+    println("✅ Bytecode Disassembler Verified.")
+}
+
+main()

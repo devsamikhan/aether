@@ -1,0 +1,45 @@
+// Project 3: Spatial Quaternion Head Tracker (6-DoF Orientation)
+// Uses Hamiltonian Quaternions [w, x, y, z] to represent 3D rotation without gimbal lock.
+
+fn quat_multiply(q1, q2) {
+    let w1 = q1[0]
+    let x1 = q1[1]
+    let y1 = q1[2]
+    let z1 = q1[3]
+    let w2 = q2[0]
+    let x2 = q2[1]
+    let y2 = q2[2]
+    let z2 = q2[3]
+    
+    let w = (w1 * w2) - (x1 * x2) - (y1 * y2) - (z1 * z2)
+    let x = (w1 * x2) + (x1 * w2) + (y1 * z2) - (z1 * y2)
+    let y = (w1 * y2) - (x1 * z2) + (y1 * w2) + (z1 * x2)
+    let z = (w1 * z2) + (x1 * y2) - (y1 * x2) + (z1 * w2)
+    return [w, x, y, z]
+}
+
+fn quat_norm(q) {
+    let sum_sq = (q[0]*q[0]) + (q[1]*q[1]) + (q[2]*q[2]) + (q[3]*q[3])
+    return sqrt(sum_sq)
+}
+
+fn main() {
+    // Identity quaternion
+    let q_pose = [1.0, 0.0, 0.0, 0.0]
+    
+    // 90-degree yaw rotation around Y-axis: cos(pi/4) + j*sin(pi/4)
+    let q_rot_yaw = [0.707106, 0.0, 0.707106, 0.0]
+    
+    let q_new_pose = quat_multiply(q_pose, q_rot_yaw)
+    let norm = quat_norm(q_new_pose)
+    
+    println("🥽 Spatial Head Tracker Orientation:")
+    println("  Quat: [" + str(q_new_pose[0]) + ", " + str(q_new_pose[1]) + ", " + str(q_new_pose[2]) + ", " + str(q_new_pose[3]) + "]")
+    println("  Unit Norm: " + str(norm))
+    
+    assert(abs(norm - 1.0) < 0.001, "Quaternion must remain normalized on unit sphere")
+    assert(abs(q_new_pose[2] - 0.707106) < 0.001, "Yaw component rotation error")
+    println("✅ Quaternion Head Tracker Verified.")
+}
+
+main()

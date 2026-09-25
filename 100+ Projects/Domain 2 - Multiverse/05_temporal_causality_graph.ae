@@ -1,0 +1,46 @@
+// Project 5: Temporal Causality Graph (Paradox Prevention)
+// Directed Acyclic Graph enforcing chronological causality across multiverse loops.
+
+fn add_causal_link(graph, parent, child) {
+    if !graph.contains_key(parent) {
+        graph[parent] = []
+    }
+    graph[parent].push(child)
+}
+
+fn is_ancestor(graph, current, target) {
+    if current == target { return true }
+    if !graph.contains_key(current) { return false }
+    let children = graph[current]
+    let i = 0
+    let child = ""
+    while i < children.len() {
+        child = children[i]
+        if is_ancestor(graph, child, target) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fn main() {
+    let causality_dag = {}
+    add_causal_link(causality_dag, "Event_1945", "Event_1969")
+    add_causal_link(causality_dag, "Event_1969", "Event_1991")
+    add_causal_link(causality_dag, "Event_1991", "Event_2026")
+    
+    println("⏳ Checking Temporal Causality DAG:")
+    let valid_flow = is_ancestor(causality_dag, "Event_1945", "Event_2026")
+    println("  Is 1945 ancestor of 2026? " + str(valid_flow))
+    
+    // Testing Paradoxical Loop Attempt (2026 -> 1945)
+    let causes_paradox = is_ancestor(causality_dag, "Event_2026", "Event_1945")
+    println("  Does 2026 precede 1945? " + str(causes_paradox))
+    
+    assert(valid_flow == true, "Direct causality line broken")
+    assert(causes_paradox == false, "Grandfather Paradox detected in DAG")
+    println("✅ Temporal Causality Graph Verified.")
+}
+
+main()

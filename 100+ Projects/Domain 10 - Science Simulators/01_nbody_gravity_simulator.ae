@@ -1,0 +1,55 @@
+// Project 1: N-Body Gravitational Physics Simulator
+// Computes multi-body gravitational interactions using Newton's Universal Law of Gravitation.
+
+fn main() {
+    let g_const = 1.0 // Normalized gravitational constant
+    
+    // Body 0: Sun (Heavy Center)
+    let m0 = 1000.0
+    let x0 = 0.0
+    let y0 = 0.0
+    
+    // Body 1: Planet (Orbiting)
+    let m1 = 1.0
+    let x1 = 10.0
+    let y1 = 0.0
+    let vx1 = 0.0
+    let vy1 = 10.0 // Tangential velocity
+    
+    let dt = 0.01
+    let steps = 5
+    let step = 0
+    let dx = 0.0
+    let dy = 0.0
+    let dist_sq = 0.0
+    let dist = 0.0
+    let f_mag = 0.0
+    let ax = 0.0
+    let ay = 0.0
+    
+    println("🪐 N-Body Gravitational Orbit Simulation:")
+    while step < steps {
+        dx = x0 - x1
+        dy = y0 - y1
+        dist_sq = (dx * dx) + (dy * dy)
+        dist = sqrt(dist_sq)
+        
+        f_mag = (g_const * m0 * m1) / dist_sq
+        ax = f_mag * (dx / dist) / m1
+        ay = f_mag * (dy / dist) / m1
+        
+        vx1 = vx1 + ax * dt
+        vy1 = vy1 + ay * dt
+        x1 = x1 + vx1 * dt
+        y1 = y1 + vy1 * dt
+        
+        println("  Step " + str(step + 1) + " -> Pos: (" + str(x1) + ", " + str(y1) + ") | Vel: (" + str(vx1) + ", " + str(vy1) + ")")
+        step = step + 1
+    }
+    
+    assert(dist > 5.0, "Planet collided with central body")
+    assert(vy1 > 5.0, "Orbit velocity degraded unexpectedly")
+    println("✅ N-Body Gravitational Simulator Verified.")
+}
+
+main()

@@ -1,0 +1,41 @@
+// Project 7: GraphQL Field Resolver Engine
+// Traverses requested field projections against entity graph without overfetching.
+
+fn resolve_query(requested_fields, data_source) {
+    let response = {}
+    let i = 0
+    let field = ""
+    while i < requested_fields.len() {
+        field = requested_fields[i]
+        if data_source.contains_key(field) {
+            response[field] = data_source[field]
+        }
+        i = i + 1
+    }
+    return response
+}
+
+fn main() {
+    let db_record = {
+        "id": "usr_404",
+        "username": "hyper_coder",
+        "email": "hidden_private@email.com",
+        "hash_pwd": "sha256$d98ef782",
+        "tier": "enterprise"
+    }
+    
+    // Client only requested public fields: id, username, tier
+    let requested = ["id", "username", "tier"]
+    let resolved = resolve_query(requested, db_record)
+    
+    println("🔮 GraphQL Resolved Projection:")
+    println("  Response: " + str(resolved))
+    
+    assert(resolved.contains_key("id"), "Missing requested id")
+    assert(resolved.contains_key("username"), "Missing requested username")
+    assert(!resolved.contains_key("email"), "Leaked unrequested email")
+    assert(!resolved.contains_key("hash_pwd"), "Leaked sensitive password hash")
+    println("✅ GraphQL Field Resolver Verified.")
+}
+
+main()

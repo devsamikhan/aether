@@ -1,0 +1,139 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 05: Q-Learning Reinforcement Learning Agent
+# ==============================================================================
+# Implements tabular Q-learning with Bellman optimality updates in an obstacle gridworld.
+# Learns the optimal policy path to maximize cumulative environmental rewards.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🕹️ [Domain 3 - Project 05] REINFORCEMENT LEARNING Q-LEARNING AGENT")
+print("================================================================================")
+
+# 4x4 Grid: 16 states (0 to 15)
+# Start = 0 (top-left), Goal = 15 (bottom-right), Trap = 5
+let NUM_STATES = 16
+let NUM_ACTIONS = 4 # 0=Up, 1=Down, 2=Left, 3=Right
+
+# Initialize Q-table with 0.0
+let Q_table = []
+let s_idx = 0
+while s_idx < NUM_STATES:
+    let act_row = [0.0, 0.0, 0.0, 0.0]
+    Q_table.append(act_row)
+    s_idx = s_idx + 1
+
+def step_env(s, a):
+    let r = s / 4
+    let c = s % 4
+
+    if a == 0 and r > 0:
+        r = r - 1 # Up
+    if a == 1 and r < 3:
+        r = r + 1 # Down
+    if a == 2 and c > 0:
+        c = c - 1 # Left
+    if a == 3 and c < 3:
+        c = c + 1 # Right
+
+    let next_s = r * 4 + c
+    let reward = -1.0 # Step cost
+    let done = false
+
+    if next_s == 15:
+        reward = 100.0 # Goal reached
+        done = true
+    if next_s == 5:
+        reward = -50.0 # Hazard trap
+        done = true
+
+    return [next_s, reward, done]
+
+def get_best_action_and_q(s):
+    let best_a = 0
+    let max_q = Q_table[s][0]
+    let a = 1
+    while a < NUM_ACTIONS:
+        if Q_table[s][a] > max_q:
+            max_q = Q_table[s][a]
+            best_a = a
+        a = a + 1
+    return [best_a, max_q]
+
+def train_q_agent(episodes):
+    let alpha = 0.5   # Learning rate
+    let gamma = 0.9   # Discount factor
+    let epsilon = 0.3 # Exploration rate
+
+    let ep = 0
+    let s = 0
+    let steps = 0
+    let a = 0
+    let best_info = nil
+    let trans = nil
+    let next_s = 0
+    let reward = 0.0
+    let done = false
+    let next_best = nil
+    let max_next_q = 0.0
+    let old_q = 0.0
+    let target = 0.0
+
+    print("Training Q-Learning Agent over " + str(episodes) + " episodes...")
+    while ep < episodes:
+        s = 0
+        steps = 0
+
+        while steps < 30:
+            if Math.random() < epsilon:
+                a = Math.random_int(0, NUM_ACTIONS)
+            else:
+                best_info = get_best_action_and_q(s)
+                a = best_info[0]
+
+            trans = step_env(s, a)
+            next_s = trans[0]
+            reward = trans[1]
+            done = trans[2]
+
+            next_best = get_best_action_and_q(next_s)
+            max_next_q = next_best[1]
+
+            # Bellman Equation: Q(s, a) = Q(s, a) + alpha * [r + gamma * max_Q(s') - Q(s, a)]
+            old_q = Q_table[s][a]
+            target = reward + gamma * max_next_q
+            Q_table[s][a] = old_q + alpha * (target - old_q)
+
+            s = next_s
+            if done:
+                break
+            steps = steps + 1
+
+        ep = ep + 1
+
+    print("\nEvaluating Trained Policy Navigation from Start (0) to Goal (15):")
+    let curr = 0
+    let path = [curr]
+    let eval_steps = 0
+    let action_info = nil
+    let chosen_action = 0
+
+    while eval_steps < 10:
+        if curr == 15:
+            break
+        action_info = get_best_action_and_q(curr)
+        chosen_action = action_info[0]
+        trans = step_env(curr, chosen_action)
+        curr = trans[0]
+        path.append(curr)
+        eval_steps = eval_steps + 1
+
+
+    print("  Optimal Discovered Route: " + str(path))
+    assert(path[len(path) - 1] == 15, "Agent must reach goal state 15")
+    print("\n[SUCCESS] Q-Learning Agent Mastered GridWorld Navigation! ✅")
+
+train_q_agent(150)
+print("================================================================================")

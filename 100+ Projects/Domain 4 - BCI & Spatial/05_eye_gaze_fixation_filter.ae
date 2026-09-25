@@ -1,0 +1,48 @@
+// Project 5: Eye Gaze Fixation Filter (I-DT Algorithm)
+// Distinguishes stationary visual fixations from high-velocity saccades in eye-tracking data.
+
+fn main() {
+    // 2D gaze coordinates over time [x, y]
+    let gaze_samples = [
+        [512.0, 384.0],
+        [514.0, 382.0],
+        [511.0, 385.0],
+        [513.0, 383.0],
+        [720.0, 600.0], // Saccade jump
+        [722.0, 599.0],
+        [721.0, 602.0]
+    ]
+    
+    let fixations = 0
+    let saccades = 0
+    let i = 1
+    let p1 = nil
+    let p2 = nil
+    let dx = 0.0
+    let dy = 0.0
+    let dist = 0.0
+    
+    println("👁️ Gaze Classification (Dispersion Threshold):")
+    while i < gaze_samples.len() {
+        p1 = gaze_samples[i - 1]
+        p2 = gaze_samples[i]
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        dist = sqrt((dx * dx) + (dy * dy))
+        
+        if dist < 20.0 {
+            fixations = fixations + 1
+            println("  Step " + str(i) + " -> Fixation (Displacement: " + str(dist) + " px)")
+        } else {
+            saccades = saccades + 1
+            println("  Step " + str(i) + " -> Saccade Jump (Displacement: " + str(dist) + " px)")
+        }
+        i = i + 1
+    }
+    
+    assert(saccades == 1, "Expected exactly 1 rapid saccadic jump")
+    assert(fixations == 5, "Expected 5 micro-fixation samples")
+    println("✅ Eye Gaze Fixation Filter Verified.")
+}
+
+main()

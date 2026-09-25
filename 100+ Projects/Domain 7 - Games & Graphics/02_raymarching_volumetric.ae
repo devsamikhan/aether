@@ -1,0 +1,87 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 02: Signed Distance Field (SDF) 3D Raymarching Renderer
+# ==============================================================================
+# Renders 3D geometry using Signed Distance Field (SDF) sphere tracing.
+# Computes surface normals via gradient finite differences and evaluates
+# Lambertian diffuse lighting on hit points.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🔮 [Domain 7 - Project 02] 3D SDF RAYMARCHING SHADER CORE")
+print("================================================================================")
+
+def sdf_sphere(px, py, pz, radius):
+    let dist_to_center = Math.sqrt(px * px + py * py + pz * pz)
+    return dist_to_center - radius
+
+def estimate_normal(px, py, pz, radius):
+    let eps = 0.001
+    let nx = sdf_sphere(px + eps, py, pz, radius) - sdf_sphere(px - eps, py, pz, radius)
+    let ny = sdf_sphere(px, py + eps, pz, radius) - sdf_sphere(px, py - eps, pz, radius)
+    let nz = sdf_sphere(px, py, pz + eps, radius) - sdf_sphere(px, py, pz - eps, radius)
+    let length = Math.sqrt(nx * nx + ny * ny + nz * nz)
+    return [nx / length, ny / length, nz / length]
+
+def raymarch(ro_x, ro_y, ro_z, rd_x, rd_y, rd_z, sphere_radius):
+    let max_steps = 30
+    let max_dist = 20.0
+    let epsilon = 0.001
+
+    let t = 0.0
+    let step = 0
+    let px = 0.0
+    let py = 0.0
+    let pz = 0.0
+    let d = 0.0
+
+    while step < max_steps and t < max_dist:
+        px = ro_x + t * rd_x
+        py = ro_y + t * rd_y
+        pz = ro_z + t * rd_z
+
+        d = sdf_sphere(px, py, pz, sphere_radius)
+        if d < epsilon:
+            # Hit surface!
+            return {"hit": true, "t": t, "steps": step, "p": [px, py, pz]}
+        t = t + d
+        step = step + 1
+
+    return {"hit": false, "t": t, "steps": step, "p": nil}
+
+# Camera setup: Origin at (0, 0, -3.0), looking along +Z axis
+let ro = [0.0, 0.0, -3.0]
+let sphere_rad = 1.0
+print("Scene Setup:")
+print("  Camera Ray Origin: (0, 0, -3.0)")
+print("  Sphere Object:     Center (0, 0, 0), Radius = " + str(sphere_rad))
+
+# Ray 1: Center ray (0, 0, 1) -> Hits sphere directly at (0, 0, -1.0)
+print("\n[Ray 1: Forward Center Ray (rd = [0, 0, 1])]:")
+let hit1 = raymarch(ro[0], ro[1], ro[2], 0.0, 0.0, 1.0, sphere_rad)
+print("  Hit Detected: " + str(hit1["hit"]))
+print("  Distance t:   " + str(Math.round(hit1["t"], 4)) + " (Expected ~2.0)")
+print("  Hit Point:    [" + str(Math.round(hit1["p"][0], 3)) + ", " + str(Math.round(hit1["p"][1], 3)) + ", " + str(Math.round(hit1["p"][2], 3)) + "]")
+
+# Compute normal and Lambertian diffuse light: Light at (2, 2, -2)
+let norm = estimate_normal(hit1["p"][0], hit1["p"][1], hit1["p"][2], sphere_rad)
+print("  Surface Normal: [" + str(Math.round(norm[0], 2)) + ", " + str(Math.round(norm[1], 2)) + ", " + str(Math.round(norm[2], 2)) + "]")
+
+let light_dir = [0.577, 0.577, -0.577] # Normalized light vector
+let diffuse = norm[0] * light_dir[0] + norm[1] * light_dir[1] + norm[2] * light_dir[2]
+if diffuse < 0.0:
+    diffuse = 0.0
+print("  Diffuse Shading Intensity: " + str(Math.round(diffuse, 3)))
+
+# Ray 2: Missing ray (shooting far off to the side)
+print("\n[Ray 2: Missing Ray (rd = [1, 0, 0])]:")
+let hit2 = raymarch(ro[0], ro[1], ro[2], 1.0, 0.0, 0.0, sphere_rad)
+print("  Hit Detected: " + str(hit2["hit"]) + " (Correctly missed)")
+
+assert(hit1["hit"] == true, "Ray 1 must hit sphere")
+assert(hit2["hit"] == false, "Ray 2 must miss sphere")
+
+print("\n[SUCCESS] 3D Signed Distance Field (SDF) Raymarching Shader Verified! ✅")
+print("================================================================================")

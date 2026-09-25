@@ -1,0 +1,48 @@
+// Project 4: Dead Code Eliminator
+// Scans symbol reference counts and prunes uncalled functions from the build.
+
+fn prune_dead_functions(all_functions, called_functions) {
+    let active = []
+    let dead = []
+    let i = 0
+    let fn_name = ""
+    let is_called = false
+    let j = 0
+    
+    while i < all_functions.len() {
+        fn_name = all_functions[i]
+        is_called = false
+        j = 0
+        while j < called_functions.len() {
+            if called_functions[j] == fn_name {
+                is_called = true
+            }
+            j = j + 1
+        }
+        
+        if is_called || fn_name == "main" {
+            active.push(fn_name)
+        } else {
+            dead.push(fn_name)
+        }
+        i = i + 1
+    }
+    return { "active": active, "dead": dead }
+}
+
+fn main() {
+    let defined_fns = ["main", "init_system", "render_frame", "legacy_debug_dump", "unused_helper"]
+    let invoked_fns = ["main", "init_system", "render_frame"]
+    
+    let result = prune_dead_functions(defined_fns, invoked_fns)
+    println("🧹 Dead Code Elimination Pass:")
+    println("  Retained: " + str(result["active"]))
+    println("  Eliminated: " + str(result["dead"]))
+    
+    assert(result["active"].len() == 3, "Expected 3 active functions")
+    assert(result["dead"].len() == 2, "Expected 2 dead functions pruned")
+    assert(result["dead"][0] == "legacy_debug_dump", "Wrong dead function identified")
+    println("✅ Dead Code Eliminator Verified.")
+}
+
+main()

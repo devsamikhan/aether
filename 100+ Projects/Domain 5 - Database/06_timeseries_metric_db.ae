@@ -1,0 +1,110 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 06: Time-Series Metric Database & Downsampling Rollup
+# ==============================================================================
+# Stores high-frequency time-series telemetry metrics, performs continuous windowed
+# downsampling rollups (average, min, max), and computes Exponential Moving Averages (EMA).
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("📈 [Domain 5 - Project 06] TIME-SERIES METRIC DATABASE")
+print("================================================================================")
+
+class MetricPoint:
+    def __init__(self, timestamp, value):
+        self.timestamp = timestamp
+        self.value = value
+
+class TimeSeriesDB:
+    def __init__(self):
+        self.series = []
+
+    def record(self, ts, val):
+        self.series.append(MetricPoint(ts, val))
+
+    def downsample_bucket(self, window_size):
+        let buckets = []
+        let i = 0
+        let b_start = 0
+        let b_sum = 0.0
+        let b_count = 0
+        let b_min = 999999.0
+        let b_max = -999999.0
+
+        while i < len(self.series):
+            let pt = self.series[i]
+            if b_count == 0:
+                b_start = pt.timestamp
+                b_min = pt.value
+                b_max = pt.value
+
+            b_sum = b_sum + pt.value
+            b_count = b_count + 1
+            if pt.value < b_min:
+                b_min = pt.value
+            if pt.value > b_max:
+                b_max = pt.value
+
+            if b_count == window_size or i == len(self.series) - 1:
+                buckets.append({
+                    "start_ts": b_start,
+                    "avg": b_sum / float(b_count),
+                    "min": b_min,
+                    "max": b_max,
+                    "count": b_count
+                })
+                b_sum = 0.0
+                b_count = 0
+            i = i + 1
+        return buckets
+
+    def exponential_moving_average(self, alpha):
+        let ema = []
+        if len(self.series) == 0:
+            return ema
+
+        let current_ema = self.series[0].value
+        ema.append(current_ema)
+        let i = 1
+        while i < len(self.series):
+            let val = self.series[i].value
+            current_ema = alpha * val + (1.0 - alpha) * current_ema
+            ema.append(Math.round(current_ema, 2))
+            i = i + 1
+        return ema
+
+let tsdb = TimeSeriesDB()
+
+# Ingest 9 server CPU load metric points (sampled every 10 seconds)
+tsdb.record(1000, 20.0)
+tsdb.record(1010, 25.0)
+tsdb.record(1020, 30.0)
+tsdb.record(1030, 85.0) # Load spike
+tsdb.record(1040, 90.0)
+tsdb.record(1050, 75.0)
+tsdb.record(1060, 40.0)
+tsdb.record(1070, 35.0)
+tsdb.record(1080, 30.0)
+
+print("Ingested " + str(len(tsdb.series)) + " High-Resolution Metric Points.")
+
+# Downsample to 3-point windows
+let rollups = tsdb.downsample_bucket(3)
+print("\n[Downsampling Rollup] 3-sample aggregation windows:")
+let r_idx = 0
+while r_idx < len(rollups):
+    let b = rollups[r_idx]
+    print("  Window #" + str(r_idx + 1) + " [t=" + str(b["start_ts"]) + "]: Avg=" + str(Math.round(b["avg"], 1)) + "%, Min=" + str(b["min"]) + "%, Max=" + str(b["max"]) + "%")
+    r_idx = r_idx + 1
+
+# Compute EMA smoothing (alpha = 0.4)
+let ema_values = tsdb.exponential_moving_average(0.4)
+print("\n[Exponential Moving Average (alpha=0.4)]:")
+print("  Smoothed Series: " + str(ema_values))
+
+assert(len(rollups) == 3, "Expected 3 downsampled buckets")
+assert(rollups[1]["max"] == 90.0, "Expected peak load 90.0% in window 2")
+print("\n[SUCCESS] Time-Series Metric Database & Downsampling Rollup Verified! ✅")
+print("================================================================================")

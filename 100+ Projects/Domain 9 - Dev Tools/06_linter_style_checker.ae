@@ -1,0 +1,45 @@
+// Project 6: Linter & Style Checker
+// Validates variable naming conventions (enforcing snake_case over camelCase).
+
+fn is_snake_case(identifier) {
+    let i = 0
+    let ch = ""
+    while i < identifier.len() {
+        ch = identifier[i]
+        // Check if character is uppercase (A-Z)
+        if ch >= "A" && ch <= "Z" {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+fn main() {
+    let symbols = ["user_id", "compute_hash", "maxRetryCount", "total_sum", "isFinished"]
+    let valid_count = 0
+    let lint_warnings = 0
+    let i = 0
+    let sym = ""
+    let ok = false
+    
+    println("🔍 Style Linter Scan (snake_case rule):")
+    while i < symbols.len() {
+        sym = symbols[i]
+        ok = is_snake_case(sym)
+        if ok {
+            valid_count = valid_count + 1
+            println("  [PASS] " + sym)
+        } else {
+            lint_warnings = lint_warnings + 1
+            println("  [WARN] " + sym + " -> violates snake_case convention")
+        }
+        i = i + 1
+    }
+    
+    assert(valid_count == 3, "Expected 3 compliant snake_case identifiers")
+    assert(lint_warnings == 2, "Expected 2 style warnings on camelCase names")
+    println("✅ Linter Style Checker Verified.")
+}
+
+main()

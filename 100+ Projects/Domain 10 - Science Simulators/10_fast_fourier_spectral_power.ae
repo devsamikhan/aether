@@ -1,0 +1,32 @@
+// Project 10: Fast Fourier Spectral Power Spectrum
+// Analyzes frequency components of discretized signal via Discrete Fourier Transform kernel.
+
+fn main() {
+    // 4-point discrete signal with strong DC offset and alternating harmonic
+    let signal = [2.0, 0.0, 2.0, 0.0]
+    let n = 4
+    
+    // Compute DC component (k=0): sum of all samples
+    let dc_real = 0.0
+    let i = 0
+    while i < n {
+        dc_real = dc_real + signal[i]
+        i = i + 1
+    }
+    
+    // Compute Nyquist component (k=2): sum(s[n] * (-1)^n)
+    let nyquist_real = signal[0] - signal[1] + signal[2] - signal[3]
+    
+    let dc_power = (dc_real * dc_real) / n
+    let nyquist_power = (nyquist_real * nyquist_real) / n
+    
+    println("📊 Fourier Spectral Power Estimation:")
+    println("  DC Component (k=0) Power:      " + str(dc_power))
+    println("  Nyquist Harmonic (k=2) Power: " + str(nyquist_power))
+    
+    assert(dc_power == 4.0, "DC spectral energy calculation error")
+    assert(nyquist_power == 4.0, "Nyquist harmonic power calculation error")
+    println("✅ Fast Fourier Spectral Power Verified.")
+}
+
+main()

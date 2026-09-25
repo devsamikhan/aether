@@ -1,6 +1,9 @@
 # Build artifacts
 /target/
 Cargo.lock
+*.exe
+*.obj
+*.pdb
 
 # IDE / editor files
 .vscode/

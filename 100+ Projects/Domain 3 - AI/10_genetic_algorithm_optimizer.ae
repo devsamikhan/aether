@@ -1,0 +1,138 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 10: Evolutionary Genetic Algorithm (Knapsack Optimizer)
+# ==============================================================================
+# Implements Darwinian evolutionary optimization: Chromosome population,
+# tournament selection, crossover recombination, and stochastic bit-flip mutation.
+# Solves the NP-Hard 0/1 Knapsack problem.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🧬 [Domain 3 - Project 10] EVOLUTIONARY GENETIC ALGORITHM")
+print("================================================================================")
+
+# Knapsack Problem: 6 items with [weight, value]
+let items = [
+    [5, 10],  # Item 0
+    [10, 25], # Item 1
+    [12, 30], # Item 2
+    [7, 18],  # Item 3
+    [4, 12],  # Item 4
+    [8, 22]   # Item 5
+]
+let MAX_WEIGHT = 30
+let NUM_GENES = 6
+let POP_SIZE = 12
+
+def calculate_fitness(chromosome):
+    let total_w = 0
+    let total_v = 0
+    let i = 0
+    while i < NUM_GENES:
+        if chromosome[i] == 1:
+            total_w = total_w + items[i][0]
+            total_v = total_v + items[i][1]
+        i = i + 1
+
+    # Invalidate if overweight
+    if total_w > MAX_WEIGHT:
+        return 0
+    return total_v
+
+def run_genetic_algorithm(generations):
+    print("Optimization Objective: Maximize Knapsack Value (Max Weight = " + str(MAX_WEIGHT) + ")")
+    
+    # 1. Initialize random population
+    let pop = []
+    let p = 0
+    while p < POP_SIZE:
+        let chromo = []
+        let g = 0
+        while g < NUM_GENES:
+            chromo.append(Math.random_int(0, 2))
+            g = g + 1
+        pop.append(chromo)
+        p = p + 1
+
+    let best_global_fitness = 0
+    let best_global_chromo = nil
+
+    # Hoist loop temporaries
+    let gen = 0
+    let new_pop = []
+    let p_idx = 0
+    let parent1 = nil
+    let parent2 = nil
+    let r1 = 0
+    let r2 = 0
+    let r3 = 0
+    let r4 = 0
+    let child1 = []
+    let child2 = []
+    let x_point = 0
+    let c_idx = 0
+    let m_idx = 0
+    let eval_i = 0
+    let fit = 0
+
+    while gen < generations:
+        new_pop = []
+        p_idx = 0
+
+        while p_idx < POP_SIZE:
+            # Tournament selection
+            r1 = Math.random_int(0, POP_SIZE)
+            r2 = Math.random_int(0, POP_SIZE)
+            if calculate_fitness(pop[r1]) >= calculate_fitness(pop[r2]):
+                parent1 = pop[r1]
+            else:
+                parent1 = pop[r2]
+
+            r3 = Math.random_int(0, POP_SIZE)
+            r4 = Math.random_int(0, POP_SIZE)
+            if calculate_fitness(pop[r3]) >= calculate_fitness(pop[r4]):
+                parent2 = pop[r3]
+            else:
+                parent2 = pop[r4]
+
+            # Single-point Crossover at index 3
+            child1 = [parent1[0], parent1[1], parent1[2], parent2[3], parent2[4], parent2[5]]
+            child2 = [parent2[0], parent2[1], parent2[2], parent1[3], parent1[4], parent1[5]]
+
+            # Mutation: 15% bit-flip
+            m_idx = 0
+            while m_idx < NUM_GENES:
+                if Math.random() < 0.15:
+                    child1[m_idx] = 1 - child1[m_idx]
+                if Math.random() < 0.15:
+                    child2[m_idx] = 1 - child2[m_idx]
+                m_idx = m_idx + 1
+
+            new_pop.append(child1)
+            new_pop.append(child2)
+            p_idx = p_idx + 2
+
+        pop = new_pop
+
+        # Evaluate generation fitness
+        eval_i = 0
+        while eval_i < POP_SIZE:
+            fit = calculate_fitness(pop[eval_i])
+            if fit > best_global_fitness:
+                best_global_fitness = fit
+                best_global_chromo = pop[eval_i]
+            eval_i = eval_i + 1
+
+        gen = gen + 1
+
+    print("\n[Evolutionary Convergence over " + str(generations) + " Generations]:")
+    print("  Optimal Solution Chromosome: " + str(best_global_chromo))
+    print("  Max Knapsack Pack Value:     $" + str(best_global_fitness))
+
+    assert(best_global_fitness >= 60, "Genetic algorithm must find high value pack (>= $60)")
+    print("\n[SUCCESS] Evolutionary Genetic Algorithm Successfully Optimized Knapsack! ✅")
+
+run_genetic_algorithm(35)
+print("================================================================================")

@@ -1,0 +1,48 @@
+// Project 6: BCI Motor Imagery Classifier (CSP Feature Variance)
+// Distinguishes Left vs Right hand imagined movement via electro-cortical band power variance.
+
+fn calc_variance(signal) {
+    let mean = 0.0
+    let i = 0
+    while i < signal.len() {
+        mean = mean + signal[i]
+        i = i + 1
+    }
+    mean = mean / signal.len()
+    
+    let sum_sq = 0.0
+    let diff = 0.0
+    i = 0
+    while i < signal.len() {
+        diff = signal[i] - mean
+        sum_sq = sum_sq + (diff * diff)
+        i = i + 1
+    }
+    return sum_sq / signal.len()
+}
+
+fn main() {
+    // Channel C3 (Left hemisphere motor cortex) vs C4 (Right hemisphere)
+    let left_hand_intent_c3 = [15.2, 14.8, 16.1, 15.0, 14.9] // Desynchronization (low variance)
+    let left_hand_intent_c4 = [5.1, 48.2, -35.1, 28.0, -12.4] // Synchronization (high variance)
+    
+    let var_c3 = calc_variance(left_hand_intent_c3)
+    let var_c4 = calc_variance(left_hand_intent_c4)
+    
+    println("✋ Motor Imagery Feature Extraction:")
+    println("  C3 Variance: " + str(var_c3))
+    println("  C4 Variance: " + str(var_c4))
+    
+    let classified_intent = "UNKNOWN"
+    if var_c4 > var_c3 {
+        classified_intent = "LEFT_HAND"
+    } else {
+        classified_intent = "RIGHT_HAND"
+    }
+    
+    println("  Detected Intent: " + classified_intent)
+    assert(classified_intent == "LEFT_HAND", "Contralateral motor desynchronization classification error")
+    println("✅ BCI Motor Imagery Classifier Verified.")
+}
+
+main()

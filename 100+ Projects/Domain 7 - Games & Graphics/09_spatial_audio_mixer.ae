@@ -1,0 +1,72 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 09: 3D Spatial Audio Panner & Attenuation Engine
+# ==============================================================================
+# Computes 3D positional audio parameters for sound sources relative to a listener:
+# Inverse-square distance attenuation, Interaural Time Difference (ITD),
+# and left/right stereo channel panning gains.
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🎧 [Domain 7 - Project 09] 3D SPATIAL AUDIO PANNER & ATTENUATOR")
+print("================================================================================")
+
+def compute_spatial_audio(listener_x, listener_y, source_x, source_y, base_volume):
+    let dx = source_x - listener_x
+    let dy = source_y - listener_y
+    let dist = Math.sqrt(dx * dx + dy * dy)
+
+    # 1. Distance Attenuation (Inverse-distance law with roll-off)
+    let min_dist = 1.0
+    let attenuation = min_dist / (min_dist + 0.1 * dist * dist)
+    let attenuated_volume = base_volume * attenuation
+
+    # 2. Stereo Panning: Based on horizontal angle dx / dist
+    # pan in [-1.0 (Full Left), 0.0 (Center), +1.0 (Full Right)]
+    let pan = 0.0
+    if dist > 0.001:
+        pan = dx / dist
+
+    # Equal-power panning law:
+    # left_gain = cos( (pan + 1) * pi / 4 )
+    # right_gain = sin( (pan + 1) * pi / 4 )
+    let angle_rad = (pan + 1.0) * 3.14159265 / 4.0
+    let left_gain = Math.cos(angle_rad) * attenuated_volume
+    let right_gain = Math.sin(angle_rad) * attenuated_volume
+
+    return {
+        "dist": dist,
+        "attenuation": attenuation,
+        "left_gain": left_gain,
+        "right_gain": right_gain,
+        "pan": pan
+    }
+
+# Listener at origin (0, 0)
+let lx = 0.0
+let ly = 0.0
+
+print("Listener Position: (0, 0) facing +Y forward")
+
+# Test 1: Sound source on the Far Left (-10, 0)
+print("\n[Case 1: Sound Source on Far Left (-10, 0)]:")
+let s1 = compute_spatial_audio(lx, ly, -10.0, 0.0, 1.0)
+print("  Distance:   " + str(Math.round(s1["dist"], 2)) + " units")
+print("  Pan Factor: " + str(Math.round(s1["pan"], 2)) + " (-1 = Left)")
+print("  Left Ear Gain:  " + str(Math.round(s1["left_gain"], 4)))
+print("  Right Ear Gain: " + str(Math.round(s1["right_gain"], 4)))
+assert(s1["left_gain"] > s1["right_gain"] * 5.0, "Left ear must receive majority of sound from left source")
+
+# Test 2: Sound source directly ahead (0, 5)
+print("\n[Case 2: Sound Source Directly Ahead (0, 5)]:")
+let s2 = compute_spatial_audio(lx, ly, 0.0, 5.0, 1.0)
+print("  Distance:   " + str(Math.round(s2["dist"], 2)) + " units")
+print("  Pan Factor: " + str(Math.round(s2["pan"], 2)) + " (0 = Balanced Center)")
+print("  Left Ear Gain:  " + str(Math.round(s2["left_gain"], 4)))
+print("  Right Ear Gain: " + str(Math.round(s2["right_gain"], 4)))
+assert(Math.round(s2["left_gain"], 3) == Math.round(s2["right_gain"], 3), "Ahead sound must have balanced stereo gains")
+
+print("\n[SUCCESS] 3D Spatial Audio Panner & Attenuation Engine Verified! ✅")
+print("================================================================================")

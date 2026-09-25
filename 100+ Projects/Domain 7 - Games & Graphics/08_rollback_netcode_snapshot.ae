@@ -1,0 +1,87 @@
+# ==============================================================================
+# Domain 7: Games & Graphics Engines
+# Project 08: Deterministic GGPO-Style Rollback Netcode
+# ==============================================================================
+# Simulates peer-to-peer fighting/action game rollback netcode.
+# Serializes deterministic state snapshots into a rolling history buffer,
+# rewinds state upon delayed packet arrival, and fast-forwards to current frame.
+# ==============================================================================
+
+print("================================================================================")
+print("🎮 [Domain 7 - Project 08] DETERMINISTIC ROLLBACK NETCODE (GGPO)")
+print("================================================================================")
+
+class GameStateSnapshot:
+    def __init__(self, frame, p1_x, p2_x):
+        self.frame = frame
+        self.p1_x = p1_x
+        self.p2_x = p2_x
+
+class NetcodeEngine:
+    def __init__(self):
+        self.current_frame = 0
+        self.p1_x = 0.0
+        self.p2_x = 100.0
+        self.history = {} # Frame -> GameStateSnapshot
+        self.inputs = {}  # Frame -> {p1_input, p2_input}
+
+    def save_snapshot(self):
+        let snap = GameStateSnapshot(self.current_frame, self.p1_x, self.p2_x)
+        self.history[str(self.current_frame)] = snap
+
+    def advance_frame(self, p1_move, p2_move):
+        self.save_snapshot()
+        self.inputs[str(self.current_frame)] = {"p1": p1_move, "p2": p2_move}
+        self.p1_x = self.p1_x + p1_move
+        self.p2_x = self.p2_x + p2_move
+        self.current_frame = self.current_frame + 1
+
+    def rollback_and_resimulate(self, target_frame, corrected_p2_input):
+        print("\n  ⚠️ [Network Jitter] Delayed Packet Arrived for Past Frame " + str(target_frame) + "!")
+        print("  Current Frame: " + str(self.current_frame) + ". Rolling back to Frame " + str(target_frame) + " snapshot...")
+
+        # 1. Restore historical snapshot
+        let snap = self.history[str(target_frame)]
+        self.p1_x = snap.p1_x
+        self.p2_x = snap.p2_x
+        print("  ✓ State Restored: P1_X = " + str(self.p1_x) + ", P2_X = " + str(self.p2_x))
+
+        # 2. Patch the corrected remote input
+        self.inputs[str(target_frame)]["p2"] = corrected_p2_input
+
+        # 3. Fast-forward re-simulation from target_frame to current_frame
+        let f = target_frame
+        let inps = nil
+        while f < self.current_frame:
+            inps = self.inputs[str(f)]
+            self.p1_x = self.p1_x + inps["p1"]
+            self.p2_x = self.p2_x + inps["p2"]
+            # Update history with corrected state
+            self.history[str(f)] = GameStateSnapshot(f, self.p1_x, self.p2_x)
+            f = f + 1
+
+        print("  ✓ Fast-Forward Re-simulation Complete. Corrected Current Frame State: P1=" + str(self.p1_x) + ", P2=" + str(self.p2_x))
+
+let engine = NetcodeEngine()
+
+print("Simulating Local Gameplay (Frames 0 to 4):")
+# P1 moves +10 each frame, predicted P2 moves 0 (idle)
+engine.advance_frame(10.0, 0.0) # Frame 0
+engine.advance_frame(10.0, 0.0) # Frame 1
+engine.advance_frame(10.0, 0.0) # Frame 2
+engine.advance_frame(10.0, 0.0) # Frame 3
+engine.advance_frame(10.0, 0.0) # Frame 4
+
+print("Predicted State at Frame 5: P1_X = " + str(engine.p1_x) + ", P2_X = " + str(engine.p2_x))
+
+# Now, a delayed network packet arrives from opponent: At Frame 1, opponent actually dashed -25.0!
+engine.rollback_and_resimulate(1, -25.0)
+
+# Expected final position:
+# P1: 5 * 10 = 50.0
+# P2: 100.0 - 25.0 = 75.0
+assert(engine.p1_x == 50.0, "P1 should be at 50.0")
+assert(engine.p2_x == 75.0, "P2 should be at 75.0 after corrected dash")
+
+print("\n[SUCCESS] Deterministic Rollback Netcode Snapshot Rewind Verified! ✅")
+print("================================================================================")

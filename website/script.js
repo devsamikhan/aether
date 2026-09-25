@@ -62,21 +62,30 @@ function switchTab(tab, event) {
   logs.innerText = samples[tab].logs;
 }
 
-function copyInstall() {
-  const cmd = document.getElementById("install-cmd").innerText;
+function copyInstall(type) {
+  let elementId = "install-cmd";
+  if (type === "ps") elementId = "install-cmd-ps";
+  else if (type === "bash") elementId = "install-cmd-bash";
+  
+  const el = document.getElementById(elementId) || document.getElementById("install-cmd");
+  if (!el) return;
+  
+  const cmd = el.innerText;
   navigator.clipboard.writeText(cmd);
   
   // Custom button feedback
-  const btn = document.querySelector(".copy-btn");
-  const originalText = btn.innerText;
-  btn.innerText = "Copied! ✓";
-  btn.style.backgroundColor = "#22d3ee";
-  btn.style.color = "#000";
-  setTimeout(() => {
-    btn.innerText = originalText;
-    btn.style.backgroundColor = "rgba(34, 211, 238, 0.1)";
-    btn.style.color = "var(--accent-color)";
-  }, 2000);
+  const eventBtn = window.event ? window.event.currentTarget : document.querySelector(".copy-btn");
+  if (eventBtn) {
+    const originalText = eventBtn.innerText;
+    eventBtn.innerText = "Copied! ✓";
+    eventBtn.style.backgroundColor = "#22d3ee";
+    eventBtn.style.color = "#000";
+    setTimeout(() => {
+      eventBtn.innerText = originalText;
+      eventBtn.style.backgroundColor = "rgba(34, 211, 238, 0.1)";
+      eventBtn.style.color = "var(--accent-color)";
+    }, 2000);
+  }
 }
 
 // Initial load

@@ -1,0 +1,81 @@
+# ==============================================================================
+# Domain 3: AI, Machine Learning & Autonomous Swarms
+# Project 06: Columnar DataFrame ML Feature Pipeline
+# ==============================================================================
+# Implements production feature engineering on columnar DataFrames:
+# Missing value imputation, Min-Max scaling, Z-score standardization,
+# and synthetic feature transformation.
+# ==============================================================================
+
+import aether_df
+import Math
+
+print("================================================================================")
+print("📊 [Domain 3 - Project 06] COLUMNAR DATAFRAME ML PIPELINE")
+print("================================================================================")
+
+# Raw dataset features: user_id, age, latency_ms, error_count
+let raw_data = {
+    "user_id": [101, 102, 103, 104, 105],
+    "age": [25.0, 42.0, 31.0, 56.0, 22.0],
+    "latency_ms": [120.0, 450.0, 85.0, 310.0, 95.0],
+    "error_count": [0.0, 4.0, 1.0, 2.0, 0.0]
+}
+
+let df = aether_df.DataFrame(raw_data)
+print("Initial Dataset Schema & Records:")
+print("  DataFrame Shape: " + str(df.shape()))
+
+
+# 1. Compute summary statistics
+let age_col = df["age"]
+let mean_age = age_col.mean()
+print("\n[Step 1: Descriptive Analytics]")
+print("  Mean Age: " + str(Math.round(mean_age, 2)) + " years")
+
+let lat_col = df["latency_ms"]
+let max_lat = lat_col.max()
+let min_lat = lat_col.min()
+print("  Latency Span: Min=" + str(min_lat) + "ms, Max=" + str(max_lat) + "ms")
+
+# 2. Min-Max Feature Scaling: norm_x = (x - min) / (max - min)
+print("\n[Step 2: Min-Max Feature Normalization on Latency]")
+let lat_list = lat_col
+let norm_latency = []
+let lat_range = max_lat - min_lat
+let i = 0
+while i < len(lat_list):
+    let scaled = (lat_list[i] - min_lat) / lat_range
+    norm_latency.append(Math.round(scaled, 4))
+    i = i + 1
+
+print("  Normalized Latency Vector [0.0 - 1.0]: " + str(norm_latency))
+
+# 3. Synthetic Feature Derivation: Risk Score = (errors * 2.0) + (norm_latency * 1.5)
+print("\n[Step 3: Synthetic Feature Engineering]")
+let err_list = df["error_count"]
+let risk_scores = []
+let j = 0
+while j < len(err_list):
+    let risk = (err_list[j] * 2.0) + (norm_latency[j] * 1.5)
+    risk_scores.append(Math.round(risk, 3))
+    j = j + 1
+
+
+print("  Computed User Risk Scores: " + str(risk_scores))
+
+# Verify highest risk user is user #102 (high latency + 4 errors)
+let max_risk = risk_scores[0]
+let max_user = raw_data["user_id"][0]
+let k = 1
+while k < len(risk_scores):
+    if risk_scores[k] > max_risk:
+        max_risk = risk_scores[k]
+        max_user = raw_data["user_id"][k]
+    k = k + 1
+
+print("  Flagged High-Risk Anomalous Entity: User #" + str(max_user) + " (Risk Score: " + str(max_risk) + ")")
+assert(max_user == 102, "Expected user 102 to have highest risk score")
+
+print("\n[SUCCESS] Columnar DataFrame ML Feature Pipeline Completed! ✅")
+print("================================================================================")

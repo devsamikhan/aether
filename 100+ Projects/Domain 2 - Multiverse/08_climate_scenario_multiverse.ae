@@ -1,0 +1,38 @@
+// Project 8: Climate Scenario Multiverse (IPCC SSP Pathways)
+// Evaluates warming pathways under 3 emissions trajectories (SSP1-1.9, SSP2-4.5, SSP5-8.5).
+
+fn simulate_pathway(name, annual_ppm_growth, years) {
+    let ppm = 420.0
+    let temp_anomaly = 1.2
+    let y = 0
+    let delta = 0.0
+    
+    while y < years {
+        ppm = ppm + annual_ppm_growth
+        delta = (annual_ppm_growth / 420.0) * 0.15
+        temp_anomaly = temp_anomaly + delta
+        y = y + 1
+    }
+    return {
+        "name": name,
+        "co2": ppm,
+        "temp": temp_anomaly
+    }
+}
+
+fn main() {
+    let ssp1 = simulate_pathway("SSP1_Green", 0.5, 30)
+    let ssp2 = simulate_pathway("SSP2_Middle", 2.2, 30)
+    let ssp5 = simulate_pathway("SSP5_Fossil", 4.8, 30)
+    
+    println("🌍 Climate Multiverse Projections (2026 - 2056):")
+    println("  " + ssp1["name"] + " -> CO2: " + str(ssp1["co2"]) + " ppm | Temp Delta: +" + str(ssp1["temp"]) + "C")
+    println("  " + ssp2["name"] + " -> CO2: " + str(ssp2["co2"]) + " ppm | Temp Delta: +" + str(ssp2["temp"]) + "C")
+    println("  " + ssp5["name"] + " -> CO2: " + str(ssp5["co2"]) + " ppm | Temp Delta: +" + str(ssp5["temp"]) + "C")
+    
+    assert(ssp1["temp"] < ssp2["temp"], "Green pathway must be cooler than middle pathway")
+    assert(ssp2["temp"] < ssp5["temp"], "Middle pathway must be cooler than fossil pathway")
+    println("✅ Climate Scenario Multiverse Verified.")
+}
+
+main()

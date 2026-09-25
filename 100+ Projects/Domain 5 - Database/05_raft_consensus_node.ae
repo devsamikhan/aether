@@ -1,0 +1,95 @@
+# ==============================================================================
+# Domain 5: Database & Storage Engines
+# Project 05: Raft Distributed Consensus Protocol Node
+# ==============================================================================
+# Implements the Raft Consensus Algorithm state machine:
+# Leader Election, Term increments, Quorum voting (N/2 + 1),
+# Heartbeat AppendEntries RPCs, and replicated log consistency.
+# ==============================================================================
+
+print("================================================================================")
+print("⚓ [Domain 5 - Project 05] RAFT DISTRIBUTED CONSENSUS NODE")
+print("================================================================================")
+
+class RaftNode:
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.current_term = 0
+        self.voted_for = nil
+        self.state = "Follower" # "Follower", "Candidate", "Leader"
+        self.log = []
+
+    def start_election(self, cluster_size):
+        self.current_term = self.current_term + 1
+        self.state = "Candidate"
+        self.voted_for = self.node_id
+        print("\n[Node " + str(self.node_id) + "] Election Timeout! Starting Term " + str(self.current_term) + " as Candidate.")
+        return self.voted_for
+
+    def request_vote(self, candidate_id, term):
+        if term > self.current_term:
+            self.current_term = term
+            self.state = "Follower"
+            self.voted_for = candidate_id
+            return true
+        if term == self.current_term and (self.voted_for == nil or self.voted_for == candidate_id):
+            self.voted_for = candidate_id
+            return true
+        return false
+
+    def append_entries(self, leader_id, term, log_entry):
+        if term >= self.current_term:
+            self.current_term = term
+            self.state = "Follower"
+            if log_entry != nil:
+                self.log.append(log_entry)
+            return true
+        return false
+
+def run_raft_simulation():
+    # 3-Node Cluster: Node 0, Node 1, Node 2
+    let node0 = RaftNode(0)
+    let node1 = RaftNode(1)
+    let node2 = RaftNode(2)
+    let cluster_size = 3
+    let quorum = (cluster_size / 2) + 1 # 2 votes needed
+
+    print("Initialized 3-Node Raft Cluster (Quorum threshold = 2 nodes).")
+
+    # Step 1: Node 0 times out and initiates election
+    node0.start_election(cluster_size)
+    let votes_granted = 1 # Voted for self
+
+    # Request votes from Node 1 and Node 2
+    let v1 = node1.request_vote(node0.node_id, node0.current_term)
+    if v1:
+        votes_granted = votes_granted + 1
+        print("  ✓ Node 1 granted vote to Node 0")
+
+    let v2 = node2.request_vote(node0.node_id, node0.current_term)
+    if v2:
+        votes_granted = votes_granted + 1
+        print("  ✓ Node 2 granted vote to Node 0")
+
+    print("\n[Election Result]: Total Votes = " + str(votes_granted) + "/" + str(cluster_size))
+    if votes_granted >= quorum:
+        node0.state = "Leader"
+        print("  👑 Node 0 Achieved Quorum! Transitioned to LEADER for Term " + str(node0.current_term))
+
+    # Step 2: Leader replicates state log entry: "SET balance = 1000"
+    let entry = "SET balance = 1000"
+    print("\n[Log Replication] Leader 0 replicating entry '" + entry + "' across cluster...")
+    node0.log.append(entry)
+
+    let ack1 = node1.append_entries(node0.node_id, node0.current_term, entry)
+    let ack2 = node2.append_entries(node0.node_id, node0.current_term, entry)
+
+    print("  Node 1 Ack: " + str(ack1) + " | Log count: " + str(len(node1.log)))
+    print("  Node 2 Ack: " + str(ack2) + " | Log count: " + str(len(node2.log)))
+
+    assert(node0.state == "Leader", "Node 0 must be leader")
+    assert(len(node1.log) == 1 and len(node2.log) == 1, "Followers must have replicated entry")
+    print("\n[SUCCESS] Raft Consensus Leader Election & Log Replication Verified! ✅")
+
+run_raft_simulation()
+print("================================================================================")

@@ -1,0 +1,49 @@
+// Project 10: Multiverse Decision Matrix (Minimax Optimal Choice)
+// Evaluates strategies across alternative competitor responses to select the Nash equilibrium.
+
+fn main() {
+    // Strategy payoff matrix: Rows = Our Strategy [Aggressive, Balanced, Conservative]
+    // Columns = Opponent Moves [Price War, Normal, Premium]
+    let payoff_matrix = [
+        [10, 5, -5],
+        [8, 8, 4],
+        [2, 4, 6]
+    ]
+    let strategies = ["Aggressive", "Balanced", "Conservative"]
+    
+    let best_strategy_idx = 0
+    let best_min_payoff = -999
+    
+    let row = 0
+    let col = 0
+    let min_payoff = 0
+    let val = 0
+    
+    while row < 3 {
+        col = 0
+        min_payoff = 999
+        while col < 3 {
+            val = payoff_matrix[row][col]
+            if val < min_payoff {
+                min_payoff = val
+            }
+            col = col + 1
+        }
+        
+        println("  Strategy [" + strategies[row] + "] Guaranteed Min Payoff: " + str(min_payoff))
+        if min_payoff > best_min_payoff {
+            best_min_payoff = min_payoff
+            best_strategy_idx = row
+        }
+        row = row + 1
+    }
+    
+    let chosen_strategy = strategies[best_strategy_idx]
+    println("🎯 Optimal Multiverse Minimax Strategy: " + chosen_strategy + " (Floor: " + str(best_min_payoff) + ")")
+    
+    assert(chosen_strategy == "Balanced", "Balanced strategy must be minimax choice")
+    assert(best_min_payoff == 4, "Minimax security floor must be 4")
+    println("✅ Multiverse Decision Matrix Verified.")
+}
+
+main()

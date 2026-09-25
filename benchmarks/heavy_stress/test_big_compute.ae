@@ -1,0 +1,12 @@
+from aether_compute import Buffer, vec_fma, parallel_sum
+
+let n = 10000000
+let a = Buffer.zeros(n)
+let b = Buffer.zeros(n)
+let c = Buffer.zeros(n)
+
+let t0 = time()
+let out = vec_fma(a, b, c)
+let s = parallel_sum(out)
+let t1 = time()
+println("10 Million Floats FMA + Parallel Sum Time:", (t1 - t0) * 1000.0, "ms")

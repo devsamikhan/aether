@@ -1,0 +1,54 @@
+// Project 10: Spatial Anchor Realigner (Point Cloud Drift Correction)
+// Calculates centroid displacement vector to realign persistent holographic anchors to physical markers.
+
+fn compute_centroid(points) {
+    let sum_x = 0.0
+    let sum_y = 0.0
+    let sum_z = 0.0
+    let i = 0
+    let pt = nil
+    
+    while i < points.len() {
+        pt = points[i]
+        sum_x = sum_x + pt[0]
+        sum_y = sum_y + pt[1]
+        sum_z = sum_z + pt[2]
+        i = i + 1
+    }
+    let n = points.len()
+    return [sum_x / n, sum_y / n, sum_z / n]
+}
+
+fn main() {
+    // Stored anchor reference cloud
+    let ref_cloud = [
+        [1.0, 2.0, 0.5],
+        [1.2, 2.1, 0.5],
+        [0.8, 1.9, 0.5]
+    ]
+    
+    // Live SLAM sensor detected points (drifted by +0.3 in X, +0.1 in Y)
+    let live_cloud = [
+        [1.3, 2.1, 0.5],
+        [1.5, 2.2, 0.5],
+        [1.1, 2.0, 0.5]
+    ]
+    
+    let c_ref = compute_centroid(ref_cloud)
+    let c_live = compute_centroid(live_cloud)
+    
+    let drift_x = c_live[0] - c_ref[0]
+    let drift_y = c_live[1] - c_ref[1]
+    let drift_z = c_live[2] - c_ref[2]
+    
+    println("📍 Spatial Hologram Re-alignment:")
+    println("  Reference Centroid: " + str(c_ref))
+    println("  Live SLAM Centroid: " + str(c_live))
+    println("  Correction Offset:  [" + str(-drift_x) + ", " + str(-drift_y) + ", " + str(-drift_z) + "]")
+    
+    assert(abs(drift_x - 0.3) < 0.001, "X-axis alignment offset mismatch")
+    assert(abs(drift_y - 0.1) < 0.001, "Y-axis alignment offset mismatch")
+    println("✅ Spatial Anchor Realigner Verified.")
+}
+
+main()

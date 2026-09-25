@@ -1,0 +1,68 @@
+# ==============================================================================
+# Domain 1: Quantum Computing & Cryptography
+# Project 07: Shor's Quantum Period Finding & Factorization
+# ==============================================================================
+# Simulates the quantum core of Shor's Polynomial-Time Factorization Algorithm.
+# Computes the quantum modular order r of unitary operator U|y> = |a*y mod N>
+# and extracts non-trivial prime factors of composite N via Euclid's GCD.
+# ==============================================================================
+
+print("================================================================================")
+print("🔢 [Domain 1 - Project 07] SHOR'S QUANTUM FACTORIZATION ENGINE")
+print("================================================================================")
+
+def gcd(a, b):
+    let temp = 0
+    while b != 0:
+        temp = b
+        b = a % b
+        a = temp
+    return a
+
+def find_quantum_period(a, n):
+    print("Finding Quantum Period r for a = " + str(a) + " mod " + str(n) + "...")
+    # Quantum Modular Exponentiation register evaluation
+    let r = 1
+    let val = a % n
+    while val != 1:
+        val = (val * a) % n
+        r = r + 1
+        if r > n:
+            return -1 # Period not found
+    print("  Quantum Phase Estimation Collapsed to Order r = " + str(r))
+    return r
+
+def factorize_shor(n):
+    print("Attempting Quantum Factorization of Composite N = " + str(n) + ":")
+    let a = 7 # Coprime generator: gcd(7, 15) = 1
+    let g = gcd(a, n)
+    if g > 1:
+        print("Lucky initial classical factor found: " + str(g))
+        return [g, n / g]
+
+    let r = find_quantum_period(a, n)
+    if r % 2 != 0:
+        print("Period is odd; retry with different coprime.")
+        return nil
+
+    # Compute a^(r/2)
+    let half_r = r / 2
+    let power_val = 1
+    let p_idx = 0
+    while p_idx < half_r:
+        power_val = power_val * a
+        p_idx = p_idx + 1
+
+    print("  a^(r/2) = " + str(a) + "^" + str(half_r) + " = " + str(power_val))
+    let factor1 = gcd(power_val - 1, n)
+    let factor2 = gcd(power_val + 1, n)
+
+    print("  Factor 1 = gcd(" + str(power_val - 1) + ", " + str(n) + ") = " + str(factor1))
+    print("  Factor 2 = gcd(" + str(power_val + 1) + ", " + str(n) + ") = " + str(factor2))
+
+    assert(factor1 * factor2 == n, "Shor factors must multiply to N")
+    print("\n[SUCCESS] RSA Composite N=" + str(n) + " Broken via Quantum Shor Algorithm: " + str(factor1) + " * " + str(factor2) + "! ✅")
+    return [factor1, factor2]
+
+factorize_shor(15)
+print("================================================================================")

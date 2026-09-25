@@ -1,0 +1,143 @@
+# ==============================================================================
+# Domain 1: Quantum Computing & Cryptography
+# Project 05: Lattice-Based Post-Quantum Key Encapsulation (CRYSTALS-Kyber MLWE)
+# ==============================================================================
+# Simulates the NIST FIPS 203 standard Module Learning-with-Errors (MLWE)
+# post-quantum cryptosystem in polynomial ring Z_q[X]/(X^n + 1).
+# ==============================================================================
+
+import Math
+
+print("================================================================================")
+print("🛡️ [Domain 1 - Project 05] LATTICE POST-QUANTUM KEM (KYBER)")
+print("================================================================================")
+
+let Q = 3329 # Prime modulus used in Kyber-512/768/1024
+let N = 8    # Polynomial ring degree (dimension)
+
+def poly_add(a, b):
+    let res = []
+    let i = 0
+    while i < N:
+        res.append((a[i] + b[i]) % Q)
+        i = i + 1
+    return res
+
+def poly_sub(a, b):
+    let res = []
+    let i = 0
+    while i < N:
+        let val = (a[i] - b[i]) % Q
+        if val < 0:
+            val = val + Q
+        res.append(val)
+        i = i + 1
+    return res
+
+def poly_mul_negacyclic(a, b):
+    # Multiplication in Z_q[X]/(X^N + 1)
+    let prod = []
+    let i = 0
+    while i < N:
+        prod.append(0)
+        i = i + 1
+
+    let term = 0
+    let diff = 0
+    let j = 0
+    while j < N:
+        let k = 0
+        while k < N:
+            term = (a[j] * b[k]) % Q
+            if j + k < N:
+                prod[j + k] = (prod[j + k] + term) % Q
+            if j + k >= N:
+                diff = (prod[j + k - N] - term) % Q
+                if diff < 0:
+                    diff = diff + Q
+                prod[j + k - N] = diff
+            k = k + 1
+        j = j + 1
+    return prod
+
+
+
+def run_kyber_simulation():
+    print("[1. Key Generation] Generating Alice's Public/Private Keypair...")
+    # Public matrix/seed A (uniform random mod Q)
+    let a_seed = [1200, 310, 2450, 990, 1840, 220, 1400, 780]
+    # Private secret s (small coefficients in [-2, 2])
+    let s_secret = [1, -1, 0, 1, -1, 0, 1, 0]
+    # Small error noise e
+    let e_noise = [0, 1, -1, 0, 1, 0, -1, 0]
+
+    # Public Key: pk = A * s + e (mod Q)
+    let as_prod = poly_mul_negacyclic(a_seed, s_secret)
+    let pk = poly_add(as_prod, e_noise)
+    print("  Public Key pk (Preview): " + str(pk[0]) + ", " + str(pk[1]) + ", " + str(pk[2]) + "...")
+
+    print("\n[2. Encapsulation] Bob Encapsulates Shared Secret Key...")
+    # Bob's ephemeral random secret r and noises e1, e2
+    let r_secret = [1, 0, -1, 1, 0, 1, -1, 0]
+    let e1_noise = [0, -1, 1, 0, 0, 1, 0, -1]
+    let e2_noise = [1, 0, -1, 0, 1, 0, 0, 0]
+
+    # Shared secret message to transmit (e.g. 1-bit per coeff)
+    let message = [1, 0, 1, 1, 0, 0, 1, 0]
+    # Encode msg to high-order bits: m * round(Q/2)
+    let half_q = 1665
+    let encoded_m = []
+    let m_i = 0
+    while m_i < N:
+        encoded_m.append(message[m_i] * half_q)
+        m_i = m_i + 1
+
+    # Ciphertext: u = A^T * r + e1
+    let ar_prod = poly_mul_negacyclic(a_seed, r_secret)
+    let c_u = poly_add(ar_prod, e1_noise)
+
+    # v = pk * r + e2 + encoded_m
+    let pkr_prod = poly_mul_negacyclic(pk, r_secret)
+    let v_partial = poly_add(pkr_prod, e2_noise)
+    let c_v = poly_add(v_partial, encoded_m)
+    print("  Ciphertext (u, v) Generated across Lattice Grid.")
+
+    print("\n[3. Decapsulation] Alice Decapsulates Shared Secret using Secret s...")
+    # Alice computes: recovered_m = v - s * u
+    let su_prod = poly_mul_negacyclic(s_secret, c_u)
+    let noisy_m = poly_sub(c_v, su_prod)
+
+    # Decode high-order bits: if distance to Q/2 is small -> 1, else 0
+    let decoded_message = []
+    let dist_to_half = 0
+    let bit = 0
+    let d_i = 0
+    while d_i < N:
+        let val = noisy_m[d_i]
+        # Check if closer to Q/2 than 0 or Q
+        dist_to_half = (val - half_q)
+        if dist_to_half < 0:
+            dist_to_half = 0 - dist_to_half
+
+        bit = 0
+        if dist_to_half < half_q / 2:
+            bit = 1
+        decoded_message.append(bit)
+        d_i = d_i + 1
+
+
+    print("  Original Secret Message:  " + str(message))
+    print("  Decapsulated Key Message: " + str(decoded_message))
+
+    let match_count = 0
+    let v_idx = 0
+    while v_idx < N:
+        if message[v_idx] == decoded_message[v_idx]:
+            match_count = match_count + 1
+        v_idx = v_idx + 1
+
+    assert(match_count == N, "Kyber post-quantum key decapsulation failed")
+    print("\n[SUCCESS] Kyber Post-Quantum Shared Key Successfully Recovered! ✅")
+
+run_kyber_simulation()
+print("================================================================================")

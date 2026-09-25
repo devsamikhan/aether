@@ -1,0 +1,59 @@
+// Project 7: Parallel Timeline Merger (CRDT 3-Way Reconciliation)
+// Merges divergent timeline registers using Last-Write-Wins and version vectors.
+
+fn merge_registers(base, branch_a, branch_b) {
+    let merged = {}
+    let keys = ["alpha_node", "beta_node", "gamma_node"]
+    let i = 0
+    let k = ""
+    let va = nil
+    let vb = nil
+    
+    while i < keys.len() {
+        k = keys[i]
+        va = branch_a[k]
+        vb = branch_b[k]
+        
+        // Compare Lamport timestamps
+        if va["ts"] >= vb["ts"] {
+            merged[k] = va["val"]
+        } else {
+            merged[k] = vb["val"]
+        }
+        i = i + 1
+    }
+    return merged
+}
+
+fn main() {
+    let base = {
+        "alpha_node": { "val": "A0", "ts": 1 },
+        "beta_node": { "val": "B0", "ts": 1 },
+        "gamma_node": { "val": "G0", "ts": 1 }
+    }
+    
+    let timeline_alpha = {
+        "alpha_node": { "val": "A_updated", "ts": 5 },
+        "beta_node": { "val": "B0", "ts": 1 },
+        "gamma_node": { "val": "G_stale", "ts": 2 }
+    }
+    
+    let timeline_beta = {
+        "alpha_node": { "val": "A0", "ts": 1 },
+        "beta_node": { "val": "B_winner", "ts": 6 },
+        "gamma_node": { "val": "G_winner", "ts": 8 }
+    }
+    
+    let unified = merge_registers(base, timeline_alpha, timeline_beta)
+    println("🔗 Reconciled Multiverse Timeline State:")
+    println("  alpha_node: " + unified["alpha_node"])
+    println("  beta_node:  " + unified["beta_node"])
+    println("  gamma_node: " + unified["gamma_node"])
+    
+    assert(unified["alpha_node"] == "A_updated", "Timeline A latest write failed")
+    assert(unified["beta_node"] == "B_winner", "Timeline B latest write failed")
+    assert(unified["gamma_node"] == "G_winner", "Timeline B highest timestamp failed")
+    println("✅ Parallel Timeline Merger Verified.")
+}
+
+main()

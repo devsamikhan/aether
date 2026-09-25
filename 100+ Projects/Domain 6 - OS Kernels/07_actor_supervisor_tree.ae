@@ -1,0 +1,81 @@
+# ==============================================================================
+# Domain 6: Operating System Kernels & Systems Architecture
+# Project 07: Erlang/OTP Actor Supervision Tree
+# ==============================================================================
+# Implements an autonomous supervision tree with One-For-One fault tolerance.
+# Intercepts child actor runtime crashes and transparently respawns clean instances.
+# ==============================================================================
+
+print("================================================================================")
+print("🌳 [Domain 6 - Project 07] ACTOR SUPERVISION TREE (OTP)")
+print("================================================================================")
+
+class WorkerActor:
+    def __init__(self, name, generation):
+        self.name = name
+        self.generation = generation
+        self.status = "HEALTHY" # "HEALTHY", "CRASHED"
+
+    def process_message(self, msg):
+        if msg == "FATAL_DIVISION_BY_ZERO":
+            self.status = "CRASHED"
+            print("  💥 Actor '" + self.name + "' (Gen " + str(self.generation) + ") CRASHED on fatal message!")
+            return false
+        print("  ✓ Actor '" + self.name + "' (Gen " + str(self.generation) + ") processed: " + msg)
+        return true
+
+class Supervisor:
+    def __init__(self, strategy):
+        self.strategy = strategy # "OneForOne"
+        self.workers = {}
+        self.restart_counts = {}
+
+    def register_child(self, name):
+        self.workers[name] = WorkerActor(name, 1)
+        self.restart_counts[name] = 0
+        print("  [Supervisor] Spawned child actor '" + name + "' (Generation 1)")
+
+    def send_message(self, name, msg):
+        let worker = self.workers[name]
+        let ok = worker.process_message(msg)
+
+        if !ok:
+            # Child crashed -> trigger supervisor policy
+            self.handle_child_failure(name)
+
+    def handle_child_failure(self, name):
+        let current_worker = self.workers[name]
+        let prev_gen = current_worker.generation
+        let prev_restarts = self.restart_counts[name]
+
+        print("\n  [Supervisor Alarm] Intercepted failure of child '" + name + "'. Applying " + self.strategy + " policy...")
+        let next_gen = prev_gen + 1
+        let new_worker = WorkerActor(name, next_gen)
+        self.workers[name] = new_worker
+        self.restart_counts[name] = prev_restarts + 1
+        print("  ✓ Resurrected clean replacement actor '" + name + "' (Generation " + str(next_gen) + ") | Restarts: " + str(self.restart_counts[name]) + "\n")
+
+let sup = Supervisor("OneForOne")
+
+print("Initializing Supervised Microservice Subsystem:")
+sup.register_child("DatabaseConnector")
+sup.register_child("PaymentGateway")
+
+# Normal operations
+print("\n--- Normal Message Passing ---")
+sup.send_message("DatabaseConnector", "QUERY: SELECT * FROM accounts")
+sup.send_message("PaymentGateway", "CHARGE: $50.00")
+
+# Inject fatal crash in PaymentGateway
+print("\n--- Simulating Malformed Payload Crash ---")
+sup.send_message("PaymentGateway", "FATAL_DIVISION_BY_ZERO")
+
+# Verify PaymentGateway was resurrected to Generation 2 and processes subsequent message
+print("--- Sending message to resurrected PaymentGateway ---")
+sup.send_message("PaymentGateway", "CHARGE: $120.00")
+
+assert(sup.workers["PaymentGateway"].generation == 2, "PaymentGateway must be Generation 2")
+assert(sup.restart_counts["PaymentGateway"] == 1, "Expected 1 restart event recorded")
+
+print("\n[SUCCESS] Actor Supervision Tree & One-For-One Recovery Verified! ✅")
+print("================================================================================")
