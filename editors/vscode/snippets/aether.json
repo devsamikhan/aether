@@ -1,0 +1,82 @@
+{
+  "Function Definition": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2:params}) {",
+      "\t${0:// body}",
+      "}"
+    ],
+    "description": "Define an AETHER function"
+  },
+  "Variable Declaration": {
+    "prefix": "let",
+    "body": [
+      "let ${1:variable} = ${2:value};"
+    ],
+    "description": "Declare a variable"
+  },
+  "Class Definition": {
+    "prefix": "class",
+    "body": [
+      "class ${1:ClassName} {",
+      "\tfn init(${2:params}) {",
+      "\t\t${3:// initialize}",
+      "\t}",
+      "\t${0}",
+      "}"
+    ],
+    "description": "Define an AETHER class with constructor"
+  },
+  "Intent Contract": {
+    "prefix": "intent",
+    "body": [
+      "intent ${1:ContractName} {",
+      "\tschema {",
+      "\t\t${2:field}: ${3:Type};",
+      "\t}",
+      "\trequire {",
+      "\t\tthis.${2:field} >= 0;",
+      "\t}",
+      "\tensure {",
+      "\t\tthis.${2:field} >= 0;",
+      "\t}",
+      "\t${0}",
+      "}"
+    ],
+    "description": "Define an AETHER declarative intent contract"
+  },
+  "Fiber Spawn": {
+    "prefix": "spawn",
+    "body": [
+      "spawn(fn() {",
+      "\t${0:// concurrent fiber task}",
+      "});"
+    ],
+    "description": "Spawn a high-speed green fiber"
+  },
+  "List Comprehension": {
+    "prefix": "comp",
+    "body": [
+      "[${1:x * 2} for ${2:x} in ${3:items} if ${4:condition}]"
+    ],
+    "description": "AETHER list comprehension"
+  },
+  "Try-Catch Exception": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t${1:// risky code}",
+      "} catch (${2:err}) {",
+      "\tprintln(\"Error: \" + ${2:err});",
+      "}"
+    ],
+    "description": "Structured try-catch exception block"
+  },
+  "Println Output": {
+    "prefix": "pl",
+    "body": [
+      "println(${1:\"message\"});"
+    ],
+    "description": "Print line to standard output"
+  }
+}

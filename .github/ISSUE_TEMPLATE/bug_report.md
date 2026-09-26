@@ -1,23 +1,26 @@
 ---
-name: Bug report
+name: 🐛 Bug Report
 about: Create a report to help us improve AETHER
-title: '[BUG] '
-labels: bug
-assignees: ''
+title: "[BUG] "
+labels: ["bug", "triage"]
+assignees: ""
 ---
 
-**Describe the bug**
+### Describe the Bug
 A clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior or minimal AETHER source code:
-```aether
-// source code
-```
+### Reproduction Steps
+1. Write code in `test.ae`:
+   ```aether
+   // Sample minimal code reproducing the issue
+   ```
+2. Run command: `aether run test.ae`
+3. Observe error output.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+### Expected Behavior
+A clear description of what you expected to happen.
 
-**Desktop/Environment Info:**
-- OS: [e.g. Windows/macOS/Linux]
-- AETHER version: [e.g. 1.0.0]
+### System & Environment Information
+- **OS:** Windows / Linux / macOS
+- **AETHER Version:** `aether --version` (or output of `aether doctor`)
+- **Architecture:** x86_64 / aarch64

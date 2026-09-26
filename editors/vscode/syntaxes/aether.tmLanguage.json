@@ -1,0 +1,155 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AETHER",
+  "scopeName": "source.aether",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#builtins" },
+    { "include": "#functions" },
+    { "include": "#operators" },
+    { "include": "#constants" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.aether",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.line.double-slash.aether",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.aether",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.aether",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.aether",
+              "match": "\\\\([nrt\\\\\"'0]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.aether",
+          "match": "\\b0x[0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.aether",
+          "match": "\\b0b[01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.aether",
+          "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*([eE][+-]?[0-9_]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.aether",
+          "match": "\\b[0-9][0-9_]*\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.aether",
+          "match": "\\b(if|elif|else|while|for|in|return|break|continue|match|try|catch|finally|throw|spawn|channel|use|as)\\b"
+        },
+        {
+          "name": "keyword.declaration.aether",
+          "match": "\\b(let|fn|def|class|intent|schema|require|ensure)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.aether",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "variable.language.this.aether",
+          "match": "\\b(this|self)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.aether",
+          "match": "\\b(Int|Float|Bool|String|Nil|List|Map|Tuple|Set|Qubit|QuantumRegister|PNCounter|GCounter|ORSet|AetherGraph|Compute|DataFrame)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.aether",
+          "match": "\\b(println|print|assert|to_string|to_int|to_float|len|range|type_of|sleep|clock_ms|clock_ns|sha256|random_int|uuid|sqrt|pow|abs|floor|ceil|round|sin|cos|tan|min|max|file_read|file_write|file_append|file_exists|dir_create|json_parse|json_stringify|env_get|env_set|exit)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\b(fn|def)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.declaration.aether" },
+            "2": { "name": "entity.name.function.aether" }
+          }
+        },
+        {
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+          "captures": {
+            "1": { "name": "entity.name.function.call.aether" }
+          }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.aether",
+          "match": "(\\+|\\-|\\*|\\/|%|\\^)"
+        },
+        {
+          "name": "keyword.operator.comparison.aether",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.assignment.aether",
+          "match": "(=|\\+=|\\-=|\\*=|\\/=)"
+        },
+        {
+          "name": "keyword.operator.bitwise.aether",
+          "match": "(&|\\||<<|>>)"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.aether",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.nil.aether",
+          "match": "\\b(nil|None|null)\\b"
+        }
+      ]
+    }
+  }
+}

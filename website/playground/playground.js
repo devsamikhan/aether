@@ -207,9 +207,22 @@ clearBtn.addEventListener("click", () => {
 });
 
 shareBtn.addEventListener("click", () => {
-  navigator.clipboard.writeText(editor.value).then(() => {
-    alert("Snippet copied to clipboard!");
-  });
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(editor.value)));
+    const shareUrl = window.location.origin + window.location.pathname + "#code=" + encoded;
+    window.location.hash = "code=" + encoded;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      const origText = shareBtn.innerHTML;
+      shareBtn.innerHTML = "<span>✓ Link Copied!</span>";
+      shareBtn.style.color = "#34d399";
+      setTimeout(() => { 
+        shareBtn.innerHTML = origText;
+        shareBtn.style.color = "";
+      }, 2500);
+    });
+  } catch (_) {
+    navigator.clipboard.writeText(editor.value);
+  }
 });
 
 runBtn.addEventListener("click", executeCode);
@@ -402,6 +415,25 @@ function renderVisualizer(mode) {
   }
 }
 
-// Initial Load: Starts gently with friendly Hello World & Math!
-loadTemplate("hello");
+// Initial Load: Check if a shared snippet is passed in the URL hash, otherwise load friendly Hello World!
+function checkUrlHash() {
+  if (window.location.hash && window.location.hash.startsWith("#code=")) {
+    try {
+      const b64 = window.location.hash.replace("#code=", "");
+      const decoded = decodeURIComponent(escape(atob(b64)));
+      if (decoded.trim()) {
+        editor.value = decoded;
+        updateLineNumbers();
+        terminal.textContent = "// Loaded shared snippet from URL hash.\nPress 'Run Code' (Ctrl+Enter) to execute.";
+        renderVisualizer("hello");
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+if (!checkUrlHash()) {
+  loadTemplate("hello");
+}
 

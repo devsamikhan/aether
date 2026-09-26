@@ -1,0 +1,53 @@
+{
+  "name": "aether-language",
+  "displayName": "AETHER Language Support",
+  "description": "Official syntax highlighting, code snippets, and language configuration for AETHER 2.0",
+  "version": "2.0.0",
+  "publisher": "devsamikhan",
+  "icon": "../../logo/aether-logo-128.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "aether",
+    "quantum",
+    "systems",
+    "intent",
+    "concurrency"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devsamikhan/aether.git"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "aether",
+        "aliases": ["AETHER", "aether", "ae"],
+        "extensions": [".ae", ".aether"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "../../logo/aether-file-icon.svg",
+          "dark": "../../logo/aether-file-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "aether",
+        "scopeName": "source.aether",
+        "path": "./syntaxes/aether.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "aether",
+        "path": "./snippets/aether.json"
+      }
+    ]
+  }
+}
