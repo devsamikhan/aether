@@ -1,11 +1,12 @@
 # ==============================================================================
 # Flagship Project 04: AetherPocket (Mobile Fitness & Productivity App)
-# Written in pure AETHER syntax for Android (.apk) compilation
+# Powered by Google Material 3 (M3 / Material You) & AETHER Mobile Engine
 # Features:
+#   - Google Material 3 Dynamic Tonal Theming (M3.theme)
+#   - M3 Elevated & Filled Cards, Chips, Badges, FAB & NavigationBar
 #   - Pythonic F-strings: f"..."
 #   - Pipeline Operators: |>
-#   - Reactive Mobile State & UI Component Tree
-#   - Android Device APIs (Haptics, Battery, Network, Toasts)
+#   - Android Device Hardware APIs (Haptics, Battery, Network, Toasts)
 # ==============================================================================
 
 # 1. Utility pipelines for fitness metrics
@@ -18,7 +19,6 @@ def apply_step_calibration(steps):
     return steps * 1.05
 
 def steps_to_calories(steps):
-    # Standard formula: ~0.04 calories per step
     return steps * 0.04
 
 def format_percentage(ratio):
@@ -27,17 +27,8 @@ def format_percentage(ratio):
         pct = 100
     return f"{pct}%"
 
-# 2. Reactive UI Component Models
-class Widget:
-    def __init__(self, widget_type, label, value):
-        self.widget_type = widget_type
-        self.label = label
-        self.value = value
-
-    def render(self):
-        return f"[{self.widget_type}] {self.label}: {self.value}"
-
-class ProgressBar:
+# 2. Material 3 Progress Indicator Widget
+class M3ProgressBar:
     def __init__(self, current, target, unit):
         self.current = current
         self.target = target
@@ -55,7 +46,7 @@ class ProgressBar:
         pct = format_percentage(ratio)
         return f"|{bar}| {pct} ({self.current}/{self.target} {self.unit})"
 
-# 3. Mobile Application State Container
+# 3. Mobile Application State Container with Material 3 Integration
 class AetherPocketApp:
     def __init__(self, user_name, step_goal, water_goal_ml):
         self.app_title = "AetherPocket Mobile"
@@ -65,7 +56,10 @@ class AetherPocketApp:
         self.current_steps = 0
         self.current_water_ml = 0
         self.completed_tasks = []
-        self.is_dark_mode = True
+        self.active_tab = "Home"
+
+        # Initialize Google Material 3 Theme with AETHER Cyan Seed
+        self.theme = M3.theme("#00F5FF", True)
         self.battery = Mobile.battery_level()
         self.device = Mobile.device_info()
         self.network = Mobile.network_status()
@@ -73,21 +67,23 @@ class AetherPocketApp:
     def bootstrap(self):
         Mobile.set_title(self.app_title)
         Mobile.show_toast(f"Welcome back, {self.user_name}!")
-        print("==================================================")
-        print(f"       ⚡ {self.app_title} for Android ⚡")
-        print("==================================================")
-        print(f"📱 Running on:  {self.device['brand']} {self.device['model']}")
-        print(f"⚙️ OS Version:  {self.device['os']} ({self.device['arch']})")
-        print(f"🔋 Battery:     {self.battery}%")
-        print(f"🌐 Network:     {self.network}")
-        print("--------------------------------------------------\n")
+        print("================================================================")
+        print(f"   ⚡ {self.app_title} - Google Material 3 Edition ⚡")
+        print("================================================================")
+        print(f"🎨 M3 Seed Color:      {self.theme['seed']} (Tonal Dynamic Palette)")
+        print(f"🎨 M3 Primary:         {self.theme['primary']}  |  On-Primary: {self.theme['on_primary']}")
+        print(f"🎨 M3 Surface:         {self.theme['surface']}  |  Container:  {self.theme['primary_container']}")
+        print(f"📱 Running on:         {self.device['brand']} {self.device['model']}")
+        print(f"⚙️ Android OS:         {self.device['os']} ({self.device['arch']})")
+        print(f"🔋 Battery Level:      {self.battery}%  |  Network: {self.network}")
+        print("----------------------------------------------------------------\n")
 
     def record_steps(self, raw_steps):
-        # Using AETHER pipeline operator for sensor data transformation
+        # AETHER pipeline operator for sensor data
         calibrated = raw_steps |> clean_sensor_jitter |> apply_step_calibration
         self.current_steps = self.current_steps + int(calibrated)
         
-        # Trigger subtle Android haptic feedback
+        # Trigger Android haptic vibration
         Mobile.vibrate(25)
         
         cals = self.current_steps |> steps_to_calories
@@ -106,27 +102,66 @@ class AetherPocketApp:
         Mobile.show_toast(f"Task completed: {title}")
         print(f"✅ Completed: {title}")
 
-    def render_dashboard(self):
-        print("\n================== [MOBILE UI SCREEN] ==================")
-        print(f" User: {self.user_name}  |  Theme: {'Dark 🌙' if self.is_dark_mode else 'Light ☀️'}")
-        print("--------------------------------------------------------")
+    def render_m3_screen(self):
+        print("\n================== [GOOGLE MATERIAL 3 MOBILE UI] ==================")
         
-        step_pb = ProgressBar(self.current_steps, self.step_goal, "steps")
-        print(f" Daily Steps:   {step_pb.progress_bar_str()}")
+        # 1. Top App Bar
+        top_bar = M3.top_app_bar(self.app_title, f"User: {self.user_name}")
+        M3.render_preview(top_bar)
 
-        water_pb = ProgressBar(self.current_water_ml, self.water_goal_ml, "ml")
-        print(f" Hydration:     {water_pb.progress_bar_str()}")
+        # 2. Filter Chips row
+        print("\n M3 FilterChips:")
+        chip1 = M3.chip("Cardio & Steps", True, "👟")
+        chip2 = M3.chip("Hydration", True, "💧")
+        chip3 = M3.chip("Core Workout", len(self.completed_tasks) > 0, "💪")
+        print(f"   [✓ {chip1['label']}]   [✓ {chip2['label']}]   [{'✓' if chip3['selected'] else '○'} {chip3['label']}]")
 
+        # 3. M3 Elevated Card for Daily Steps
+        step_pb = M3ProgressBar(self.current_steps, self.step_goal, "steps")
         cals = self.current_steps |> steps_to_calories
-        print(f" Active Burn:   {cals:.1f} kcal")
-        
-        print("\n Recent Completed Habits:")
+        card1 = M3.card(
+            "elevated",
+            "Daily Steps & Calories",
+            "Activity Sensor Goal",
+            f"Progress: {step_pb.progress_bar_str()} | Burn: {cals:.1f} kcal"
+        )
+        M3.render_preview(card1)
+
+        # 4. M3 Filled Card for Hydration
+        water_pb = M3ProgressBar(self.current_water_ml, self.water_goal_ml, "ml")
+        card2 = M3.card(
+            "filled",
+            "Hydration Target",
+            "Optimal Daily Intake",
+            f"Logged: {water_pb.progress_bar_str()}"
+        )
+        M3.render_preview(card2)
+
+        # 5. M3 Buttons & FAB
+        print("\n Interactive Actions:")
+        btn_workout = M3.filled_button("Log Hydration (+250ml)", "💧")
+        M3.render_preview(btn_workout)
+
+        fab = M3.fab("add", "New Activity", True)
+        M3.render_preview(fab)
+
+        # 6. M3 Bottom Navigation Bar
+        nav_items = [
+            {"label": "Home", "icon": "home", "active": True},
+            {"label": "Activity", "icon": "fitness", "active": False},
+            {"label": "Insights", "icon": "analytics", "active": False},
+            {"label": "Profile", "icon": "person", "active": False}
+        ]
+        nav_bar = M3.navigation_bar(nav_items)
+        M3.render_preview(nav_bar)
+
+        print("\n Recent Activity Log:")
         if len(self.completed_tasks) == 0:
             print("   (No habits logged yet today)")
         else:
             for t in self.completed_tasks:
                 print(f"   • {t}")
-        print("========================================================\n")
+        print("===================================================================\n")
 
 # 4. Mobile Execution Simulation
 def main():
@@ -148,9 +183,9 @@ def main():
     app.complete_task("30-minute Cardio & Core Workout")
     app.complete_task("Read 15 pages of Compiler Architecture")
 
-    # Render complete mobile screen view
-    app.render_dashboard()
+    # Render complete Google Material 3 screen view
+    app.render_m3_screen()
 
-    print("✨ AETHER Mobile Application Loop executed successfully on Android!")
+    print("✨ AETHER Google Material 3 Mobile Application executed successfully!")
 
 main()

@@ -1154,7 +1154,30 @@ class MainActivity : AppCompatActivity() {{
         // 6. Source app.ae
         fs::write(assets_dir.join("app.ae"), source_content).map_err(|e| e.to_string())?;
 
+        // 7. Google Material 3 Theme & Colors
+        let themes_xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AetherApp" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#00F5FF</item>
+        <item name="colorSecondary">#00B4D8</item>
+        <item name="android:statusBarColor">#0F1123</item>
+        <item name="android:navigationBarColor">#0F1123</item>
+    </style>
+</resources>
+"#;
+        fs::write(res_dir.join("themes.xml"), themes_xml).map_err(|e| e.to_string())?;
+
+        let colors_xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#00F5FF</color>
+    <color name="secondary">#00B4D8</color>
+    <color name="surface">#0F1123</color>
+</resources>
+"#;
+        fs::write(res_dir.join("colors.xml"), colors_xml).map_err(|e| e.to_string())?;
+
         println!("✨ Android Studio / Gradle Project Scaffolding Generated: {}", output_dir.display());
+        println!("   🎨 Google Material 3 Theme & Colors: Theme.Material3.DayNight.NoActionBar");
         println!("   Open this folder directly in Android Studio or compile with './gradlew assembleDebug'");
 
         Ok(())

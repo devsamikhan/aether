@@ -272,3 +272,35 @@ print(f"Device: {info['brand']} {info['model']} | OS: {info['os']}")
 let net = Mobile.network_status() # 'wifi_connected', 'cellular', 'offline'
 ```
 
+---
+
+## 19. Google Material 3 (M3 / Material You) Design System
+
+AETHER provides full native support for Google's official Material 3 design system, including algorithmic tonal palettes, component factories, typography, and shape tokens:
+
+```aether
+# 1. Dynamic Tonal Palette Theming (from seed color)
+let theme = M3.theme("#00F5FF", dark_mode=True)
+print(f"Primary: {theme['primary']} | Surface: {theme['surface']}")
+
+# 2. Material 3 UI Components
+let top_bar = M3.top_app_bar("AetherPocket", "Fitness & Wellness")
+let step_card = M3.card("elevated", "Daily Steps", "Sensor Goal", "8,641 / 10,000 steps")
+let hydration_card = M3.card("filled", "Hydration", "Optimal Intake", "1,250 / 2,500 ml")
+
+let btn = M3.filled_button("Log Activity", icon="add")
+let fab = M3.fab("add", label="New Task", extended=True)
+
+let nav = M3.navigation_bar([
+    {"label": "Home", "icon": "home", "active": True},
+    {"label": "Activity", "icon": "fitness", "active": False},
+    {"label": "Profile", "icon": "person", "active": False}
+])
+
+# 3. Interactive Visual Preview
+M3.render_preview(top_bar)
+M3.render_preview(step_card)
+M3.render_preview(btn)
+M3.render_preview(nav)
+```
+

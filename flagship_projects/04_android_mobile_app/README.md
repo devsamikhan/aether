@@ -6,8 +6,12 @@ An idiomatic, high-performance mobile application written entirely in **AETHER**
 
 ## 🌟 Features & Highlights
 
+- **Google Material 3 (M3 / Material You) Design System:**
+  - **Dynamic Tonal Theming (`M3.theme`):** Algorithmic palette generator for primary, on-primary, surface, container, and outline colors based on seed hex values.
+  - **M3 UI Components:** Elevated & Filled Cards (`M3.card`), Filter Chips (`M3.chip`), Filled/Tonal/Outlined Buttons, Floating Action Buttons (`M3.fab`), Top App Bar (`M3.top_app_bar`), and Navigation Bar (`M3.navigation_bar`).
+  - **M3 Tokens:** Official typography (`display_large`..`label_small`) and shape corner radius tokens (`none`, `xs`, `sm`, `md`, `lg`, `xl`, `full`).
 - **Pure AETHER Codebase:** Built using Pythonic syntax, F-strings (`f"..."`), and pipeline operators (`|>`).
-- **Zero-Dependency APK Generation:** The AETHER compiler synthesizes Android Binary XML (`AndroidManifest.xml`), Dalvik bytecode (`classes.dex`), resource tables (`resources.arsc`), icons, and self-signed PKCS#7 signatures (`META-INF/`) directly in pure Rust.
+- **Zero-Dependency APK Generation:** Synthesizes Android Binary XML (`AndroidManifest.xml`), Dalvik bytecode (`classes.dex`), resource tables (`resources.arsc`), icons, and self-signed PKCS#7 signatures (`META-INF/`) directly in pure Rust.
 - **Native Android Hardware Bridge:**
   - `Mobile.show_toast(msg)`: Displays native Android toasts.
   - `Mobile.vibrate(ms)`: Triggers precise haptic feedback.

@@ -444,4 +444,355 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     }));
 
     globals.insert("Mobile".to_string(), Value::map(mobile_module));
+
+    // =========================================================================
+    // 7. Google Material 3 (M3 / Material You) Design System
+    // =========================================================================
+    let mut m3_module = HashMap::new();
+
+    // M3 Typography tokens
+    let mut typography = HashMap::new();
+    let mut add_type_token = |name: &str, size: i64, weight: &str, tracking: f64| {
+        let mut t = HashMap::new();
+        t.insert("size".to_string(), Value::Int(size));
+        t.insert("weight".to_string(), Value::string(weight));
+        t.insert("tracking".to_string(), Value::Float(tracking));
+        typography.insert(name.to_string(), Value::map(t));
+    };
+    add_type_token("display_large", 57, "regular", -0.25);
+    add_type_token("display_medium", 45, "regular", 0.0);
+    add_type_token("headline_large", 32, "regular", 0.0);
+    add_type_token("headline_medium", 28, "regular", 0.0);
+    add_type_token("title_large", 22, "regular", 0.0);
+    add_type_token("title_medium", 16, "medium", 0.15);
+    add_type_token("body_large", 16, "regular", 0.5);
+    add_type_token("body_medium", 14, "regular", 0.25);
+    add_type_token("label_large", 14, "medium", 0.1);
+    add_type_token("label_small", 11, "medium", 0.5);
+    m3_module.insert("typography".to_string(), Value::map(typography));
+
+    // M3 Shape tokens (corner radius in dp)
+    let mut shapes = HashMap::new();
+    shapes.insert("none".to_string(), Value::Int(0));
+    shapes.insert("xs".to_string(), Value::Int(4));
+    shapes.insert("sm".to_string(), Value::Int(8));
+    shapes.insert("md".to_string(), Value::Int(12));
+    shapes.insert("lg".to_string(), Value::Int(16));
+    shapes.insert("xl".to_string(), Value::Int(28));
+    shapes.insert("full".to_string(), Value::Int(9999));
+    m3_module.insert("shape".to_string(), Value::map(shapes));
+
+    // M3.theme(seed_color, dark_mode) -> Dynamic Tonal Palette generator
+    m3_module.insert("theme".to_string(), Value::Native("M3.theme".into(), |args| {
+        let seed = if !args.is_empty() { format!("{}", args[0]) } else { "#00F5FF".to_string() };
+        let dark_mode = if args.len() > 1 {
+            match args[1] {
+                Value::Bool(b) => b,
+                _ => true,
+            }
+        } else {
+            true
+        };
+
+        let seed_rgb = parse_hex_color(&seed);
+        let mut palette = HashMap::new();
+        palette.insert("seed".to_string(), Value::string(seed.clone()));
+        palette.insert("dark_mode".to_string(), Value::Bool(dark_mode));
+
+        if dark_mode {
+            let primary = blend_color(seed_rgb, (255, 255, 255), 0.25);
+            let on_primary = blend_color(seed_rgb, (0, 0, 0), 0.85);
+            let primary_container = blend_color(seed_rgb, (0, 0, 0), 0.65);
+            let on_primary_container = blend_color(seed_rgb, (255, 255, 255), 0.70);
+
+            palette.insert("primary".to_string(), Value::string(rgb_to_hex(primary.0, primary.1, primary.2)));
+            palette.insert("on_primary".to_string(), Value::string(rgb_to_hex(on_primary.0, on_primary.1, on_primary.2)));
+            palette.insert("primary_container".to_string(), Value::string(rgb_to_hex(primary_container.0, primary_container.1, primary_container.2)));
+            palette.insert("on_primary_container".to_string(), Value::string(rgb_to_hex(on_primary_container.0, on_primary_container.1, on_primary_container.2)));
+
+            palette.insert("surface".to_string(), Value::string("#111318"));
+            palette.insert("on_surface".to_string(), Value::string("#E1E2E8"));
+            palette.insert("surface_variant".to_string(), Value::string("#43474E"));
+            palette.insert("on_surface_variant".to_string(), Value::string("#C3C6CF"));
+            palette.insert("outline".to_string(), Value::string("#8D9199"));
+            palette.insert("error".to_string(), Value::string("#FFB4AB"));
+            palette.insert("on_error".to_string(), Value::string("#690005"));
+        } else {
+            let primary = blend_color(seed_rgb, (0, 0, 0), 0.20);
+            let on_primary = (255, 255, 255);
+            let primary_container = blend_color(seed_rgb, (255, 255, 255), 0.75);
+            let on_primary_container = blend_color(seed_rgb, (0, 0, 0), 0.80);
+
+            palette.insert("primary".to_string(), Value::string(rgb_to_hex(primary.0, primary.1, primary.2)));
+            palette.insert("on_primary".to_string(), Value::string(rgb_to_hex(on_primary.0, on_primary.1, on_primary.2)));
+            palette.insert("primary_container".to_string(), Value::string(rgb_to_hex(primary_container.0, primary_container.1, primary_container.2)));
+            palette.insert("on_primary_container".to_string(), Value::string(rgb_to_hex(on_primary_container.0, on_primary_container.1, on_primary_container.2)));
+
+            palette.insert("surface".to_string(), Value::string("#FDF8FD"));
+            palette.insert("on_surface".to_string(), Value::string("#1D1B1E"));
+            palette.insert("surface_variant".to_string(), Value::string("#E7E0EB"));
+            palette.insert("on_surface_variant".to_string(), Value::string("#49454E"));
+            palette.insert("outline".to_string(), Value::string("#79747E"));
+            palette.insert("error".to_string(), Value::string("#BA1A1A"));
+            palette.insert("on_error".to_string(), Value::string("#FFFFFF"));
+        }
+
+        Ok(Value::map(palette))
+    }));
+
+    // M3.card(type, title, subtitle?, content?)
+    m3_module.insert("card".to_string(), Value::Native("M3.card".into(), |args| {
+        let card_type = if !args.is_empty() { format!("{}", args[0]) } else { "elevated".to_string() };
+        let title = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let subtitle = if args.len() > 2 { format!("{}", args[2]) } else { "".to_string() };
+        let content = if args.len() > 3 { format!("{}", args[3]) } else { "".to_string() };
+
+        let mut card = HashMap::new();
+        card.insert("component".to_string(), Value::string("M3.Card"));
+        card.insert("type".to_string(), Value::string(card_type.clone()));
+        card.insert("title".to_string(), Value::string(title));
+        card.insert("subtitle".to_string(), Value::string(subtitle));
+        card.insert("content".to_string(), Value::string(content));
+        card.insert("shape".to_string(), Value::string("md"));
+        card.insert("elevation".to_string(), Value::Int(if card_type == "elevated" { 1 } else { 0 }));
+
+        Ok(Value::map(card))
+    }));
+
+    // M3.filled_button(label, icon?)
+    m3_module.insert("filled_button".to_string(), Value::Native("M3.filled_button".into(), |args| {
+        let label = if !args.is_empty() { format!("{}", args[0]) } else { "Button".to_string() };
+        let icon = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let mut btn = HashMap::new();
+        btn.insert("component".to_string(), Value::string("M3.FilledButton"));
+        btn.insert("label".to_string(), Value::string(label));
+        btn.insert("icon".to_string(), Value::string(icon));
+        btn.insert("elevation".to_string(), Value::Int(0));
+        btn.insert("shape".to_string(), Value::string("full"));
+        Ok(Value::map(btn))
+    }));
+
+    // M3.tonal_button(label, icon?)
+    m3_module.insert("tonal_button".to_string(), Value::Native("M3.tonal_button".into(), |args| {
+        let label = if !args.is_empty() { format!("{}", args[0]) } else { "Button".to_string() };
+        let icon = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let mut btn = HashMap::new();
+        btn.insert("component".to_string(), Value::string("M3.TonalButton"));
+        btn.insert("label".to_string(), Value::string(label));
+        btn.insert("icon".to_string(), Value::string(icon));
+        btn.insert("elevation".to_string(), Value::Int(0));
+        btn.insert("shape".to_string(), Value::string("full"));
+        Ok(Value::map(btn))
+    }));
+
+    // M3.outlined_button(label, icon?)
+    m3_module.insert("outlined_button".to_string(), Value::Native("M3.outlined_button".into(), |args| {
+        let label = if !args.is_empty() { format!("{}", args[0]) } else { "Button".to_string() };
+        let icon = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let mut btn = HashMap::new();
+        btn.insert("component".to_string(), Value::string("M3.OutlinedButton"));
+        btn.insert("label".to_string(), Value::string(label));
+        btn.insert("icon".to_string(), Value::string(icon));
+        btn.insert("shape".to_string(), Value::string("full"));
+        Ok(Value::map(btn))
+    }));
+
+    // M3.fab(icon, label?, extended?)
+    m3_module.insert("fab".to_string(), Value::Native("M3.fab".into(), |args| {
+        let icon = if !args.is_empty() { format!("{}", args[0]) } else { "add".to_string() };
+        let label = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let extended = if args.len() > 2 {
+            match args[2] {
+                Value::Bool(b) => b,
+                _ => false,
+            }
+        } else {
+            !label.is_empty()
+        };
+
+        let mut fab = HashMap::new();
+        fab.insert("component".to_string(), Value::string("M3.FAB"));
+        fab.insert("icon".to_string(), Value::string(icon));
+        fab.insert("label".to_string(), Value::string(label));
+        fab.insert("extended".to_string(), Value::Bool(extended));
+        fab.insert("elevation".to_string(), Value::Int(3));
+        fab.insert("shape".to_string(), Value::string("lg"));
+        Ok(Value::map(fab))
+    }));
+
+    // M3.top_app_bar(title, subtitle?)
+    m3_module.insert("top_app_bar".to_string(), Value::Native("M3.top_app_bar".into(), |args| {
+        let title = if !args.is_empty() { format!("{}", args[0]) } else { "App".to_string() };
+        let subtitle = if args.len() > 1 { format!("{}", args[1]) } else { "".to_string() };
+        let mut bar = HashMap::new();
+        bar.insert("component".to_string(), Value::string("M3.TopAppBar"));
+        bar.insert("title".to_string(), Value::string(title));
+        bar.insert("subtitle".to_string(), Value::string(subtitle));
+        bar.insert("elevation".to_string(), Value::Int(0));
+        Ok(Value::map(bar))
+    }));
+
+    // M3.navigation_bar(items)
+    m3_module.insert("navigation_bar".to_string(), Value::Native("M3.navigation_bar".into(), |args| {
+        let items = if !args.is_empty() { args[0].clone() } else { Value::array(Vec::new()) };
+        let mut bar = HashMap::new();
+        bar.insert("component".to_string(), Value::string("M3.NavigationBar"));
+        bar.insert("items".to_string(), items);
+        bar.insert("elevation".to_string(), Value::Int(2));
+        Ok(Value::map(bar))
+    }));
+
+    // M3.chip(label, selected?, icon?)
+    m3_module.insert("chip".to_string(), Value::Native("M3.chip".into(), |args| {
+        let label = if !args.is_empty() { format!("{}", args[0]) } else { "Chip".to_string() };
+        let selected = if args.len() > 1 {
+            match args[1] {
+                Value::Bool(b) => b,
+                _ => false,
+            }
+        } else {
+            false
+        };
+        let icon = if args.len() > 2 { format!("{}", args[2]) } else { "".to_string() };
+
+        let mut chip = HashMap::new();
+        chip.insert("component".to_string(), Value::string("M3.Chip"));
+        chip.insert("label".to_string(), Value::string(label));
+        chip.insert("selected".to_string(), Value::Bool(selected));
+        chip.insert("icon".to_string(), Value::string(icon));
+        chip.insert("shape".to_string(), Value::string("sm"));
+        Ok(Value::map(chip))
+    }));
+
+    // M3.badge(value, color?)
+    m3_module.insert("badge".to_string(), Value::Native("M3.badge".into(), |args| {
+        let val = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
+        let color = if args.len() > 1 { format!("{}", args[1]) } else { "error".to_string() };
+        let mut b = HashMap::new();
+        b.insert("component".to_string(), Value::string("M3.Badge"));
+        b.insert("value".to_string(), Value::string(val));
+        b.insert("color".to_string(), Value::string(color));
+        b.insert("shape".to_string(), Value::string("full"));
+        Ok(Value::map(b))
+    }));
+
+    // M3.progress_indicator(value, type?)
+    m3_module.insert("progress_indicator".to_string(), Value::Native("M3.progress_indicator".into(), |args| {
+        let val = if !args.is_empty() {
+            match args[0] {
+                Value::Float(f) => f,
+                Value::Int(i) => i as f64,
+                _ => 0.0,
+            }
+        } else {
+            0.0
+        };
+        let p_type = if args.len() > 1 { format!("{}", args[1]) } else { "linear".to_string() };
+        let mut p = HashMap::new();
+        p.insert("component".to_string(), Value::string("M3.ProgressIndicator"));
+        p.insert("value".to_string(), Value::Float(val));
+        p.insert("type".to_string(), Value::string(p_type));
+        Ok(Value::map(p))
+    }));
+
+    // M3.render_preview(component) -> Pretty terminal/console visual renderer
+    m3_module.insert("render_preview".to_string(), Value::Native("M3.render_preview".into(), |args| {
+        if args.is_empty() { return Err("M3.render_preview(component) requires component map".into()); }
+        if let Value::Map(m) = &args[0] {
+            let map = m.lock();
+            let comp = map.get("component").map(|v| format!("{}", v)).unwrap_or_default();
+            match comp.as_str() {
+                "M3.Card" => {
+                    let card_type = map.get("type").map(|v| format!("{}", v)).unwrap_or_else(|| "elevated".to_string());
+                    let title = map.get("title").map(|v| format!("{}", v)).unwrap_or_default();
+                    let subtitle = map.get("subtitle").map(|v| format!("{}", v)).unwrap_or_default();
+                    let content = map.get("content").map(|v| format!("{}", v)).unwrap_or_default();
+                    println!("╭────────────────────────────────────────────────────────────╮");
+                    println!("│ [M3 {} Card] (Shape: md / 12dp)                  │", card_type);
+                    if !title.is_empty() {
+                        println!("│ 🏷️  Title:    {:<44} │", title);
+                    }
+                    if !subtitle.is_empty() {
+                        println!("│ ℹ️  Subtitle: {:<44} │", subtitle);
+                    }
+                    if !content.is_empty() {
+                        println!("│ {:<58} │", content);
+                    }
+                    println!("╰────────────────────────────────────────────────────────────╯");
+                }
+                "M3.FilledButton" => {
+                    let label = map.get("label").map(|v| format!("{}", v)).unwrap_or_default();
+                    let icon = map.get("icon").map(|v| format!("{}", v)).unwrap_or_default();
+                    let icon_str = if !icon.is_empty() { format!("{} ", icon) } else { "".to_string() };
+                    println!("╭[ {}{} ]╮  (M3 Filled Button - Shape: full/pill)", icon_str, label);
+                }
+                "M3.FAB" => {
+                    let icon = map.get("icon").map(|v| format!("{}", v)).unwrap_or_default();
+                    let label = map.get("label").map(|v| format!("{}", v)).unwrap_or_default();
+                    println!("╭───[ ➕ {} {} ]───╮  (M3 Floating Action Button - Shape: lg/16dp)", icon, label);
+                }
+                "M3.TopAppBar" => {
+                    let title = map.get("title").map(|v| format!("{}", v)).unwrap_or_default();
+                    println!("╔══════════════════ [M3 TopAppBar: {}] ══════════════════╗", title);
+                }
+                "M3.NavigationBar" => {
+                    println!("╠════════════════════ [M3 NavigationBar] ════════════════════╣");
+                    if let Some(Value::Array(items)) = map.get("items") {
+                        let lock = items.lock();
+                        let labels: Vec<String> = lock.iter().map(|item| {
+                            if let Value::Map(m) = item {
+                                let l = m.lock();
+                                let label = l.get("label").map(|v| format!("{}", v)).unwrap_or_default();
+                                let active = l.get("active").map(|v| matches!(v, Value::Bool(true))).unwrap_or(false);
+                                if active {
+                                    format!("[🔘 {}]", label)
+                                } else {
+                                    format!("[⚪ {}]", label)
+                                }
+                            } else {
+                                format!("{}", item)
+                            }
+                        }).collect();
+                        println!("  {}", labels.join("    "));
+                    }
+                    println!("╚════════════════════════════════════════════════════════════╝");
+                }
+                _ => {
+                    println!("[M3 Component: {}]", comp);
+                }
+            }
+            Ok(Value::Bool(true))
+        } else {
+            Err("M3.render_preview requires a valid M3 component map".into())
+        }
+    }));
+
+    globals.insert("M3".to_string(), Value::map(m3_module));
+}
+
+// =========================================================================
+// Standalone Color Math Utilities for Material 3
+// =========================================================================
+
+fn parse_hex_color(hex: &str) -> (u8, u8, u8) {
+    let s = hex.trim().trim_start_matches('#');
+    if s.len() == 6 {
+        let r = u8::from_str_radix(&s[0..2], 16).unwrap_or(0);
+        let g = u8::from_str_radix(&s[2..4], 16).unwrap_or(0);
+        let b = u8::from_str_radix(&s[4..6], 16).unwrap_or(0);
+        (r, g, b)
+    } else {
+        (0, 245, 255)
+    }
+}
+
+fn rgb_to_hex(r: u8, g: u8, b: u8) -> String {
+    format!("#{:02X}{:02X}{:02X}", r, g, b)
+}
+
+fn blend_color(c: (u8, u8, u8), target: (u8, u8, u8), ratio: f64) -> (u8, u8, u8) {
+    let r = ((c.0 as f64) * (1.0 - ratio) + (target.0 as f64) * ratio).round().clamp(0.0, 255.0) as u8;
+    let g = ((c.1 as f64) * (1.0 - ratio) + (target.1 as f64) * ratio).round().clamp(0.0, 255.0) as u8;
+    let b = ((c.2 as f64) * (1.0 - ratio) + (target.2 as f64) * ratio).round().clamp(0.0, 255.0) as u8;
+    (r, g, b)
 }
