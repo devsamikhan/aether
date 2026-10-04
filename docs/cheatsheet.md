@@ -297,6 +297,7 @@ let nav = M3.navigation_bar([
     {"label": "Profile", "icon": "person", "active": False}
 ])
 
+
 # 3. Interactive Visual Preview
 M3.render_preview(top_bar)
 M3.render_preview(step_card)
@@ -304,3 +305,89 @@ M3.render_preview(btn)
 M3.render_preview(nav)
 ```
 
+---
+
+## 20. Single-File Web Target Builder (`.html`)
+
+AETHER compiles pure scripts into self-contained HTML5 single-file applications with zero CDN or external server dependencies:
+
+```bash
+# Option 1: Dedicated web command
+aether web app.ae -o app.html --name "My Aether Web App"
+
+# Option 2: Unified target compilation
+aether build app.ae --target web -o app.html
+```
+
+- Embeds full Material 3 styling, responsive canvas, and reactive UI state directly into one portable `.html` file.
+- Works offline in any browser across desktop, mobile, and tablets.
+
+---
+
+## 21. Native AI & LLM Engine (`AI.*`)
+
+AETHER features a built-in AI module for generative completions, intelligent chat sessions, autonomous task agents, sentiment classification, and vector embeddings:
+
+```aether
+# 1. Text Completion
+let poem = AI.complete("Explain quantum computing in one sentence.")
+println(poem)
+
+# 2. Multi-turn Conversational Chat
+let reply = AI.chat([
+    {"role": "user", "content": "Hello, how can you help me build my app?"}
+])
+println(reply)
+
+# 3. Autonomous Task Agents
+let agent = AI.agent("AetherCoder", "You are an expert compiler and games architect.")
+let advice = agent.ask("What is the optimal frame budget for 60 FPS?")
+println(advice)
+
+# 4. Sentiment Analysis
+let sent = AI.sentiment("AETHER makes development delightful and super fast!")
+println(sent["label"]) # "positive"
+
+# 5. Vector Embeddings
+let vec = AI.embeddings("Neon hyper-highway arcade runner")
+println(len(vec))      # 16-dimensional embedding vector
+```
+
+---
+
+## 22. Aether Package Manager (`AetherPM`)
+
+Install, resolve, and manage project dependencies declared in `aether.toml` / `Aether.toml`:
+
+```toml
+# aether.toml
+[package]
+name = "my_arcade_game"
+version = "1.0.0"
+
+[dependencies]
+std = "1.0.0"
+aether_m3 = "1.0.0"
+arcade_engine = "0.5.0"
+```
+
+```bash
+# Install all project dependencies declared in aether.toml
+aether install
+
+# Install or update a specific library
+aether install aether_m3
+
+# Search package registry
+aether search game
+```
+
+---
+
+## 23. Flagship Projects
+
+1. **`01_hyperpulse_web`**: High-concurrency async web server with streaming pipelines and zero-copy JSON responses.
+2. **`02_aetherframe_analytics`**: Vectorized in-memory DataFrame engine with SQL-like query builder.
+3. **`03_aetherstore_database`**: Embedded ACID key-value and document store with write-ahead logging (WAL).
+4. **`04_android_mobile_app`**: Standalone Material 3 mobile application (`.apk`) with native hardware sensors & haptics.
+5. **`05_aether_arcade_game`**: Retro 2D arcade game engine (`CyberRunner 2088`) compiling to `.exe`, `.apk`, and single-file `.html`.

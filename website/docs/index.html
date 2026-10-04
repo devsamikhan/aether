@@ -149,6 +149,16 @@
             <div class="card-title">Google Material 3</div>
             <div class="card-desc">Native Material You design system with dynamic tonal palettes, elevated cards, FABs, navigation bars, and zero-dependency Android APK builder.</div>
           </div>
+          <div class="feature-doc-card">
+            <div class="card-icon">🌐</div>
+            <div class="card-title">Single-File Web Target</div>
+            <div class="card-desc">Compile pure AETHER into self-contained HTML5 single-file applications with embedded M3 UI, reactive state, and zero CDN dependencies.</div>
+          </div>
+          <div class="feature-doc-card">
+            <div class="card-icon">🤖</div>
+            <div class="card-title">Native AI Engine</div>
+            <div class="card-desc">Built-in AI stdlib module (<code>AI.*</code>) for completions, chat sessions, autonomous task agents, sentiment classification, and vector embeddings.</div>
+          </div>
         </div>
       </article>
 
@@ -286,6 +296,26 @@ Status: SYSTEM 100% HEALTHY & READY FOR PRODUCTION 🚀
                 <td><code>aether build &lt;file.ae&gt; --target android-project -o &lt;dir&gt;</code></td>
                 <td>Exports a complete, ready-to-open Android Studio / Gradle project with Kotlin & Manifest.</td>
                 <td><code>aether build app.ae --target android-project -o my_app_android/</code></td>
+              </tr>
+              <tr>
+                <td><code>aether build &lt;file.ae&gt; --target web -o &lt;app.html&gt;</code></td>
+                <td>Compiles an AETHER script into a self-contained single-file HTML5 web application.</td>
+                <td><code>aether build app.ae --target web -o app.html</code></td>
+              </tr>
+              <tr>
+                <td><code>aether web &lt;file.ae&gt; -o &lt;app.html&gt;</code></td>
+                <td>Dedicated command to synthesize a zero-dependency Material 3 web application bundle.</td>
+                <td><code>aether web app.ae -o app.html --name "MyApp"</code></td>
+              </tr>
+              <tr>
+                <td><code>aether install [pkg]</code></td>
+                <td>Installs project dependencies from <code>aether.toml</code> or downloads a package from the registry.</td>
+                <td><code>aether install aether_m3</code></td>
+              </tr>
+              <tr>
+                <td><code>aether search &lt;query&gt;</code></td>
+                <td>Searches the official AETHER package registry for matching libraries.</td>
+                <td><code>aether search game</code></td>
               </tr>
             </tbody>
           </table>

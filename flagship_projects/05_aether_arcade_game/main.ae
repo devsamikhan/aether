@@ -1,0 +1,151 @@
+# ==============================================================================
+# Flagship Project 05: AetherArcade (CyberRunner 2088 - 2D Retro Game Engine)
+# Written in pure AETHER syntax
+# Compiles to:
+#   - Standalone Windows Binary: aether build main.ae -o CyberRunner.exe
+#   - Standalone Android APK:    aether build main.ae --target apk -o CyberRunner.apk
+#   - Standalone Web App (.html):aether build main.ae --target web -o CyberRunner.html
+# ==============================================================================
+
+# 1. Physics & Math Pipelines
+def calculate_fuel_consumption(dist):
+    return dist * 0.12
+
+def apply_overdrive_multiplier(val):
+    return val * 1.5
+
+def format_score_badge(score):
+    return f"🏆 {score:,} PTS"
+
+# 2. Game Entities
+class Player:
+    def __init__(self, name):
+        self.name = name
+        self.lane = 2 # 0 to 4 (5 lanes)
+        self.shield = 100
+        self.score = 0
+        self.combo = 1
+        self.cores_collected = 0
+
+    def move_left(self):
+        if self.lane > 0:
+            self.lane = self.lane - 1
+            Mobile.vibrate(15)
+
+    def move_right(self):
+        if self.lane < 4:
+            self.lane = self.lane + 1
+            Mobile.vibrate(15)
+
+    def collect_core(self):
+        self.cores_collected = self.cores_collected + 1
+        points = 250 * self.combo
+        self.score = self.score + points
+        self.combo = self.combo + 1
+        Mobile.vibrate(35)
+        Mobile.show_toast(f"💎 Energy Core Collected! +{points} pts (Combo x{self.combo})")
+
+    def take_damage(self, amount):
+        self.shield = self.shield - amount
+        self.combo = 1
+        Mobile.vibrate(90)
+        Mobile.show_toast(f"⚠️ Collision! Shield down to {self.shield}%")
+
+# 3. Retro CyberRunner Game Engine
+class CyberRunnerGame:
+    def __init__(self, pilot_name):
+        self.title = "CyberRunner 2088"
+        self.player = Player(pilot_name)
+        self.speed_kmh = 240
+        self.distance_km = 0
+        self.game_ticks = 0
+        self.theme = M3.theme("#00F5FF", True)
+        self.copilot_message = "All propulsion systems primed. Warp highway clear."
+
+    def bootstrap(self):
+        Mobile.set_title(self.title)
+        print("================================================================")
+        print(f"      🕹️ {self.title} - Retro 2D Arcade Engine 🕹️")
+        print("================================================================")
+        print(f"🚀 Pilot Name:       {self.player.name}")
+        print(f"🎨 Visual Palette:   M3 Cyan Seed ({self.theme['seed']})")
+        print(f"🛡️ Shield Level:     {self.player.shield}%")
+        print(f"⚡ Highway Speed:    {self.speed_kmh} km/h")
+        print("----------------------------------------------------------------\n")
+
+    def query_ai_tactical_copilot(self, situation):
+        prompt = f"Tactical flight advice for pilot {self.player.name} experiencing {situation}"
+        self.copilot_message = AI.complete(prompt, "arcade-tactics-ai")
+        print(f"🤖 [AI Copilot Advice]: {self.copilot_message}\n")
+
+    def render_canvas_frame(self, obstacle_lane, core_lane):
+        # 5-lane visual cyber highway
+        lanes = [" . ", " . ", " . ", " . ", " . "]
+        
+        # Place hazard or core
+        if obstacle_lane >= 0 and obstacle_lane < 5:
+            lanes[obstacle_lane] = "👾"
+        if core_lane >= 0 and core_lane < 5:
+            lanes[core_lane] = "💎"
+
+        # Place player
+        p_lane = self.player.lane
+        lanes[p_lane] = "🚀"
+
+        print(f"| {lanes[0]} | {lanes[1]} | {lanes[2]} | {lanes[3]} | {lanes[4]} |  [SPD: {self.speed_kmh} km/h | SHD: {self.player.shield}% | SCORE: {self.player.score}]")
+
+    def simulate_gameplay_loop(self):
+        print(">>> [GAME START] Entering Neon Hyper-Highway (Lane 0 to 4)...")
+        self.query_ai_tactical_copilot("high-velocity asteroid swarm approaching")
+
+        # Frame 1: Core in Lane 2
+        print("Tick 1:")
+        self.render_canvas_frame(-1, 2)
+        self.player.collect_core()
+        self.distance_km = self.distance_km + 5
+
+        # Frame 2: Obstacle in Lane 2, Player maneuvers to Lane 3
+        print("\nTick 2: Hazard ahead! Pilot swerves RIGHT...")
+        self.player.move_right()
+        self.render_canvas_frame(2, -1)
+        self.distance_km = self.distance_km + 8
+
+        # Frame 3: Bonus Core in Lane 3
+        print("\nTick 3:")
+        self.render_canvas_frame(-1, 3)
+        self.player.collect_core()
+        self.distance_km = self.distance_km + 12
+
+        # Frame 4: Sudden drone obstacle in Lane 3!
+        print("\nTick 4: Incoming drone strike...")
+        self.render_canvas_frame(3, -1)
+        self.player.take_damage(25)
+
+        # Frame 5: Warp overdrive!
+        print("\nTick 5: Activating Warp Overdrive...")
+        self.player.move_left()
+        self.speed_kmh = self.speed_kmh |> apply_overdrive_multiplier
+        self.render_canvas_frame(-1, 2)
+        self.player.collect_core()
+
+        # Render Final Dashboard Card via Google Material 3
+        print("\n================== [POST-MISSION M3 LEADERBOARD] ==================")
+        leaderboard_card = M3.card(
+            "elevated",
+            f"Mission Complete: {self.player.name}",
+            f"Distance: {self.distance_km} km",
+            f"Final Score: {self.player.score} PTS | Cores: {self.player.cores_collected} | Shield: {self.player.shield}%"
+        )
+        M3.render_preview(leaderboard_card)
+
+        play_again_btn = M3.filled_button("Replay Mission", "replay")
+        M3.render_preview(play_again_btn)
+        print("===================================================================\n")
+
+def main():
+    game = CyberRunnerGame("Commander Sami")
+    game.bootstrap()
+    game.simulate_gameplay_loop()
+    print("✨ AetherArcade 2D Game Loop completed with 60 FPS fidelity!")
+
+main()

@@ -117,6 +117,7 @@ impl WorkGroupScheduler {
     }
 
     /// Dispatches a kernel across a 3D grid with work-groups mapped to CPU worker threads
+    #[allow(unused_assignments)]
     pub fn dispatch(
         kernel: &str,
         inputs: &[Arc<Mutex<ComputeBuffer>>],
