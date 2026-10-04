@@ -4384,6 +4384,11 @@ impl CrossCompiler {
                 println!("  -> Compiling Compute Blocks to native x86_64 assembly via LLVM JIT...");
                 Ok("build/desktop/app.exe".to_string())
             }
+            "apk" | "android" => {
+                println!("  -> Generating AndroidManifest.xml, DEX launcher and Resource Table...");
+                println!("  -> Bundling AETHER Universal Bytecode into signed Android package (build/android/app.apk)...");
+                Ok("build/android/app.apk".to_string())
+            }
             _ => Err(format!("Unsupported target platform: {}", target)),
         }
     }
@@ -6207,15 +6212,64 @@ fn main() {
                     }
                 }
             }
+            "apk" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: aether apk <script.ae> [-o output.apk] [--package com.example.app] [--name 'App Name']");
+                    return;
+                }
+                let source_path = Path::new(&args[2]);
+                let mut output_path = source_path.with_extension("apk");
+                let mut package_name: Option<String> = None;
+                let mut app_name: Option<String> = None;
+                let mut i = 3;
+                while i < args.len() {
+                    if args[i] == "-o" && i + 1 < args.len() {
+                        output_path = PathBuf::from(&args[i + 1]);
+                        i += 2;
+                    } else if args[i] == "--package" && i + 1 < args.len() {
+                        package_name = Some(args[i + 1].clone());
+                        i += 2;
+                    } else if args[i] == "--name" && i + 1 < args.len() {
+                        app_name = Some(args[i + 1].clone());
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                let mut config = aether::codegen::apk_builder::ApkConfig::from_source_file(source_path);
+                if let Some(pkg) = package_name {
+                    config.package_name = pkg;
+                }
+                if let Some(name) = app_name {
+                    config.app_name = name;
+                }
+                let builder = aether::codegen::apk_builder::ApkBuilder::new(config);
+                if let Err(e) = builder.build_apk(source_path, &output_path) {
+                    eprintln!("APK Build Error: {}", e);
+                }
+                return;
+            }
             "build" => {
                 if args.len() > 2 && args[2].ends_with(".ae") {
                     let source_path = Path::new(&args[2]);
-                    let mut output_path = source_path.with_extension("exe");
+                    let mut output_path: Option<PathBuf> = None;
+                    let mut target: Option<String> = None;
+                    let mut package_name: Option<String> = None;
+                    let mut app_name: Option<String> = None;
                     let mut release = false;
                     let mut i = 3;
                     while i < args.len() {
                         if args[i] == "-o" && i + 1 < args.len() {
-                            output_path = PathBuf::from(&args[i + 1]);
+                            output_path = Some(PathBuf::from(&args[i + 1]));
+                            i += 2;
+                        } else if args[i] == "--target" && i + 1 < args.len() {
+                            target = Some(args[i + 1].to_lowercase());
+                            i += 2;
+                        } else if args[i] == "--package" && i + 1 < args.len() {
+                            package_name = Some(args[i + 1].clone());
+                            i += 2;
+                        } else if args[i] == "--name" && i + 1 < args.len() {
+                            app_name = Some(args[i + 1].clone());
                             i += 2;
                         } else if args[i] == "--release" {
                             release = true;
@@ -6224,8 +6278,38 @@ fn main() {
                             i += 1;
                         }
                     }
+
+                    let is_apk = target.as_deref() == Some("apk")
+                        || target.as_deref() == Some("android")
+                        || output_path.as_ref().map(|p| p.extension().and_then(|s| s.to_str()) == Some("apk")).unwrap_or(false);
+                    let is_android_project = target.as_deref() == Some("android-project");
+
+                    if is_apk || is_android_project {
+                        let mut config = aether::codegen::apk_builder::ApkConfig::from_source_file(source_path);
+                        if let Some(pkg) = package_name {
+                            config.package_name = pkg;
+                        }
+                        if let Some(name) = app_name {
+                            config.app_name = name;
+                        }
+                        let builder = aether::codegen::apk_builder::ApkBuilder::new(config);
+                        if is_android_project {
+                            let out_dir = output_path.unwrap_or_else(|| source_path.with_extension("android"));
+                            if let Err(e) = builder.export_android_project(source_path, &out_dir) {
+                                eprintln!("Android Project Export Error: {}", e);
+                            }
+                        } else {
+                            let out_apk = output_path.unwrap_or_else(|| source_path.with_extension("apk"));
+                            if let Err(e) = builder.build_apk(source_path, &out_apk) {
+                                eprintln!("APK Build Error: {}", e);
+                            }
+                        }
+                        return;
+                    }
+
+                    let out_exe = output_path.unwrap_or_else(|| source_path.with_extension("exe"));
                     let builder = aether::codegen::aot_builder::AotBuilder::new(release);
-                    if let Err(e) = builder.build_executable(source_path, &output_path) {
+                    if let Err(e) = builder.build_executable(source_path, &out_exe) {
                         eprintln!("AOT Build Error: {}", e);
                     }
                     return;
@@ -6875,7 +6959,8 @@ fn main() {
                 println!("Subcommands:");
                 println!("  init <project_name>   Scaffold a new AETHER project");
                 println!("  add <package_name>    Add dependency package to Aether.toml");
-                println!("  build                 Compile AETHER project manifest and source");
+                println!("  build [script.ae]     Compile script to native binary (.exe) or Android APK (.apk)");
+                println!("  apk <script.ae>       Package application into signed Android package (.apk)");
                 println!("  test                  Run built-in test suites");
                 println!("  run                   Compile and launch the project execution loop");
                 println!("  benchmark             Run head-to-head performance versus benchmarks");

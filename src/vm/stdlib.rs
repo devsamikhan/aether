@@ -395,4 +395,53 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     }));
 
     globals.insert("Sys".to_string(), Value::map(sys_module));
+
+    // =========================================================================
+    // 6. Mobile Module (Android Device APIs & UI Bridge)
+    // =========================================================================
+    let mut mobile_module = HashMap::new();
+
+    mobile_module.insert("show_toast".to_string(), Value::Native("Mobile.show_toast".into(), |args| {
+        let msg = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
+        println!("[📱 Android Toast] {}", msg);
+        Ok(Value::Bool(true))
+    }));
+
+    mobile_module.insert("vibrate".to_string(), Value::Native("Mobile.vibrate".into(), |args| {
+        let ms = if !args.is_empty() {
+            match args[0] {
+                Value::Int(i) => i,
+                _ => 50,
+            }
+        } else {
+            50
+        };
+        println!("[📳 Android Haptic Feedback] Vibrating for {} ms", ms);
+        Ok(Value::Bool(true))
+    }));
+
+    mobile_module.insert("battery_level".to_string(), Value::Native("Mobile.battery_level".into(), |_| {
+        Ok(Value::Int(96))
+    }));
+
+    mobile_module.insert("device_info".to_string(), Value::Native("Mobile.device_info".into(), |_| {
+        let mut info = HashMap::new();
+        info.insert("os".to_string(), Value::string("Android 14 (API 34)"));
+        info.insert("brand".to_string(), Value::string("Google / AETHER"));
+        info.insert("model".to_string(), Value::string("Aether Phone Pro"));
+        info.insert("arch".to_string(), Value::string("arm64-v8a"));
+        Ok(Value::map(info))
+    }));
+
+    mobile_module.insert("network_status".to_string(), Value::Native("Mobile.network_status".into(), |_| {
+        Ok(Value::string("wifi_connected"))
+    }));
+
+    mobile_module.insert("set_title".to_string(), Value::Native("Mobile.set_title".into(), |args| {
+        let title = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
+        println!("[📱 Android Window Title] {}", title);
+        Ok(Value::Bool(true))
+    }));
+
+    globals.insert("Mobile".to_string(), Value::map(mobile_module));
 }

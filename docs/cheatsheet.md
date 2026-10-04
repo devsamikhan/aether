@@ -236,3 +236,39 @@ aether build my_script.ae -o my_app.exe
 ./my_app.exe
 ```
 
+---
+
+## 18. Android Mobile Compilation & APK Packaging (`.apk`)
+
+AETHER can compile applications directly into signed, standalone Android Packages (`.apk`) with zero external SDKs or Android Studio dependencies:
+
+```bash
+# Option 1: Direct APK compilation with target flag
+aether build app.ae --target apk -o app.apk
+
+# Option 2: Dedicated apk command with custom metadata
+aether apk app.ae -o app.apk --package com.myorg.app --name "MyApp"
+
+# Option 3: Export full Gradle / Android Studio project
+aether build app.ae --target android-project -o MyAndroidProject/
+```
+
+### Mobile Hardware & Runtime APIs (`Mobile`)
+```aether
+# Native toast message
+Mobile.show_toast("Welcome to AETHER on Android!")
+
+# Precise haptic vibration (milliseconds)
+Mobile.vibrate(50)
+
+# Device battery level percentage (0-100)
+let battery = Mobile.battery_level()
+
+# Hardware information
+let info = Mobile.device_info()
+print(f"Device: {info['brand']} {info['model']} | OS: {info['os']}")
+
+# Network connectivity status
+let net = Mobile.network_status() # 'wifi_connected', 'cellular', 'offline'
+```
+

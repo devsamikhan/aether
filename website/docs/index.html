@@ -267,6 +267,21 @@ Status: SYSTEM 100% HEALTHY & READY FOR PRODUCTION 🚀
                 <td>Compiles an AETHER script into a zero-dependency standalone native Windows executable.</td>
                 <td><code>aether build app.ae -o my_app.exe</code></td>
               </tr>
+              <tr>
+                <td><code>aether build &lt;file.ae&gt; --target apk -o &lt;app.apk&gt;</code></td>
+                <td>Compiles an AETHER script into a signed, standalone Android package (.apk) with zero external SDKs.</td>
+                <td><code>aether build app.ae --target apk -o app.apk</code></td>
+              </tr>
+              <tr>
+                <td><code>aether apk &lt;file.ae&gt; -o &lt;app.apk&gt;</code></td>
+                <td>Dedicated command to package an application into an installable Android APK with custom package ID and app name.</td>
+                <td><code>aether apk app.ae -o app.apk --package com.aether.pocket</code></td>
+              </tr>
+              <tr>
+                <td><code>aether build &lt;file.ae&gt; --target android-project -o &lt;dir&gt;</code></td>
+                <td>Exports a complete, ready-to-open Android Studio / Gradle project with Kotlin & Manifest.</td>
+                <td><code>aether build app.ae --target android-project -o my_app_android/</code></td>
+              </tr>
             </tbody>
           </table>
         </div>

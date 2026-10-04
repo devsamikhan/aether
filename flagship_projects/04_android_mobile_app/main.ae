@@ -1,0 +1,156 @@
+# ==============================================================================
+# Flagship Project 04: AetherPocket (Mobile Fitness & Productivity App)
+# Written in pure AETHER syntax for Android (.apk) compilation
+# Features:
+#   - Pythonic F-strings: f"..."
+#   - Pipeline Operators: |>
+#   - Reactive Mobile State & UI Component Tree
+#   - Android Device APIs (Haptics, Battery, Network, Toasts)
+# ==============================================================================
+
+# 1. Utility pipelines for fitness metrics
+def clean_sensor_jitter(val):
+    if val < 0:
+        return 0
+    return val
+
+def apply_step_calibration(steps):
+    return steps * 1.05
+
+def steps_to_calories(steps):
+    # Standard formula: ~0.04 calories per step
+    return steps * 0.04
+
+def format_percentage(ratio):
+    pct = int(ratio * 100.0)
+    if pct > 100:
+        pct = 100
+    return f"{pct}%"
+
+# 2. Reactive UI Component Models
+class Widget:
+    def __init__(self, widget_type, label, value):
+        self.widget_type = widget_type
+        self.label = label
+        self.value = value
+
+    def render(self):
+        return f"[{self.widget_type}] {self.label}: {self.value}"
+
+class ProgressBar:
+    def __init__(self, current, target, unit):
+        self.current = current
+        self.target = target
+        self.unit = unit
+
+    def progress_bar_str(self):
+        ratio = (self.current * 1.0) / self.target
+        filled = int(ratio * 20.0)
+        if filled > 20:
+            filled = 20
+        if filled < 0:
+            filled = 0
+        empty = 20 - filled
+        bar = ("█" * filled) + ("░" * empty)
+        pct = format_percentage(ratio)
+        return f"|{bar}| {pct} ({self.current}/{self.target} {self.unit})"
+
+# 3. Mobile Application State Container
+class AetherPocketApp:
+    def __init__(self, user_name, step_goal, water_goal_ml):
+        self.app_title = "AetherPocket Mobile"
+        self.user_name = user_name
+        self.step_goal = step_goal
+        self.water_goal_ml = water_goal_ml
+        self.current_steps = 0
+        self.current_water_ml = 0
+        self.completed_tasks = []
+        self.is_dark_mode = True
+        self.battery = Mobile.battery_level()
+        self.device = Mobile.device_info()
+        self.network = Mobile.network_status()
+
+    def bootstrap(self):
+        Mobile.set_title(self.app_title)
+        Mobile.show_toast(f"Welcome back, {self.user_name}!")
+        print("==================================================")
+        print(f"       ⚡ {self.app_title} for Android ⚡")
+        print("==================================================")
+        print(f"📱 Running on:  {self.device['brand']} {self.device['model']}")
+        print(f"⚙️ OS Version:  {self.device['os']} ({self.device['arch']})")
+        print(f"🔋 Battery:     {self.battery}%")
+        print(f"🌐 Network:     {self.network}")
+        print("--------------------------------------------------\n")
+
+    def record_steps(self, raw_steps):
+        # Using AETHER pipeline operator for sensor data transformation
+        calibrated = raw_steps |> clean_sensor_jitter |> apply_step_calibration
+        self.current_steps = self.current_steps + int(calibrated)
+        
+        # Trigger subtle Android haptic feedback
+        Mobile.vibrate(25)
+        
+        cals = self.current_steps |> steps_to_calories
+        print(f"👟 Step Update: +{int(calibrated)} steps (Total: {self.current_steps})")
+        print(f"🔥 Calories Burned: {cals:.1f} kcal")
+
+    def drink_water(self, amount_ml):
+        self.current_water_ml = self.current_water_ml + amount_ml
+        Mobile.vibrate(40)
+        Mobile.show_toast(f"+{amount_ml}ml logged. Keep hydrating!")
+        print(f"💧 Hydration Logged: {self.current_water_ml}ml / {self.water_goal_ml}ml")
+
+    def complete_task(self, title):
+        self.completed_tasks.append(title)
+        Mobile.vibrate(80)
+        Mobile.show_toast(f"Task completed: {title}")
+        print(f"✅ Completed: {title}")
+
+    def render_dashboard(self):
+        print("\n================== [MOBILE UI SCREEN] ==================")
+        print(f" User: {self.user_name}  |  Theme: {'Dark 🌙' if self.is_dark_mode else 'Light ☀️'}")
+        print("--------------------------------------------------------")
+        
+        step_pb = ProgressBar(self.current_steps, self.step_goal, "steps")
+        print(f" Daily Steps:   {step_pb.progress_bar_str()}")
+
+        water_pb = ProgressBar(self.current_water_ml, self.water_goal_ml, "ml")
+        print(f" Hydration:     {water_pb.progress_bar_str()}")
+
+        cals = self.current_steps |> steps_to_calories
+        print(f" Active Burn:   {cals:.1f} kcal")
+        
+        print("\n Recent Completed Habits:")
+        if len(self.completed_tasks) == 0:
+            print("   (No habits logged yet today)")
+        else:
+            for t in self.completed_tasks:
+                print(f"   • {t}")
+        print("========================================================\n")
+
+# 4. Mobile Execution Simulation
+def main():
+    app = AetherPocketApp("Sami Khan", 10000, 2500)
+    app.bootstrap()
+
+    # User interacts with mobile touch UI
+    print(">>> [User Action] User walks during morning commute...")
+    app.record_steps(3420)
+
+    print("\n>>> [User Action] User drinks a glass of water...")
+    app.drink_water(350)
+
+    print("\n>>> [User Action] User walks after lunch...")
+    app.record_steps(4810)
+
+    print("\n>>> [User Action] User completes daily workout task...")
+    app.drink_water(500)
+    app.complete_task("30-minute Cardio & Core Workout")
+    app.complete_task("Read 15 pages of Compiler Architecture")
+
+    # Render complete mobile screen view
+    app.render_dashboard()
+
+    print("✨ AETHER Mobile Application Loop executed successfully on Android!")
+
+main()
