@@ -328,6 +328,66 @@ impl<'a> Lexer<'a> {
                     }
                 }
 
+                // F-Strings (f"..." or f'...' or f"""...""")
+                'f' | 'F' if self.peek() == '"' || self.peek() == '\'' => {
+                    let quote = self.advance();
+                    let is_triple = self.peek() == quote && self.peek_next() == Some(quote);
+                    if is_triple {
+                        self.advance(); // consume 2nd quote
+                        self.advance(); // consume 3rd quote
+                    }
+                    let mut s = String::new();
+                    let mut closed = false;
+                    while !self.is_at_end() {
+                        if is_triple {
+                            if self.peek() == quote && self.peek_next() == Some(quote) {
+                                if self.cursor + 2 < self.chars.len() && self.chars[self.cursor + 2].1 == quote {
+                                    self.advance();
+                                    self.advance();
+                                    self.advance();
+                                    closed = true;
+                                    break;
+                                }
+                            }
+                            let c = self.advance();
+                            if c == '\n' {
+                                self.line += 1;
+                                self.col = 1;
+                            }
+                            s.push(c);
+                        } else {
+                            let c = self.advance();
+                            if c == quote {
+                                closed = true;
+                                break;
+                            } else if c == '\\' {
+                                if !self.is_at_end() {
+                                    match self.advance() {
+                                        'n' => s.push('\n'),
+                                        'r' => s.push('\r'),
+                                        't' => s.push('\t'),
+                                        '\\' => s.push('\\'),
+                                        '\'' => s.push('\''),
+                                        '"' => s.push('"'),
+                                        other => {
+                                            s.push('\\');
+                                            s.push(other);
+                                        }
+                                    }
+                                }
+                            } else {
+                                s.push(c);
+                            }
+                        }
+                    }
+                    if !closed {
+                        let span = Span::new(start_pos, self.current_pos(), start_line, start_col);
+                        return Err(("Unterminated f-string literal".to_string(), span));
+                    }
+                    let span = Span::new(start_pos, self.current_pos(), start_line, start_col);
+                    tokens.push(Token::new(TokenKind::FString(s), span));
+                }
+
                 // Identifiers & Keywords
                 c if c.is_alphabetic() || c == '_' => {
                     let mut ident = String::new();

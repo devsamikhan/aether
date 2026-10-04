@@ -7,6 +7,7 @@ pub enum TokenKind {
     Int(i64),
     Float(f64),
     String(String),
+    FString(String),
     Ident(String),
 
     // Core Keywords (~20 clean keywords)
@@ -127,6 +128,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Int(v) => write!(f, "{}", v),
             TokenKind::Float(v) => write!(f, "{}", v),
             TokenKind::String(s) => write!(f, "\"{}\"", s),
+            TokenKind::FString(s) => write!(f, "f\"{}\"", s),
             TokenKind::Ident(s) => write!(f, "{}", s),
             TokenKind::Fn => write!(f, "fn"),
             TokenKind::Def => write!(f, "def"),

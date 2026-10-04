@@ -28,10 +28,20 @@ let ok = (a > 10) and (b == 4); # Logical AND (or: '&&', 'or', 'not')
 
 ---
 
-## 3. Strings & Interpolation
+## 3. Strings & Python-Style F-Strings
 ```aether
 let s1 = "Hello";
 let s2 = "World";
+let name = "AETHER";
+let version = 2;
+
+# Python-style formatted string interpolation
+let greeting = f"Welcome to {name} v{version}!"; 
+println(greeting);              # "Welcome to AETHER v2!"
+
+# Expression evaluation inside f-strings:
+println(f"Calculation: 2 + 2 = {2 + 2}, escaped: {{x}}");
+
 let msg = s1 + ", " + s2 + "!"; # String concatenation
 println(to_string(42));         # Cast int to string: "42"
 println(to_int("100"));         # Parse string to int: 100
@@ -190,3 +200,39 @@ qreg.cnot(0, 1);                 # Entangle Q0 and Q1
 let result = qreg.measure(0);    # Wavefunction collapse
 println("Collapsed Q0: " + to_string(result));
 ```
+
+---
+
+## 16. Pipeline Chaining Operator (`|>`)
+```aether
+fn double(x):
+    return x * 2
+
+fn add_five(x):
+    return x + 5
+
+fn square(x):
+    return x * x
+
+# Pipeline data flow: 3 -> double(6) -> add_five(11) -> square(121)
+let result = 3 |> double |> add_five |> square;
+println(f"Pipeline Result: {result}"); # 121
+
+# Multi-argument pipeline forwarding:
+fn multiply(val, factor):
+    return val * factor
+
+let total = 10 |> multiply(5); # calls multiply(10, 5) => 50
+```
+
+---
+
+## 17. Standalone Native Binary Compilation (`aether build`)
+```bash
+# Compile any AETHER script into a zero-dependency standalone native Windows executable (.exe):
+aether build my_script.ae -o my_app.exe
+
+# Execute standalone binary anywhere with no dependencies:
+./my_app.exe
+```
+

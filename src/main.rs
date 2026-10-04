@@ -6050,6 +6050,19 @@ pub fn search_libraries(query: &str) -> Result<(), String> {
 }
 
 fn main() {
+    // Check if running as a standalone self-contained executable bundle
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Ok(bytes) = std::fs::read(&exe_path) {
+            if let Some(payload_str) = aether::codegen::aot_builder::extract_embedded_payload(&bytes) {
+                if let Err(e) = aether::vm::run_source(&payload_str) {
+                    eprintln!("Runtime Error: {}", e);
+                    std::process::exit(1);
+                }
+                return;
+            }
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() > 1 {

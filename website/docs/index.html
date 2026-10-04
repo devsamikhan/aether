@@ -262,6 +262,11 @@ Status: SYSTEM 100% HEALTHY & READY FOR PRODUCTION 🚀
                 <td>Profiles execution with nanosecond-resolution timing and memory allocation statistics.</td>
                 <td><code>aether bench pipeline.ae</code></td>
               </tr>
+              <tr>
+                <td><code>aether build &lt;file.ae&gt; -o &lt;app.exe&gt;</code></td>
+                <td>Compiles an AETHER script into a zero-dependency standalone native Windows executable.</td>
+                <td><code>aether build app.ae -o my_app.exe</code></td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -336,7 +341,11 @@ g.<code class="fn">run</code>();</pre>
 
 <code class="cmt"># Mutating variables</code>
 count = count + <code class="num">1</code>;
-<code class="fn">println</code>(<code class="str">"Updated count: "</code> + <code class="fn">to_string</code>(count)); <code class="cmt"># 101</code></pre>
+
+<code class="cmt"># Python-Style F-Strings (Native String Interpolation)</code>
+<code class="kwd">let</code> greeting = <code class="str">f"System: {name} (Active: {is_active}) Speed: {speed}%"</code>;
+<code class="fn">println</code>(greeting);
+<code class="fn">println</code>(<code class="str">f"Computation: 2 + 2 = {2 + 2}"</code>);</pre>
         </div>
       </article>
 
@@ -375,6 +384,11 @@ count = count + <code class="num">1</code>;
                 <td><code>&amp;</code>, <code>|</code>, <code>^</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code></td>
                 <td>Bitwise AND, OR, XOR, Left Shift, Right Shift.</td>
               </tr>
+              <tr>
+                <td>Pipeline</td>
+                <td><code>|&gt;</code></td>
+                <td>Pipeline Chaining (feeds left expression as first argument to right function).</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -392,8 +406,9 @@ count = count + <code class="num">1</code>;
 <code class="fn">println</code>(a / b);   <code class="cmt"># 3 (integer division) or 3.75 for floats</code>
 <code class="fn">println</code>(a % b);   <code class="cmt"># 3 (modulo)</code>
 
-<code class="kwd">let</code> condition = (a &gt; <code class="num">10</code>) <code class="kwd">and</code> (b == <code class="num">4</code>);
-<code class="fn">println</code>(condition); <code class="cmt"># true</code></pre>
+<code class="cmt"># Pipeline Chaining: 3 |> double |> add_five |> square</code>
+<code class="kwd">let</code> res = <code class="num">3</code> |&gt; <code class="fn">double</code> |&gt; <code class="fn">add_five</code> |&gt; <code class="fn">square</code>;
+<code class="fn">println</code>(res);     <code class="cmt"># 121</code></pre>
         </div>
       </article>
 

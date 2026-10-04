@@ -1,10 +1,60 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use crate::syntax::parse;
 
 pub struct AotBuilder {
     pub release: bool,
+}
+
+pub const MAGIC: &[u8] = b"__AETHER_EMBEDDED_PAYLOAD_V1__";
+
+/// Extracts embedded AETHER script payload from executable bytes if present
+pub fn extract_embedded_payload(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < MAGIC.len() * 2 + 8 {
+        return None;
+    }
+    if &bytes[bytes.len() - MAGIC.len()..] != MAGIC {
+        return None;
+    }
+    let search_slice = &bytes[..bytes.len() - MAGIC.len()];
+    if let Some(start_idx) = search_slice.windows(MAGIC.len()).rposition(|w| w == MAGIC) {
+        let content_start = start_idx + MAGIC.len() + 8;
+        let content_end = bytes.len() - MAGIC.len();
+        if content_start <= content_end {
+            let len_bytes: [u8; 8] = search_slice[start_idx + MAGIC.len()..start_idx + MAGIC.len() + 8].try_into().ok()?;
+            let expected_len = u64::from_le_bytes(len_bytes) as usize;
+            if expected_len == content_end - content_start {
+                return String::from_utf8(bytes[content_start..content_end].to_vec()).ok();
+            }
+        }
+    }
+    None
+}
+
+/// Embeds an AETHER script payload into a standalone native executable
+pub fn embed_payload(exe_path: &Path, payload: &str, output_path: &Path) -> Result<(), String> {
+    let mut exe_bytes = fs::read(exe_path)
+        .map_err(|e| format!("Failed to read base executable '{}': {}", exe_path.display(), e))?;
+
+    // Strip any existing payload if present
+    if exe_bytes.len() >= MAGIC.len() * 2 + 8 && &exe_bytes[exe_bytes.len() - MAGIC.len()..] == MAGIC {
+        let search_slice = &exe_bytes[..exe_bytes.len() - MAGIC.len()];
+        if let Some(start_idx) = search_slice.windows(MAGIC.len()).rposition(|w| w == MAGIC) {
+            exe_bytes.truncate(start_idx);
+        }
+    }
+
+    let payload_bytes = payload.as_bytes();
+    let payload_len = (payload_bytes.len() as u64).to_le_bytes();
+
+    exe_bytes.extend_from_slice(MAGIC);
+    exe_bytes.extend_from_slice(&payload_len);
+    exe_bytes.extend_from_slice(payload_bytes);
+    exe_bytes.extend_from_slice(MAGIC);
+
+    fs::write(output_path, exe_bytes)
+        .map_err(|e| format!("Failed to write standalone binary '{}': {}", output_path.display(), e))?;
+    Ok(())
 }
 
 impl AotBuilder {
@@ -14,7 +64,6 @@ impl AotBuilder {
 
     /// Locates rust-lld or host linkers if available
     pub fn find_linker() -> Option<PathBuf> {
-        // 1. Check rustlib for rust-lld.exe
         if let Ok(user_profile) = std::env::var("USERPROFILE") {
             let rustup_lld = PathBuf::from(user_profile)
                 .join(".rustup")
@@ -30,7 +79,6 @@ impl AotBuilder {
             }
         }
 
-        // 2. Check MinGW gcc
         let mingw_gcc = PathBuf::from(r"C:\MinGW\bin\gcc.exe");
         if mingw_gcc.exists() {
             return Some(mingw_gcc);
@@ -48,65 +96,33 @@ impl AotBuilder {
         let program = parse(&source_content)
             .map_err(|(err, span)| format!("{}:{}: Syntax error: {}", span.line, span.col, err))?;
 
-        println!("[AETHER AOT] Parsed {} top-level statements successfully.", program.statements.len());
-        println!("[AETHER AOT] Compiling to native target architecture via Cranelift...");
+        println!("[AETHER Build] Parsed {} top-level statements successfully.", program.statements.len());
+        println!("[AETHER Build] Packaging standalone zero-dependency executable...");
 
-        // 2. We generate a standalone self-contained native executable launcher
-        // by wrapping a minimal AETHER native execution runtime runner.
-        // We compile a dedicated stand-alone binary embedding the AETHER payload.
-        let out_dir = std::env::temp_dir().join(format!("aether_build_{}", std::process::id()));
-        let _ = fs::create_dir_all(&out_dir);
-
-        let runner_rs = out_dir.join("main.rs");
-        let runner_code = format!(
-            "fn main() {{\n    let src = {:?};\n    match aether::syntax::parse(src) {{\n        Ok(prog) => {{\n            match aether::codegen::cranelift_backend::CraneliftCompiler::new() {{\n                Ok(mut comp) => {{\n                    if let Err(e) = comp.compile_and_run(&prog) {{\n                        eprintln!(\"Runtime error: {{}}\", e);\n                        std::process::exit(1);\n                    }}\n                }}\n                Err(e) => {{\n                    eprintln!(\"JIT initialization error: {{}}\", e);\n                    std::process::exit(1);\n                }}\n            }}\n        }}\n        Err((e, span)) => {{\n            eprintln!(\"{{}}:{{}}: Syntax error: {{}}\", span.line, span.col, e);\n            std::process::exit(1);\n        }}\n    }}\n}}\n",
-            source_content
-        );
-
-        fs::write(&runner_rs, runner_code)
-            .map_err(|e| format!("Failed to write runner source: {}", e))?;
-
-        println!("[AETHER AOT] Emitting optimized standalone PE binary -> {}", output_path.display());
-
-        // Invoke rustc to produce true zero-dependency standalone native .exe
+        // 2. Identify base runtime executable
         let current_exe = std::env::current_exe().unwrap_or_default();
         let target_dir = current_exe.parent().unwrap_or(Path::new("."));
-        let deps_dir = target_dir.join("deps");
+        let release_exe = target_dir.join("aether.exe");
 
-        let mut cmd = Command::new("rustc");
-        cmd.arg(&runner_rs)
-            .arg("--edition=2021")
-            .arg("-o").arg(output_path);
+        let base_exe = if current_exe.exists() && current_exe.is_file() {
+            current_exe
+        } else if release_exe.exists() {
+            release_exe
+        } else {
+            PathBuf::from("target").join("release").join("aether.exe")
+        };
 
-        if self.release {
-            cmd.arg("-C").arg("opt-level=3")
-               .arg("-C").arg("lto=fat");
+        if !base_exe.exists() {
+            return Err(format!("Base AETHER executable runtime not found at '{}'", base_exe.display()));
         }
 
-        if deps_dir.exists() {
-            cmd.arg("-L").arg(format!("dependency={}", deps_dir.display()));
-            cmd.arg("--extern").arg("aether");
-        }
+        embed_payload(&base_exe, &source_content, output_path)?;
 
-        // Try compiling directly or copy standalone bundle
-        let status = cmd.status();
-        match status {
-            Ok(s) if s.success() => {
-                println!("[AETHER AOT] Build SUCCESS! Standalone executable generated at: {}", output_path.display());
-            }
-            _ => {
-                // If direct rustc linking needs cargo, we produce a pre-packaged runner executable
-                let current_aether_bin = current_exe;
-                if current_aether_bin.exists() {
-                    let _ = fs::copy(&current_aether_bin, output_path);
-                    println!("[AETHER AOT] Standalone native executable created at: {}", output_path.display());
-                } else {
-                    return Err("Failed to generate standalone executable".to_string());
-                }
-            }
-        }
+        let metadata = fs::metadata(output_path).map_err(|e| e.to_string())?;
+        println!("✨ Standalone executable successfully built: {}", output_path.display());
+        println!("   Size: {:.2} MB (Zero external dependencies)", metadata.len() as f64 / (1024.0 * 1024.0));
+        println!("   Ready to distribute and run directly on Windows!");
 
-        let _ = fs::remove_dir_all(&out_dir);
         Ok(())
     }
 }

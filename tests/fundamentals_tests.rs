@@ -236,3 +236,56 @@ val
     let result = run_source(code).expect("Comments test failed");
     assert_eq!(result, Value::Int(42));
 }
+
+#[test]
+fn test_fstrings_interpolation() {
+    let code = r#"
+name = "Aether"
+version = 2
+speed = 100.5
+greeting = f"Welcome to {name} v{version}! Speed: {speed}%"
+greeting
+"#;
+    let result = run_source(code).expect("F-string test failed");
+    assert_eq!(result, Value::string("Welcome to Aether v2! Speed: 100.5%"));
+
+    let calc_code = r#"
+a = 10
+b = 25
+msg = f"Calc: {a} + {b} = {a + b}, escaped: {{x}}"
+msg
+"#;
+    let calc_res = run_source(calc_code).expect("F-string calc test failed");
+    assert_eq!(calc_res, Value::string("Calc: 10 + 25 = 35, escaped: {x}"));
+}
+
+#[test]
+fn test_pipeline_operator_chaining() {
+    let code = r#"
+fn double(x):
+    return x * 2
+
+fn add_five(x):
+    return x + 5
+
+fn square(x):
+    return x * x
+
+result = 3 |> double |> add_five |> square
+result
+"#;
+    let result = run_source(code).expect("Pipeline test failed");
+    // 3 |> double -> 6 |> add_five -> 11 |> square -> 121
+    assert_eq!(result, Value::Int(121));
+
+    let multi_arg_code = r#"
+fn multiply(a, factor):
+    return a * factor
+
+val = 7 |> multiply(4)
+val
+"#;
+    let multi_res = run_source(multi_arg_code).expect("Pipeline multi-arg test failed");
+    assert_eq!(multi_res, Value::Int(28));
+}
+

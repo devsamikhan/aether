@@ -182,6 +182,7 @@ pub enum Expr {
     Set(Vec<Expr>, Span),
     Map(Vec<(Expr, Expr)>, Span),
     Pipe(Box<Expr>, Box<Expr>, Span),
+    FString(Vec<Expr>, Span),
     Lambda(Vec<Param>, Box<Block>, Span),
     If {
         condition: Box<Expr>,
@@ -246,6 +247,7 @@ impl Expr {
             Expr::Set(_, s) => *s,
             Expr::Map(_, s) => *s,
             Expr::Pipe(_, _, s) => *s,
+            Expr::FString(_, s) => *s,
             Expr::Lambda(_, _, s) => *s,
             Expr::If { span, .. } => *span,
             Expr::Match { span, .. } => *span,

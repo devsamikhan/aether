@@ -1028,6 +1028,15 @@ impl BytecodeCompiler {
                     }
                 }
             }
+            Expr::FString(parts, span) => {
+                let idx = self.add_constant(Value::string(String::new()));
+                self.emit_op(OpCode::Constant, *span);
+                self.emit_u16(idx as u16, *span);
+                for part in parts {
+                    self.compile_expression(part)?;
+                    self.emit_op(OpCode::Add, *span);
+                }
+            }
             Expr::Array(elements, span) => {
                 for el in elements {
                     self.compile_expression(el)?;

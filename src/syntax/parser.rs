@@ -1,6 +1,7 @@
 use super::ast::*;
 use super::span::Span;
 use super::token::{Token, TokenKind};
+use super::lexer::Lexer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
@@ -892,6 +893,7 @@ impl Parser {
             TokenKind::Int(v) => Ok(Expr::Literal(Literal::Int(*v), token.span)),
             TokenKind::Float(v) => Ok(Expr::Literal(Literal::Float(*v), token.span)),
             TokenKind::String(s) => Ok(Expr::Literal(Literal::String(s.clone()), token.span)),
+            TokenKind::FString(s) => self.parse_fstring(s, token.span),
             TokenKind::True => Ok(Expr::Literal(Literal::Bool(true), token.span)),
             TokenKind::False => Ok(Expr::Literal(Literal::Bool(false), token.span)),
             TokenKind::Nil => Ok(Expr::Literal(Literal::Nil, token.span)),
@@ -1309,6 +1311,7 @@ impl Parser {
             }
             TokenKind::Float(f) => Ok(MatchPattern::Literal(Literal::Float(*f))),
             TokenKind::String(s) => Ok(MatchPattern::Literal(Literal::String(s.clone()))),
+            TokenKind::FString(s) => Ok(MatchPattern::Literal(Literal::String(s.clone()))),
             TokenKind::True => Ok(MatchPattern::Literal(Literal::Bool(true))),
             TokenKind::False => Ok(MatchPattern::Literal(Literal::Bool(false))),
             TokenKind::Nil => Ok(MatchPattern::Literal(Literal::Nil)),
@@ -1321,6 +1324,101 @@ impl Parser {
             }
             _ => Err((format!("Invalid match pattern token '{:?}'", tok.kind), tok.span)),
         }
+    }
+
+    fn parse_fstring(&mut self, content: &str, span: Span) -> Result<Expr, (String, Span)> {
+        let mut parts: Vec<Expr> = Vec::new();
+        let mut current_lit = String::new();
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+
+        while i < len {
+            if chars[i] == '{' {
+                if i + 1 < len && chars[i + 1] == '{' {
+                    // Escaped {{
+                    current_lit.push('{');
+                    i += 2;
+                    continue;
+                }
+                // Flush accumulated literal string
+                if !current_lit.is_empty() {
+                    parts.push(Expr::Literal(Literal::String(std::mem::take(&mut current_lit)), span));
+                }
+                // Parse expression inside { ... }
+                i += 1; // skip '{'
+                let mut expr_str = String::new();
+                let mut depth = 1;
+                let mut in_str: Option<char> = None;
+                let mut found_close = false;
+
+                while i < len {
+                    let ch = chars[i];
+                    if let Some(q) = in_str {
+                        expr_str.push(ch);
+                        if ch == '\\' && i + 1 < len {
+                            i += 1;
+                            expr_str.push(chars[i]);
+                        } else if ch == q {
+                            in_str = None;
+                        }
+                    } else {
+                        if ch == '"' || ch == '\'' {
+                            in_str = Some(ch);
+                            expr_str.push(ch);
+                        } else if ch == '{' {
+                            depth += 1;
+                            expr_str.push(ch);
+                        } else if ch == '}' {
+                            depth -= 1;
+                            if depth == 0 {
+                                found_close = true;
+                                i += 1; // skip '}'
+                                break;
+                            } else {
+                                expr_str.push(ch);
+                            }
+                        } else {
+                            expr_str.push(ch);
+                        }
+                    }
+                    i += 1;
+                }
+
+                if !found_close {
+                    return Err(("Unclosed '{' in f-string".to_string(), span));
+                }
+
+                let trimmed = expr_str.trim();
+                if trimmed.is_empty() {
+                    return Err(("Empty expression '{}' in f-string".to_string(), span));
+                }
+
+                let mut sub_lexer = Lexer::new(trimmed);
+                let sub_tokens = sub_lexer.tokenize().map_err(|(e, _)| (format!("Invalid expression in f-string: {}", e), span))?;
+                let mut sub_parser = Parser::new(sub_tokens);
+                let expr = sub_parser.parse_expression(Precedence::None)
+                    .map_err(|(e, _)| (format!("Invalid expression in f-string: {}", e), span))?;
+                parts.push(expr);
+            } else if chars[i] == '}' {
+                if i + 1 < len && chars[i + 1] == '}' {
+                    // Escaped }}
+                    current_lit.push('}');
+                    i += 2;
+                    continue;
+                }
+                return Err(("Unmatched '}' in f-string".to_string(), span));
+            } else {
+                current_lit.push(chars[i]);
+                i += 1;
+            }
+        }
+
+        if !current_lit.is_empty() {
+            parts.push(Expr::Literal(Literal::String(current_lit), span));
+        }
+
+        Ok(Expr::FString(parts, span))
     }
 
     fn parse_infix(&mut self, left: Expr) -> Result<Expr, (String, Span)> {
