@@ -146,3 +146,21 @@ fn test_flagship_07_execution_and_artifacts() {
     let html = std::path::Path::new("flagship_projects/07_aether_omni_react_app/AetherOmni.html");
     assert!(html.exists(), "AetherOmni.html must exist");
 }
+
+#[test]
+fn test_flagship_08_chronopulse_alarm_execution_and_artifacts() {
+    let script_path = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/main.ae");
+    assert!(script_path.exists(), "Flagship 08 main.ae must exist");
+    let source = std::fs::read_to_string(script_path).unwrap();
+    let res = aether::vm::run_source(&source);
+    assert!(res.is_ok(), "Flagship 08 execution failed: {:?}", res.err());
+
+    let apk = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.apk");
+    assert!(apk.exists(), "ChronoPulse.apk must exist");
+
+    let exe = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.exe");
+    assert!(exe.exists(), "ChronoPulse.exe must exist");
+
+    let html = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.html");
+    assert!(html.exists(), "ChronoPulse.html must exist");
+}

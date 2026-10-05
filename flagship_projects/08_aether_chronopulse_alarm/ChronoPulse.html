@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ChronoPulse | Cognitive Multi-Sensory Alarm System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18, ReactDOM & Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- ChronoPulse Native Hardware Bridge -->
+  <script src="aether_bridge.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #050811;
+      color: #f8fafc;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .neon-glow-cyan {
+      box-shadow: 0 0 35px -5px rgba(6, 182, 212, 0.35);
+    }
+    .neon-glow-violet {
+      box-shadow: 0 0 35px -5px rgba(168, 85, 247, 0.35);
+    }
+    .neon-glow-crimson {
+      box-shadow: 0 0 45px -5px rgba(239, 68, 68, 0.6);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .animate-pulse-ring {
+      animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+<script>
+// AETHER Universal Bridge for React, Vue, Svelte, Tailwind & Modern Web
+(function(window) {
+    if (window.Aether) return;
+
+    const Aether = {
+        version: "2.0.0",
+        platform: typeof window !== "undefined" && window.AndroidBridge ? "android" : "desktop",
+
+        // Invoke native AETHER backend RPC
+        invoke: async function(command, payload = {}) {
+            if (window.AndroidBridge && window.AndroidBridge.postMessage) {
+                return new Promise((resolve) => {
+                    const id = Date.now() + Math.random();
+                    window.AndroidBridge.postMessage(JSON.stringify({ id, command, payload }));
+                    resolve({ status: "ok", command, payload });
+                });
+            } else {
+                try {
+                    const res = await fetch("/api/bridge", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ command, payload })
+                    });
+                    return await res.json();
+                } catch(e) {
+                    return { status: "simulated", command, payload };
+                }
+            }
+        },
+
+        // Native Android Haptic Vibration
+        vibrate: function(ms = 35) {
+            if (window.AndroidBridge && window.AndroidBridge.vibrate) {
+                window.AndroidBridge.vibrate(ms);
+            } else if (navigator && navigator.vibrate) {
+                navigator.vibrate(ms);
+            }
+            console.log("[Aether Haptics] Vibrated " + ms + " ms");
+        },
+
+        // Haptic feedback profile preset
+        hapticFeedback: function(type = "light") {
+            const ms = type === "heavy" ? 80 : (type === "medium" ? 45 : 25);
+            this.vibrate(ms);
+        },
+
+        // Native Android Toast
+        showToast: function(message) {
+            if (window.AndroidBridge && window.AndroidBridge.showToast) {
+                window.AndroidBridge.showToast(message);
+            } else {
+                const toast = document.createElement("div");
+                toast.textContent = message;
+                toast.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 22px;border-radius:24px;box-shadow:0 6px 16px rgba(0,0,0,0.4);z-index:999999;font-family:system-ui,sans-serif;font-size:14px;border:1px solid #374151;transition:opacity 0.3s;";
+                document.body.appendChild(toast);
+                setTimeout(() => { toast.style.opacity = "0"; setTimeout(() => toast.remove(), 300); }, 2200);
+            }
+            console.log("[Aether Toast] " + message);
+        },
+
+        // Native Hardware & Battery specs
+        deviceInfo: async function() {
+            return await this.invoke("device_info", {});
+        },
+
+        // Native AI Prompt Completion
+        ai: async function(prompt) {
+            return await this.invoke("ai_complete", { prompt });
+        },
+
+        // Native Relational SQL Query
+        dbQuery: async function(sql, params = []) {
+            return await this.invoke("db_query", { sql, params });
+        }
+    };
+
+    window.Aether = Aether;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+</head>
+<body class="min-h-screen selection:bg-cyan-500 selection:text-slate-950 flex flex-col justify-between">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // =========================================================================
+    // 1. Procedural Web Audio Synthesizer (Zero External MP3 Assets)
+    // =========================================================================
+    class ProceduralAudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        this.intervalId = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTone(freq, type = 'sine', duration = 0.4, gainLevel = 0.2) {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(gainLevel, this.ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+      }
+
+      startAlarmSound(theme = 'cosmic') {
+        this.init();
+        if (this.isPlaying) return;
+        this.isPlaying = true;
+
+        let step = 0;
+        this.intervalId = setInterval(() => {
+          if (!this.isPlaying) return;
+
+          if (theme === 'cosmic') {
+            // Solfeggio 528Hz harmonic progression
+            const notes = [528, 639, 741, 852];
+            const f = notes[step % notes.length];
+            this.playTone(f, 'sine', 0.8, 0.35);
+            this.playTone(f * 0.5, 'triangle', 0.8, 0.2);
+            if (window.Aether) window.Aether.vibrate(60);
+          } else if (theme === 'synthwave') {
+            // Fast 80s Cyberpunk Arpeggio
+            const arp = [440, 554.37, 659.25, 830.61];
+            const f = arp[step % arp.length];
+            this.playTone(f, 'sawtooth', 0.22, 0.25);
+            if (step % 2 === 0 && window.Aether) window.Aether.vibrate(40);
+          } else if (theme === 'binaural') {
+            // Beta 15Hz Cognitive Entrainment
+            this.playTone(300, 'sine', 0.5, 0.3);
+            this.playTone(315, 'sine', 0.5, 0.3);
+            if (window.Aether) window.Aether.vibrate(50);
+          } else {
+            // Urgent NeuroRadar Pulse
+            this.playTone(880, 'square', 0.15, 0.3);
+            this.playTone(1760, 'sine', 0.15, 0.2);
+            if (window.Aether) window.Aether.vibrate(100);
+          }
+          step++;
+        }, theme === 'synthwave' ? 240 : 650);
+      }
+
+      stopAlarmSound() {
+        this.isPlaying = false;
+        if (this.intervalId) {
+          clearInterval(this.intervalId);
+          this.intervalId = null;
+        }
+      }
+    }
+
+    const audioEngine = new ProceduralAudioEngine();
+
+    // =========================================================================
+    // 2. Main React Component
+    // =========================================================================
+    function App() {
+      const [currentTime, setCurrentTime] = useState(new Date());
+      const [alarms, setAlarms] = useState([]);
+      const [sleepLogs, setSleepLogs] = useState([]);
+      const [activeAlarmModal, setActiveAlarmModal] = useState(null);
+      const [aiBriefing, setAiBriefing] = useState('');
+      const [isAiLoading, setIsAiLoading] = useState(false);
+      const [deviceInfo, setDeviceInfo] = useState(null);
+
+      // New alarm form state
+      const [newTime, setNewTime] = useState('07:00');
+      const [newLabel, setNewLabel] = useState('Deep Morning Awakening');
+      const [newSound, setNewSound] = useState('cosmic');
+      const [newPuzzle, setNewPuzzle] = useState('math');
+      const [showNewModal, setShowNewModal] = useState(false);
+
+      // Cognitive Challenge States
+      const [mathProblem, setMathProblem] = useState({ q: '24 + 19', ans: 43 });
+      const [userMathInput, setUserMathInput] = useState('');
+      const [mathError, setMathError] = useState(false);
+      const [reflexTaps, setReflexTaps] = useState(0);
+      const [solveStartTime, setSolveStartTime] = useState(0);
+
+      const canvasRef = useRef(null);
+
+      // Clock tick & Alarm monitoring
+      useEffect(() => {
+        const timer = setInterval(() => {
+          const now = new Date();
+          setCurrentTime(now);
+
+          // Check if any alarm triggers
+          const currentHourMin = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+          const currentSec = now.getSeconds();
+
+          if (currentSec === 0 && !activeAlarmModal) {
+            alarms.forEach(a => {
+              if (a.enabled && a.time_str === currentHourMin) {
+                triggerAlarm(a);
+              }
+            });
+          }
+        }, 1000);
+
+        return () => clearInterval(timer);
+      }, [alarms, activeAlarmModal]);
+
+      // Canvas Analog Clock Drawer
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const size = 260;
+
+        canvas.width = size * dpr;
+        canvas.height = size * dpr;
+        ctx.scale(dpr, dpr);
+
+        const radius = size / 2;
+        ctx.clearRect(0, 0, size, size);
+
+        // Center point
+        const cx = radius;
+        const cy = radius;
+
+        // Outer Glowing Ring
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 12, 0, Math.PI * 2);
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Ticks
+        for (let i = 0; i < 60; i++) {
+          const angle = (i * Math.PI) / 30;
+          const isHour = i % 5 === 0;
+          const len = isHour ? 12 : 5;
+          const x1 = cx + Math.cos(angle) * (radius - 16);
+          const y1 = cy + Math.sin(angle) * (radius - 16);
+          const x2 = cx + Math.cos(angle) * (radius - 16 - len);
+          const y2 = cy + Math.sin(angle) * (radius - 16 - len);
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = isHour ? '#06b6d4' : '#334155';
+          ctx.lineWidth = isHour ? 2.5 : 1;
+          ctx.stroke();
+        }
+
+        // Time values
+        const h = currentTime.getHours() % 12;
+        const m = currentTime.getMinutes();
+        const s = currentTime.getSeconds();
+        const ms = currentTime.getMilliseconds();
+
+        // Hour Hand
+        const hAngle = ((h + m / 60) * Math.PI) / 6 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(hAngle) * (radius * 0.45), cy + Math.sin(hAngle) * (radius * 0.45));
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Minute Hand
+        const mAngle = ((m + s / 60) * Math.PI) / 30 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(mAngle) * (radius * 0.65), cy + Math.sin(mAngle) * (radius * 0.65));
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Sweep Second Hand (Continuous smooth)
+        const sAngle = (s * Math.PI) / 30 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(sAngle) * 18, cy - Math.sin(sAngle) * 18);
+        ctx.lineTo(cx + Math.cos(sAngle) * (radius * 0.78), cy + Math.sin(sAngle) * (radius * 0.78));
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+
+        // Center pivot
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#06b6d4';
+        ctx.fill();
+        ctx.restore();
+      }, [currentTime]);
+
+      // Initial data load
+      useEffect(() => {
+        if (window.Aether) {
+          window.Aether.fetchAlarms().then(setAlarms);
+          window.Aether.fetchSleepLogs().then(setSleepLogs);
+          window.Aether.deviceInfo().then(setDeviceInfo);
+        }
+      }, []);
+
+      const triggerAlarm = (alarm) => {
+        setActiveAlarmModal(alarm);
+        setSolveStartTime(Date.now());
+        setReflexTaps(0);
+        setUserMathInput('');
+        generateMathProblem();
+        audioEngine.startAlarmSound(alarm.sound);
+        if (window.Aether) {
+          window.Aether.triggerAlarmHaptics();
+          window.Aether.showToast(`🚨 ALARM: ${alarm.label}! Solve cognitive challenge.`);
+        }
+      };
+
+      const generateMathProblem = () => {
+        const a = Math.floor(Math.random() * 40) + 12;
+        const b = Math.floor(Math.random() * 30) + 11;
+        setMathProblem({ q: `${a} + ${b}`, ans: a + b });
+      };
+
+      const handleDismissSuccess = async () => {
+        const elapsedSec = Math.max(1, Math.round((Date.now() - solveStartTime) / 1000));
+        audioEngine.stopAlarmSound();
+
+        if (window.Aether) {
+          window.Aether.hapticFeedback('heavy');
+          window.Aether.showToast(`Cognitive Awakening Completed in ${elapsedSec}s!`);
+          const newLog = await window.Aether.logWakeupEvent({
+            label: activeAlarmModal?.label,
+            solveTime: elapsedSec,
+            puzzleType: activeAlarmModal?.puzzle === 'math' ? 'Math Challenge' : 'Reflex Tap'
+          });
+          setSleepLogs(prev => [newLog, ...prev]);
+        }
+
+        // Fetch AI Morning Briefing
+        setIsAiLoading(true);
+        if (window.Aether) {
+          const res = await window.Aether.ai("Morning executive briefing for optimal focus and energy.");
+          setAiBriefing(res.response);
+        }
+        setIsAiLoading(false);
+
+        setActiveAlarmModal(null);
+      };
+
+      const handleMathSubmit = (e) => {
+        e.preventDefault();
+        if (parseInt(userMathInput, 10) === mathProblem.ans) {
+          handleDismissSuccess();
+        } else {
+          setMathError(true);
+          if (window.Aether) window.Aether.vibrate(150);
+          setTimeout(() => setMathError(false), 1200);
+        }
+      };
+
+      const handleReflexTap = () => {
+        if (window.Aether) window.Aether.hapticFeedback('medium');
+        const next = reflexTaps + 1;
+        setReflexTaps(next);
+        if (next >= 12) {
+          handleDismissSuccess();
+        }
+      };
+
+      const handleSaveNewAlarm = async (e) => {
+        e.preventDefault();
+        const item = {
+          time_str: newTime,
+          label: newLabel || "Custom Wakeup",
+          sound: newSound,
+          puzzle: newPuzzle,
+          enabled: true
+        };
+        if (window.Aether) {
+          const saved = await window.Aether.saveAlarm(item);
+          setAlarms(prev => [...prev, saved]);
+        }
+        setShowNewModal(false);
+      };
+
+      const toggleAlarm = (id) => {
+        setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
+        if (window.Aether) window.Aether.hapticFeedback('light');
+      };
+
+      const deleteAlarm = async (id) => {
+        if (window.Aether) {
+          await window.Aether.deleteAlarm(id);
+        }
+        setAlarms(prev => prev.filter(a => a.id !== id));
+      };
+
+      const previewSound = (snd) => {
+        audioEngine.playTone(528, 'sine', 0.5, 0.3);
+        if (window.Aether) window.Aether.hapticFeedback('medium');
+      };
+
+      return (
+        <div class="max-w-6xl mx-auto w-full px-4 py-6 md:py-10 flex flex-col gap-6">
+
+          {/* Top Bar Header */}
+          <header class="bg-gradient-to-r from-slate-900/90 via-slate-800/80 to-slate-900/90 border border-slate-700/60 rounded-3xl p-5 shadow-2xl backdrop-blur-xl flex items-center justify-between flex-wrap gap-4">
+            <div class="flex items-center gap-3.5">
+              <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-cyan-500/25">
+                ⏰
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h1 class="text-xl md:text-2xl font-black tracking-tight text-white">ChronoPulse</h1>
+                  <span class="px-2 py-0.5 text-[11px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                    AETHER 2.0
+                  </span>
+                </div>
+                <p class="text-xs text-slate-400">Cognitive & Multi-Sensory Universal Alarm System</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                onClick={() => triggerAlarm({ id: 999, label: "Live Test Awakening", sound: "cosmic", puzzle: "math", enabled: true })}
+                class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold px-3.5 py-2 rounded-2xl text-xs transition flex items-center gap-1.5 shadow"
+              >
+                <span>⚡</span> Test Alarm Now
+              </button>
+              <button
+                onClick={() => setShowNewModal(true)}
+                class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold px-4 py-2 rounded-2xl text-xs transition shadow-lg shadow-cyan-500/25 flex items-center gap-1.5"
+              >
+                <span>➕</span> Set Alarm
+              </button>
+            </div>
+          </header>
+
+          {/* Main Dual-Pane Dashboard */}
+          <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            {/* Left Pane: Analog Canvas Clock & Digital HUD (5 Cols on Desktop) */}
+            <section class="lg:col-span-5 flex flex-col gap-5">
+              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden backdrop-blur-xl shadow-2xl">
+                <div class="absolute -top-20 -left-20 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                {/* Canvas Clock */}
+                <div class="relative w-[260px] h-[260px] flex items-center justify-center">
+                  <canvas ref={canvasRef} style={{ width: '260px', height: '260px' }}></canvas>
+                </div>
+
+                {/* Digital HUD Clock */}
+                <div class="mt-4 text-center">
+                  <div class="text-4xl md:text-5xl font-black font-mono tracking-tight text-white flex items-center justify-center gap-1">
+                    <span>{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                    <span class="text-cyan-400 text-2xl animate-pulse">:</span>
+                    <span class="text-cyan-400 font-mono text-3xl">{String(currentTime.getSeconds()).padStart(2, '0')}</span>
+                  </div>
+                  <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-1 font-mono">
+                    {currentTime.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+
+                {/* Hardware Substrate Badge */}
+                <div class="mt-5 w-full bg-slate-950/80 rounded-2xl p-3 border border-slate-800 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2 text-slate-300">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Platform: <b class="text-white capitalize">{deviceInfo?.platform || "Universal"}</b></span>
+                  </div>
+                  <span class="text-cyan-400 font-mono text-[11px] font-bold">Zero-SDK Active</span>
+                </div>
+              </div>
+
+              {/* AI Morning Briefing Display */}
+              {aiBriefing && (
+                <div class="bg-gradient-to-br from-cyan-950/40 via-slate-900/60 to-slate-950/80 border border-cyan-500/30 rounded-3xl p-5 shadow-xl text-xs flex flex-col gap-2">
+                  <div class="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider">
+                    <span>🧠</span> Autonomous AI Morning Intelligence
+                  </div>
+                  <p class="text-slate-300 font-mono leading-relaxed">{aiBriefing}</p>
+                </div>
+              )}
+            </section>
+
+            {/* Right Pane: Active Alarms List & Circadian Database Logs (7 Cols on Desktop) */}
+            <section class="lg:col-span-7 flex flex-col gap-5">
+
+              {/* Active Alarms Card */}
+              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <span>🔔</span> Active Alarms ({alarms.filter(a => a.enabled).length})
+                  </h2>
+                  <span class="text-xs text-slate-500">Auto-synced with AETHER SQL</span>
+                </div>
+
+                <div class="space-y-3">
+                  {alarms.map(a => (
+                    <div
+                      key={a.id}
+                      class={`p-4 rounded-2xl border transition flex items-center justify-between flex-wrap gap-3 ${
+                        a.enabled
+                          ? 'bg-slate-950/80 border-slate-700/80 shadow-md'
+                          : 'bg-slate-950/30 border-slate-900 opacity-60'
+                      }`}
+                    >
+                      <div class="flex items-center gap-4">
+                        <button
+                          onClick={() => toggleAlarm(a.id)}
+                          class={`w-12 h-7 rounded-full transition p-1 flex items-center ${
+                            a.enabled ? 'bg-cyan-500 justify-end' : 'bg-slate-800 justify-start'
+                          }`}
+                        >
+                          <span class="w-5 h-5 rounded-full bg-slate-950 shadow-md"></span>
+                        </button>
+
+                        <div>
+                          <div class="text-2xl font-black font-mono tracking-tight text-white">{a.time_str}</div>
+                          <div class="text-xs text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+                            <span>{a.label}</span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 uppercase">
+                              {a.puzzle}
+                            </span>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 uppercase">
+                              {a.sound}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-2">
+                        <button
+                          onClick={() => triggerAlarm(a)}
+                          class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition"
+                          title="Test Alarm Sound"
+                        >
+                          ▶️
+                        </button>
+                        <button
+                          onClick={() => deleteAlarm(a.id)}
+                          class="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-xs text-rose-400 transition"
+                          title="Delete Alarm"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {alarms.length === 0 && (
+                    <div class="text-center py-8 text-xs text-slate-500">
+                      No active alarms scheduled. Click "Set Alarm" to create one.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Relational Sleep & Wakeup Analytics Card */}
+              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                  <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <span>📊</span> Relational Sleep & Wakeup Analytics (DB.*)
+                  </h2>
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    ACID Log Engine
+                  </span>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+                  <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                      <tr>
+                        <th class="py-3 px-4">Date / Time</th>
+                        <th class="py-3 px-4">Alarm Target</th>
+                        <th class="py-3 px-4">Challenge</th>
+                        <th class="py-3 px-4">Solve Time</th>
+                        <th class="py-3 px-4">Efficiency</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 font-mono">
+                      {sleepLogs.map(l => (
+                        <tr key={l.id} class="hover:bg-slate-900/40 transition">
+                          <td class="py-2.5 px-4 text-slate-300">{l.date_str}</td>
+                          <td class="py-2.5 px-4 font-sans text-white font-medium">{l.alarm_label}</td>
+                          <td class="py-2.5 px-4 text-cyan-400">{l.puzzle}</td>
+                          <td class="py-2.5 px-4 text-slate-300 font-bold">{l.solve_time_sec}s</td>
+                          <td class="py-2.5 px-4">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              {l.efficiency}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </section>
+          </main>
+
+          {/* Cognitive Awakening Modal (Full-Screen Alarm Lockout) */}
+          {activeAlarmModal && (
+            <div class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4">
+              <div class="max-w-md w-full bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 shadow-2xl neon-glow-crimson text-center flex flex-col gap-5 relative overflow-hidden animate-pulse-ring">
+
+                <div class="text-5xl animate-bounce">🚨</div>
+                <div>
+                  <h2 class="text-2xl font-black text-rose-400 uppercase tracking-wider">
+                    {activeAlarmModal.label}
+                  </h2>
+                  <p class="text-xs text-slate-400 mt-1">
+                    Solve the cognitive challenge below to disarm the alarm and silence the audio.
+                  </p>
+                </div>
+
+                {/* Math Puzzle */}
+                {activeAlarmModal.puzzle === 'math' && (
+                  <form onSubmit={handleMathSubmit} class="flex flex-col gap-4 mt-2">
+                    <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/30">
+                      <span class="text-xs text-slate-400 uppercase font-mono tracking-widest block mb-1">Mental Arithmetic</span>
+                      <span class="text-3xl font-black font-mono text-cyan-400 tracking-wider">{mathProblem.q} = ?</span>
+                    </div>
+
+                    <input
+                      type="number"
+                      autoFocus
+                      placeholder="Enter answer..."
+                      value={userMathInput}
+                      onChange={(e) => setUserMathInput(e.target.value)}
+                      class={`bg-slate-950 border text-center font-mono text-xl py-3 rounded-2xl text-white focus:outline-none transition ${
+                        mathError ? 'border-rose-500 bg-rose-950/30 animate-shake' : 'border-slate-700 focus:border-cyan-500'
+                      }`}
+                    />
+
+                    <button
+                      type="submit"
+                      class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-extrabold py-3.5 rounded-2xl text-sm transition shadow-lg shadow-rose-500/25"
+                    >
+                      Disarm Alarm
+                    </button>
+                  </form>
+                )}
+
+                {/* Reflex Tap Challenge */}
+                {activeAlarmModal.puzzle !== 'math' && (
+                  <div class="flex flex-col gap-4 mt-2">
+                    <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/30">
+                      <span class="text-xs text-slate-400 uppercase font-mono tracking-widest block mb-1">Motor Cortex Reflex</span>
+                      <span class="text-2xl font-black font-mono text-cyan-400">{reflexTaps} / 12 Taps Completed</span>
+                      <div class="w-full bg-slate-800 rounded-full h-2.5 mt-3 overflow-hidden">
+                        <div class="bg-cyan-500 h-2.5 rounded-full transition-all duration-150" style={{ width: `${(reflexTaps / 12) * 100}%` }}></div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleReflexTap}
+                      class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black py-4 rounded-2xl text-base transition shadow-lg shadow-cyan-500/30 active:scale-95"
+                    >
+                      ⚡ TAP RAPIDLY ({12 - reflexTaps} left)
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* New Alarm Modal */}
+          {showNewModal && (
+            <div class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+              <div class="max-w-md w-full bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span>⏰</span> Set New ChronoPulse Alarm
+                  </h3>
+                  <button onClick={() => setShowNewModal(false)} class="text-slate-400 hover:text-white text-lg">✕</button>
+                </div>
+
+                <form onSubmit={handleSaveNewAlarm} class="flex flex-col gap-4 text-xs">
+                  <div>
+                    <label class="text-slate-400 font-semibold block mb-1">Time (24h)</label>
+                    <input
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-lg font-mono text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="text-slate-400 font-semibold block mb-1">Label</label>
+                    <input
+                      type="text"
+                      value={newLabel}
+                      onChange={(e) => setNewLabel(e.target.value)}
+                      class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="text-slate-400 font-semibold block mb-1">Procedural Sound</label>
+                      <select
+                        value={newSound}
+                        onChange={(e) => setNewSound(e.target.value)}
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="cosmic">Cosmic Dawn (528Hz)</option>
+                        <option value="synthwave">Synthwave Arp</option>
+                        <option value="binaural">Beta Binaural (15Hz)</option>
+                        <option value="radar">Urgent NeuroRadar</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="text-slate-400 font-semibold block mb-1">Cognitive Challenge</label>
+                      <select
+                        value={newPuzzle}
+                        onChange={(e) => setNewPuzzle(e.target.value)}
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="math">Mental Arithmetic</option>
+                        <option value="reflex">Rapid Reflex Taps</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => previewSound(newSound)}
+                      class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl transition"
+                    >
+                      🔊 Preview Sound
+                    </button>
+                    <button
+                      type="submit"
+                      class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl transition shadow-md shadow-cyan-500/20"
+                    >
+                      Save Alarm
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <footer class="text-center text-xs text-slate-500 py-2">
+            ChronoPulse Alarm Engine • Built with AETHER 2.0 & React 18 • Universal Zero-SDK Multi-Platform
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
