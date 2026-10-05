@@ -48,6 +48,11 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             if !is_memory {
+                if let Some(parent) = Path::new(&path_str).parent() {
+                    if !parent.as_os_str().is_empty() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                }
                 load_database_from_disk(&mut instance)?;
                 let wal_path = format!("{}.wal", path_str);
                 let wal = OpenOptions::new()

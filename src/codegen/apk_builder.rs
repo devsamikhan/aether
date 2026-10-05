@@ -299,6 +299,35 @@ pub struct ApkConfig {
 }
 
 impl ApkConfig {
+    pub fn new(app_name: &str) -> Self {
+        let sanitized_pkg: String = app_name
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect::<String>()
+            .to_lowercase();
+        let pkg_id = if sanitized_pkg.is_empty() {
+            "app".to_string()
+        } else {
+            sanitized_pkg
+        };
+        let package_name = format!("com.aether.{}", pkg_id);
+
+        Self {
+            app_name: app_name.to_string(),
+            package_name,
+            version_code: 1,
+            version_name: "1.0.0".to_string(),
+            min_sdk: 21,
+            target_sdk: 34,
+            permissions: vec![
+                "android.permission.INTERNET".to_string(),
+                "android.permission.VIBRATE".to_string(),
+            ],
+            orientation: "portrait".to_string(),
+            main_activity: "com.aether.runtime.MainActivity".to_string(),
+        }
+    }
+
     pub fn from_source_file(path: &Path) -> Self {
         let stem = path
             .file_stem()

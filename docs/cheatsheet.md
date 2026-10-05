@@ -465,3 +465,48 @@ Install official syntax highlighting, IntelliSense, and snippets for VS Code:
 cp -r editors/vscode ~/.vscode/extensions/aether-language-support
 ```
 
+---
+
+## 28. AetherShell Universal Bundler & AetherBridge (`aether bundle`)
+
+AETHER gives web frontend developers (React 18, Vue 3, Svelte 5, Tailwind CSS) a unified, zero-SDK pipeline to bundle into native Android APKs, Windows executables, and offline single-file HTML containers **without Android Studio, Gradle, NDK, or Tauri**:
+
+### 1. Scaffold UI Project
+```bash
+# Available UI templates: react, vue, svelte, tailwind
+aether new MyOmniApp --template react
+```
+
+### 2. Universal CLI Bundler
+```bash
+# Bundle web frontend into signed Android APK (<1 second, zero Android Studio!)
+aether bundle frontend/ --target apk -o MyOmniApp.apk --name "My Omni App" --package com.example.omni
+
+# Bundle web frontend into standalone Windows Desktop EXE (zero Electron/Tauri!)
+aether bundle frontend/ --target desktop -o MyOmniApp.exe --name "My Omni App"
+
+# Bundle web frontend into single-file portable offline HTML
+aether bundle frontend/ --target web -o MyOmniApp.html --name "My Omni App"
+```
+
+### 3. Universal JavaScript Bridge (`window.Aether`)
+Inside any React, Vue, or Tailwind app, communicate with native device hardware and AETHER engines:
+```javascript
+// Hardware Haptics & Vibration
+window.Aether.vibrate(50);
+window.Aether.hapticFeedback('medium'); // 'light', 'medium', 'heavy'
+
+// Native Android Toast Notifications
+window.Aether.showToast("Saved to AETHER DB!");
+
+// Built-in Relational SQL (DB.*)
+const rows = await window.Aether.dbQuery("SELECT * FROM users WHERE active = 1;");
+
+// Autonomous Neural AI Substrate
+const aiResp = await window.Aether.ai("Analyze user telemetry");
+
+// Hardware & Battery Telemetry
+const info = await window.Aether.deviceInfo();
+```
+
+

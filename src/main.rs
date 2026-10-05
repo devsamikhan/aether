@@ -6239,6 +6239,61 @@ fn main() {
                     }
                 }
             }
+            "bundle" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: aether bundle <dist_dir> [-o output] [--target apk|desktop|web] [--name 'App Name'] [--package com.example.app]");
+                    return;
+                }
+                let dist_dir = PathBuf::from(&args[2]);
+                let mut output_path: Option<PathBuf> = None;
+                let mut target = "apk".to_string();
+                let mut app_name: Option<String> = None;
+                let mut package_name: Option<String> = None;
+
+                let mut i = 3;
+                while i < args.len() {
+                    if args[i] == "-o" && i + 1 < args.len() {
+                        output_path = Some(PathBuf::from(&args[i + 1]));
+                        i += 2;
+                    } else if (args[i] == "--target" || args[i] == "-t") && i + 1 < args.len() {
+                        target = args[i + 1].to_lowercase();
+                        i += 2;
+                    } else if args[i] == "--name" && i + 1 < args.len() {
+                        app_name = Some(args[i + 1].clone());
+                        i += 2;
+                    } else if args[i] == "--package" && i + 1 < args.len() {
+                        package_name = Some(args[i + 1].clone());
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                let final_ext = match target.as_str() {
+                    "desktop" | "exe" | "windows" => "exe",
+                    "web" | "html" => "html",
+                    _ => "apk",
+                };
+
+                let final_output = output_path.unwrap_or_else(|| {
+                    dist_dir.with_extension(final_ext)
+                });
+
+                let mut config = aether::codegen::shell_bundler::ShellConfig::new(dist_dir, final_output);
+                config.target = target;
+                if let Some(name) = app_name {
+                    config.app_name = name;
+                }
+                if let Some(pkg) = package_name {
+                    config.package_name = pkg;
+                }
+
+                let bundler = aether::codegen::shell_bundler::ShellBundler::new(config);
+                if let Err(e) = bundler.bundle() {
+                    eprintln!("Bundle Error: {}", e);
+                }
+                return;
+            }
             "web" => {
                 if args.len() < 3 {
                     eprintln!("Usage: aether web <script.ae> [-o output.html] [--name 'App Name']");

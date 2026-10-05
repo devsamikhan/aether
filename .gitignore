@@ -31,3 +31,8 @@ desktop.ini
 # Logs
 *.log
 logs/
+
+# Runtime Database
+data/
+*.db
+*.wal
