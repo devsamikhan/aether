@@ -6182,15 +6182,36 @@ fn main() {
                     }
                 }
             }
-            "playground" => {
+            "studio" | "playground" => {
                 let port = if args.len() > 2 {
                     args[2].parse::<u16>().unwrap_or(8080)
                 } else {
                     8080
                 };
                 if let Err(e) = aether::playground_server::start_playground_server(port, true) {
-                    eprintln!("Playground Server Error: {}", e);
+                    eprintln!("Studio Server Error: {}", e);
                 }
+            }
+            "dev" | "watch" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: aether dev <script.ae> [--interval <ms>]");
+                    return;
+                }
+                let file_path = &args[2];
+                let mut interval = 100u64;
+                let mut i = 3;
+                while i < args.len() {
+                    if (args[i] == "--interval" || args[i] == "-i") && i + 1 < args.len() {
+                        interval = args[i + 1].parse().unwrap_or(100);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                if let Err(e) = aether::vm::hotreload::run_live_watcher(file_path, interval) {
+                    eprintln!("Live Dev Server Error: {}", e);
+                }
+                return;
             }
             "mcp" => {
                 let srv = aether::mcp_server::AetherMcpServer::new();

@@ -1590,7 +1590,8 @@ impl VM {
                                     Value::String(s) => {
                                         if let Some(val) = map.get(s.as_str()) {
                                             self.stack.push(val.clone());
-                                        } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len") {
+                                        } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
+                                            || (map.contains_key("_db_id") && matches!(s.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: (**s).clone(),
@@ -1603,7 +1604,8 @@ impl VM {
                                         let k = format!("{}", other);
                                         if let Some(val) = map.get(&k) {
                                             self.stack.push(val.clone());
-                                        } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len") {
+                                        } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
+                                            || (map.contains_key("_db_id") && matches!(k.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: k,
@@ -2231,7 +2233,23 @@ impl VM {
                     Ok(Value::Nil)
                 }
                 "len" => Ok(Value::Int(m.lock().len() as i64)),
-                _ => Err(format!("Unknown method '{}' on dict", method)),
+                _ => {
+                    if m.lock().contains_key("_db_id") {
+                        let mut db_args = vec![receiver.clone()];
+                        db_args.extend_from_slice(args);
+                        let db_mod = with_current_vm(|vm| {
+                            vm.globals.get("DB").cloned().ok_or_else(|| "DB module not found in globals".to_string())
+                        })?;
+                        if let Value::Map(mod_map) = db_mod {
+                            if let Some(Value::Native(_, f)) = mod_map.lock().get(method) {
+                                return f(&db_args);
+                            }
+                        }
+                        Err(format!("Unknown method '{}' on database handle", method))
+                    } else {
+                        Err(format!("Unknown method '{}' on dict", method))
+                    }
+                }
             },
             Value::String(s) => match method {
                 "upper" => Ok(Value::string(s.to_uppercase())),

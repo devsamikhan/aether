@@ -3,80 +3,67 @@
     "prefix": "fn",
     "body": [
       "fn ${1:name}(${2:params}) {",
-      "\t${0:// body}",
+      "\t${0:# body}",
       "}"
     ],
-    "description": "Define an AETHER function"
-  },
-  "Variable Declaration": {
-    "prefix": "let",
-    "body": [
-      "let ${1:variable} = ${2:value};"
-    ],
-    "description": "Declare a variable"
+    "description": "Define a function in AETHER"
   },
   "Class Definition": {
     "prefix": "class",
     "body": [
       "class ${1:ClassName} {",
       "\tfn init(${2:params}) {",
-      "\t\t${3:// initialize}",
+      "\t\t${0}",
       "\t}",
-      "\t${0}",
       "}"
     ],
-    "description": "Define an AETHER class with constructor"
+    "description": "Define a class in AETHER"
   },
-  "Intent Contract": {
+  "Intent Block": {
     "prefix": "intent",
     "body": [
       "intent ${1:ContractName} {",
-      "\tschema {",
-      "\t\t${2:field}: ${3:Type};",
-      "\t}",
-      "\trequire {",
-      "\t\tthis.${2:field} >= 0;",
-      "\t}",
-      "\tensure {",
-      "\t\tthis.${2:field} >= 0;",
-      "\t}",
+      "\trequire: ${2:condition}",
+      "\tensure: ${3:condition}",
       "\t${0}",
       "}"
     ],
-    "description": "Define an AETHER declarative intent contract"
+    "description": "Define a declarative intent contract"
   },
-  "Fiber Spawn": {
-    "prefix": "spawn",
+  "Database Connect": {
+    "prefix": "db_open",
     "body": [
-      "spawn(fn() {",
-      "\t${0:// concurrent fiber task}",
-      "});"
+      "let db = DB.open(\"${1::memory:}\")",
+      "db.execute(\"CREATE TABLE ${2:table_name} (${3:id INT, name TEXT});\")",
+      "${0}"
     ],
-    "description": "Spawn a high-speed green fiber"
+    "description": "Open relational database and create table"
   },
-  "List Comprehension": {
-    "prefix": "comp",
+  "AI Autonomous Agent": {
+    "prefix": "ai_agent",
     "body": [
-      "[${1:x * 2} for ${2:x} in ${3:items} if ${4:condition}]"
+      "let agent = AI.agent(\"${1:AgentName}\", \"${2:RoleDescription}\")",
+      "let response = AI.ask(agent, \"${3:Task prompt}\")",
+      "println(response)",
+      "${0}"
     ],
-    "description": "AETHER list comprehension"
+    "description": "Spawn an autonomous AI Agent"
   },
-  "Try-Catch Exception": {
-    "prefix": "try",
+  "Material 3 Card": {
+    "prefix": "m3_card",
     "body": [
-      "try {",
-      "\t${1:// risky code}",
-      "} catch (${2:err}) {",
-      "\tprintln(\"Error: \" + ${2:err});",
-      "}"
+      "let card = M3.card(\"${1|elevated,filled,outlined|}\", \"${2:Title}\", \"${3:Subtitle}\", \"${4:Content}\")",
+      "M3.render_preview(card)",
+      "${0}"
     ],
-    "description": "Structured try-catch exception block"
+    "description": "Create and render a Material 3 Card"
   },
-  "Println Output": {
-    "prefix": "pl",
+  "Mobile Toast": {
+    "prefix": "toast",
     "body": [
-      "println(${1:\"message\"});"
+      "Mobile.show_toast(\"${1:Message}\")",
+      "${0}"
     ],
-    "description": "Print line to standard output"
+    "description": "Show native Android toast"
   }
 }

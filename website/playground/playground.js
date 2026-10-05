@@ -151,6 +151,71 @@ println("[Quantum] Applied CNOT Gate (Control: Q0, Target: Q1)");
 # Collapse Wave Function
 let outcome = qreg.measure(0);
 println("[Quantum] Measured Q0: " + to_string(outcome));
+`,
+
+  arcade: `# 🕹️ 09. CyberRunner 2088 Retro 2D Arcade Engine
+# High-speed game loop simulation with M3 HUD & Haptics
+
+println("🕹️ Booting CyberRunner 2088 Arcade Engine...")
+Mobile.vibrate(35)
+Mobile.show_toast("Highway Hyperdrive Engaged!")
+
+let theme = M3.theme("#00F5FF", dark_mode=true)
+println(f"Visual Palette: Primary {theme['primary']}")
+
+let card = M3.card("elevated", "Mission Accomplished", "Pilot: Sami", "1000 PTS | 3 Cores | 60 FPS")
+M3.render_preview(card)
+`,
+
+  saas: `# 🧠 10. AetherBrain AI SaaS Platform
+# Embedded Relational Database, Native AI Intelligence, and M3 Dashboard
+
+let db = DB.open(":memory:")
+db.execute("CREATE TABLE users (id INT, name TEXT, role TEXT);")
+db.insert("users", {"id": 1, "name": "Sami Khan", "role": "Architect"})
+
+let team = db.query("SELECT * FROM users;")
+println(f"Team Members: {team}")
+
+let agent = AI.agent("AetherStrategist", "Corporate Analytics Copilot")
+println(f"Agent Active: {agent['name']} ({agent['role']})")
+
+let top = M3.top_app_bar("AetherBrain SaaS", "Autonomous Corporate Intelligence")
+M3.render_preview(top)
+`,
+
+  db: `# 🗄️ 11. Relational Database & SQL Engine (DB.*)
+# Zero-dependency ACID relational engine with parameter substitution
+
+let db = DB.open(":memory:")
+db.execute("CREATE TABLE products (id INT, title TEXT, price FLOAT, stock INT);")
+
+db.execute("INSERT INTO products (id, title, price, stock) VALUES (101, 'Aether Cloud Node', 199.99, 45);")
+db.execute("INSERT INTO products (id, title, price, stock) VALUES (102, 'Edge Micro-VM', 49.50, 120);")
+db.insert("products", {"id": 103, "title": "Quantum Co-processor", "price": 499.00, "stock": 10})
+
+println(f"Active Tables: {db.tables()}")
+let premium = db.query("SELECT title, price FROM products WHERE price >= ? ORDER BY price DESC;", [100.0])
+println(f"Premium Products (> $100): {premium}")
+`,
+
+  mobile: `# 📱 12. Material 3 Mobile UI & Android Hardware Bridge
+# Google Material You theming and native mobile device sensors
+
+Mobile.show_toast("Welcome to AETHER Mobile!")
+Mobile.vibrate(40)
+
+let battery = Mobile.battery_level()
+let dev = Mobile.device_info()
+println(f"Device: {dev['brand']} {dev['model']} (OS: {dev['os']})")
+println(f"Battery Level: {battery}%")
+
+let theme = M3.theme("#6750A4", dark_mode=true)
+let top_bar = M3.top_app_bar("AetherMobile", "Connected Health Dashboard")
+let btn = M3.filled_button("Sync Health Sensors", icon="sync")
+
+M3.render_preview(top_bar)
+M3.render_preview(btn)
 `
 };
 

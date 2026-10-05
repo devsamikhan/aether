@@ -347,8 +347,72 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // 10. Database.execute(handle, sql_statement)
+    db_module.insert(
+        "execute".to_string(),
+        Value::Native("Database.execute".into(), |args| {
+            if args.len() < 2 {
+                return Err("Database.execute(handle, sql_statement) requires at least 2 arguments".into());
+            }
+            let handle_id = get_handle_id(args)?;
+            let sql_str = format!("{}", args[1]);
+
+            let dbs = get_databases().lock();
+            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let mut db = db_arc.lock();
+
+            execute_sql(&mut db, &sql_str)
+        }),
+    );
+
+    // 11. Database.query(handle, sql_query, [params]) -> Array of Map rows
+    db_module.insert(
+        "query".to_string(),
+        Value::Native("Database.query".into(), |args| {
+            if args.len() < 2 {
+                return Err("Database.query(handle, sql_query, [params]) requires at least 2 arguments".into());
+            }
+            let handle_id = get_handle_id(args)?;
+            let sql_str = format!("{}", args[1]);
+
+            let empty_vec = Vec::new();
+            let params = if args.len() > 2 {
+                match &args[2] {
+                    Value::Array(arr) => arr.lock().clone(),
+                    _ => empty_vec,
+                }
+            } else {
+                empty_vec
+            };
+
+            let dbs = get_databases().lock();
+            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db = db_arc.lock();
+
+            let rows = query_sql(&db, &sql_str, &params)?;
+            let array_val = rows.into_iter().map(Value::map).collect();
+            Ok(Value::array(array_val))
+        }),
+    );
+
+    // 12. Database.tables(handle) -> Array of table names
+    db_module.insert(
+        "tables".to_string(),
+        Value::Native("Database.tables".into(), |args| {
+            let handle_id = get_handle_id(args)?;
+            let dbs = get_databases().lock();
+            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db = db_arc.lock();
+
+            let mut names: Vec<Value> = db.collections.keys().map(|k| Value::string(k.clone())).collect();
+            names.sort_by_key(|a| format!("{}", a));
+            Ok(Value::array(names))
+        }),
+    );
+
     globals.entry("__native_db".to_string()).or_insert_with(|| Value::map(db_module.clone()));
     globals.entry("Database".to_string()).or_insert_with(|| Value::map(db_module.clone()));
+    globals.entry("DB".to_string()).or_insert_with(|| Value::map(db_module.clone()));
     globals.entry("db".to_string()).or_insert_with(|| Value::map(db_module));
 }
 
@@ -615,5 +679,392 @@ fn apply_wal_entry(db: &mut DbInstance, entry: &serde_json::Value) {
             }
         }
         _ => {}
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SQL Relational Query Engine Implementation
+// -----------------------------------------------------------------------------
+
+fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
+    let trimmed = sql.trim().trim_end_matches(';').trim();
+    if trimmed.is_empty() {
+        return Ok(Value::Bool(true));
+    }
+
+    let upper = trimmed.to_uppercase();
+    if upper.starts_with("CREATE TABLE") {
+        let rest = trimmed["CREATE TABLE".len()..].trim();
+        let rest = if rest.to_uppercase().starts_with("IF NOT EXISTS") {
+            rest["IF NOT EXISTS".len()..].trim()
+        } else {
+            rest
+        };
+        let table_name = rest
+            .split(|c: char| c.is_whitespace() || c == '(')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        if table_name.is_empty() {
+            return Err("Invalid CREATE TABLE syntax: missing table name".into());
+        }
+        db.collections.entry(table_name.to_string()).or_insert_with(Vec::new);
+        Ok(Value::Bool(true))
+    } else if upper.starts_with("DROP TABLE") {
+        let rest = trimmed["DROP TABLE".len()..].trim();
+        let rest = if rest.to_uppercase().starts_with("IF EXISTS") {
+            rest["IF EXISTS".len()..].trim()
+        } else {
+            rest
+        };
+        let table_name = rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        db.collections.remove(table_name);
+        Ok(Value::Bool(true))
+    } else if upper.starts_with("INSERT INTO") {
+        let rest = trimmed["INSERT INTO".len()..].trim();
+        let (table_part, values_part) = match rest.to_uppercase().find("VALUES") {
+            Some(idx) => (&rest[..idx].trim(), &rest[idx + "VALUES".len()..].trim()),
+            None => return Err("Invalid INSERT syntax: missing VALUES".into()),
+        };
+
+        let (table_name, cols) = if let Some(open_paren) = table_part.find('(') {
+            let tname = table_part[..open_paren].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+            let end_paren = table_part.rfind(')').unwrap_or(table_part.len());
+            let cols_str = &table_part[open_paren + 1..end_paren];
+            let cols: Vec<String> = cols_str
+                .split(',')
+                .map(|s| s.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string())
+                .collect();
+            (tname, Some(cols))
+        } else {
+            (table_part.trim().trim_matches(|c| c == '`' || c == '"' || c == '\''), None)
+        };
+
+        let val_trimmed = values_part.trim();
+        let inner_vals = if val_trimmed.starts_with('(') && val_trimmed.ends_with(')') {
+            &val_trimmed[1..val_trimmed.len() - 1]
+        } else {
+            val_trimmed
+        };
+
+        let parsed_values = split_sql_csv(inner_vals);
+        let mut row_map = HashMap::new();
+
+        if let Some(col_names) = cols {
+            for (i, col) in col_names.into_iter().enumerate() {
+                let v = if i < parsed_values.len() {
+                    parse_sql_value(&parsed_values[i])
+                } else {
+                    Value::Nil
+                };
+                row_map.insert(col, v);
+            }
+        } else {
+            for (i, val_str) in parsed_values.into_iter().enumerate() {
+                row_map.insert(format!("col_{}", i + 1), parse_sql_value(&val_str));
+            }
+        }
+
+        if !row_map.contains_key("_id") {
+            let id = NEXT_DOC_ID.fetch_add(1, Ordering::SeqCst);
+            row_map.insert("_id".to_string(), Value::string(format!("doc-{}", id)));
+        }
+
+        if !db.is_memory {
+            if let Some(ref mut wal) = db.wal_file {
+                let json_line = serialize_wal_op("insert", table_name, &row_map);
+                let _ = writeln!(wal, "{}", json_line);
+                let _ = wal.flush();
+            }
+        }
+
+        db.collections.entry(table_name.to_string()).or_insert_with(Vec::new).push(row_map);
+        Ok(Value::Int(1))
+    } else if upper.starts_with("DELETE FROM") {
+        let rest = trimmed["DELETE FROM".len()..].trim();
+        let (table_name, where_clause) = match rest.to_uppercase().find("WHERE") {
+            Some(idx) => (
+                rest[..idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\''),
+                Some(rest[idx + "WHERE".len()..].trim()),
+            ),
+            None => (rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\''), None),
+        };
+
+        let mut deleted = 0;
+        if let Some(col) = db.collections.get_mut(table_name) {
+            let initial_len = col.len();
+            if let Some(where_cond) = where_clause {
+                col.retain(|row| !eval_sql_condition(row, where_cond));
+            } else {
+                col.clear();
+            }
+            deleted = (initial_len - col.len()) as i64;
+        }
+        Ok(Value::Int(deleted))
+    } else if upper.starts_with("UPDATE") {
+        let rest = trimmed["UPDATE".len()..].trim();
+        let set_idx = rest.to_uppercase().find("SET").ok_or_else(|| "UPDATE missing SET clause".to_string())?;
+        let table_name = rest[..set_idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        let after_set = rest[set_idx + "SET".len()..].trim();
+
+        let (set_part, where_clause) = match after_set.to_uppercase().find("WHERE") {
+            Some(idx) => (&after_set[..idx].trim(), Some(after_set[idx + "WHERE".len()..].trim())),
+            None => (&after_set, None),
+        };
+
+        let assignments = split_sql_csv(set_part);
+        let mut updates = HashMap::new();
+        for assign in assignments {
+            if let Some(eq_idx) = assign.find('=') {
+                let k = assign[..eq_idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+                let v = parse_sql_value(assign[eq_idx + 1..].trim());
+                updates.insert(k.to_string(), v);
+            }
+        }
+
+        let mut updated = 0;
+        if let Some(col) = db.collections.get_mut(table_name) {
+            for row in col.iter_mut() {
+                let matches = if let Some(where_cond) = where_clause {
+                    eval_sql_condition(row, where_cond)
+                } else {
+                    true
+                };
+                if matches {
+                    for (k, v) in &updates {
+                        row.insert(k.clone(), v.clone());
+                    }
+                    updated += 1;
+                }
+            }
+        }
+        Ok(Value::Int(updated))
+    } else {
+        Err(format!("Unsupported SQL statement for execute(): {}", sql))
+    }
+}
+
+fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap<String, Value>>, String> {
+    let mut resolved_sql = sql.to_string();
+    for param in params {
+        if let Some(pos) = resolved_sql.find('?') {
+            let replacement = match param {
+                Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                Value::Int(i) => format!("{}", i),
+                Value::Float(f) => format!("{}", f),
+                Value::Bool(b) => format!("{}", b),
+                Value::Nil => "NULL".to_string(),
+                other => format!("'{}'", other),
+            };
+            resolved_sql.replace_range(pos..pos + 1, &replacement);
+        }
+    }
+
+    let trimmed = resolved_sql.trim().trim_end_matches(';').trim();
+    let upper = trimmed.to_uppercase();
+    if !upper.starts_with("SELECT") {
+        return Err(format!("query() expects SELECT statement, got: {}", sql));
+    }
+
+    let from_idx = upper.find("FROM").ok_or_else(|| "SELECT missing FROM clause".to_string())?;
+    let select_part = trimmed["SELECT".len()..from_idx].trim();
+    let after_from = trimmed[from_idx + "FROM".len()..].trim();
+
+    let mut rest = after_from;
+    let mut limit: Option<usize> = None;
+    let mut order_by: Option<(String, bool)> = None;
+    let mut where_cond: Option<String> = None;
+
+    if let Some(lim_idx) = rest.to_uppercase().rfind("LIMIT") {
+        let lim_str = rest[lim_idx + "LIMIT".len()..].trim();
+        limit = lim_str.parse::<usize>().ok();
+        rest = rest[..lim_idx].trim();
+    }
+
+    if let Some(order_idx) = rest.to_uppercase().rfind("ORDER BY") {
+        let order_str = rest[order_idx + "ORDER BY".len()..].trim();
+        let parts: Vec<&str> = order_str.split_whitespace().collect();
+        if !parts.is_empty() {
+            let col = parts[0].trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string();
+            let desc = parts.len() > 1 && parts[1].eq_ignore_ascii_case("DESC");
+            order_by = Some((col, desc));
+        }
+        rest = rest[..order_idx].trim();
+    }
+
+    if let Some(where_idx) = rest.to_uppercase().find("WHERE") {
+        let w_str = rest[where_idx + "WHERE".len()..].trim();
+        where_cond = Some(w_str.to_string());
+        rest = rest[..where_idx].trim();
+    }
+
+    let table_name = rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+    let rows = match db.collections.get(table_name) {
+        Some(list) => list,
+        None => return Ok(Vec::new()),
+    };
+
+    let mut filtered_rows: Vec<HashMap<String, Value>> = Vec::new();
+    for row in rows {
+        if let Some(ref cond) = where_cond {
+            if !eval_sql_condition(row, cond) {
+                continue;
+            }
+        }
+        filtered_rows.push(row.clone());
+    }
+
+    if let Some((col, desc)) = order_by {
+        filtered_rows.sort_by(|a, b| {
+            let va = a.get(&col).unwrap_or(&Value::Nil);
+            let vb = b.get(&col).unwrap_or(&Value::Nil);
+            let ord = compare_values_ord(va, vb);
+            if desc {
+                ord.reverse()
+            } else {
+                ord
+            }
+        });
+    }
+
+    if let Some(lim) = limit {
+        filtered_rows.truncate(lim);
+    }
+
+    let selected_columns: Vec<String> = if select_part == "*" {
+        Vec::new()
+    } else {
+        select_part
+            .split(',')
+            .map(|s| s.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string())
+            .collect()
+    };
+
+    if selected_columns.is_empty() {
+        Ok(filtered_rows)
+    } else {
+        let projected = filtered_rows
+            .into_iter()
+            .map(|row| {
+                let mut new_row = HashMap::new();
+                for col in &selected_columns {
+                    if let Some(v) = row.get(col) {
+                        new_row.insert(col.clone(), v.clone());
+                    } else {
+                        new_row.insert(col.clone(), Value::Nil);
+                    }
+                }
+                new_row
+            })
+            .collect();
+        Ok(projected)
+    }
+}
+
+fn split_sql_csv(s: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+    let mut quote_char = ' ';
+
+    for c in s.chars() {
+        if (c == '\'' || c == '"') && !in_quote {
+            in_quote = true;
+            quote_char = c;
+            current.push(c);
+        } else if in_quote && c == quote_char {
+            in_quote = false;
+            current.push(c);
+        } else if c == ',' && !in_quote {
+            result.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        result.push(current.trim().to_string());
+    }
+    result
+}
+
+fn parse_sql_value(s: &str) -> Value {
+    let trimmed = s.trim();
+    if (trimmed.starts_with('\'') && trimmed.ends_with('\''))
+        || (trimmed.starts_with('"') && trimmed.ends_with('"'))
+    {
+        if trimmed.len() >= 2 {
+            Value::string(&trimmed[1..trimmed.len() - 1])
+        } else {
+            Value::string("")
+        }
+    } else if trimmed.eq_ignore_ascii_case("true") {
+        Value::Bool(true)
+    } else if trimmed.eq_ignore_ascii_case("false") {
+        Value::Bool(false)
+    } else if trimmed.eq_ignore_ascii_case("null") || trimmed.eq_ignore_ascii_case("nil") {
+        Value::Nil
+    } else if let Ok(i) = trimmed.parse::<i64>() {
+        Value::Int(i)
+    } else if let Ok(f) = trimmed.parse::<f64>() {
+        Value::Float(f)
+    } else {
+        Value::string(trimmed)
+    }
+}
+
+fn eval_sql_condition(row: &HashMap<String, Value>, cond: &str) -> bool {
+    let trimmed = cond.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+
+    for sub_cond in trimmed.split(" AND ") {
+        for inner in sub_cond.split(" and ") {
+            if !eval_single_cond(row, inner) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn eval_single_cond(row: &HashMap<String, Value>, cond: &str) -> bool {
+    let ops = [">=", "<=", "!=", "<>", ">", "<", " LIKE ", " like ", "="];
+    for op in ops {
+        if let Some(pos) = cond.to_uppercase().find(&op.to_uppercase()) {
+            let col_name = cond[..pos].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+            let val_str = cond[pos + op.len()..].trim();
+            let row_val = row.get(col_name).unwrap_or(&Value::Nil);
+            let target_val = parse_sql_value(val_str);
+
+            return match op.trim().to_uppercase().as_str() {
+                "=" => row_val == &target_val,
+                "!=" | "<>" => row_val != &target_val,
+                ">" => compare_vals(row_val, &target_val, |c| c > 0),
+                ">=" => compare_vals(row_val, &target_val, |c| c >= 0),
+                "<" => compare_vals(row_val, &target_val, |c| c < 0),
+                "<=" => compare_vals(row_val, &target_val, |c| c <= 0),
+                "LIKE" => {
+                    let r_str = format!("{}", row_val);
+                    let pattern = format!("{}", target_val).replace('%', "");
+                    r_str.contains(&pattern)
+                }
+                _ => false,
+            };
+        }
+    }
+    true
+}
+
+fn compare_values_ord(a: &Value, b: &Value) -> std::cmp::Ordering {
+    match (a, b) {
+        (Value::Int(x), Value::Int(y)) => x.cmp(y),
+        (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Int(x), Value::Float(y)) => (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(x), Value::Int(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::String(x), Value::String(y)) => x.cmp(y),
+        _ => std::cmp::Ordering::Equal,
     }
 }

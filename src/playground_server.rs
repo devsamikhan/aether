@@ -124,9 +124,91 @@ fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
             "application/octet-stream"
         };
         send_response(&mut stream, 200, content_type, &content)
+    } else if clean_path.ends_with(".html") {
+        send_response(&mut stream, 200, "text/html; charset=utf-8", get_fallback_studio_html().as_bytes())
     } else {
         send_response(&mut stream, 404, "text/plain", b"Asset not found.")
     }
+}
+
+fn get_fallback_studio_html() -> &'static str {
+    r###"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AETHER 2.0 Web Studio & Live Playground</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: #0c0e12; color: #e1e2e8; display: flex; flex-direction: column; height: 100vh; }
+        header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #161922; border-bottom: 1px solid #282d3c; }
+        .logo { font-size: 20px; font-weight: 700; color: #00F5FF; display: flex; align-items: center; gap: 8px; }
+        .btn { background: #00F5FF; color: #00363d; font-weight: 600; padding: 8px 18px; border: none; border-radius: 20px; cursor: pointer; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .editor-pane, .output-pane { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #282d3c; }
+        textarea { flex: 1; background: #12141c; color: #a5d6ff; font-family: 'Consolas', monospace; font-size: 14px; padding: 16px; border: none; resize: none; outline: none; }
+        .output-box { flex: 1; background: #090b0e; color: #00F5FF; font-family: 'Consolas', monospace; font-size: 13px; padding: 16px; overflow-y: auto; white-space: pre-wrap; }
+        .toolbar { padding: 8px 16px; background: #1a1e28; display: flex; gap: 12px; align-items: center; font-size: 13px; }
+        select { background: #222734; color: #fff; border: 1px solid #333b4e; padding: 4px 8px; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">⚡ AETHER 2.0 Web Studio & Playground</div>
+        <button class="btn" onclick="runCode()">▶ Run Script (Ctrl+Enter)</button>
+    </header>
+    <div class="main-container">
+        <div class="editor-pane">
+            <div class="toolbar">
+                <label>Template: </label>
+                <select id="tpl" onchange="loadTemplate()">
+                    <option value="arcade">🕹️ 01. CyberRunner 2088 Arcade</option>
+                    <option value="saas">🧠 02. AetherBrain AI SaaS</option>
+                    <option value="db">🗄️ 03. Relational Database & SQL</option>
+                    <option value="mobile">📱 04. Material 3 Mobile UI</option>
+                    <option value="quantum">⚛️ 05. Quantum Teleportation</option>
+                </select>
+            </div>
+            <textarea id="code"></textarea>
+        </div>
+        <div class="output-pane">
+            <div class="toolbar">🖥️ Live Execution Terminal & Diagnostics</div>
+            <div class="output-box" id="output">Click 'Run Script' to execute AETHER code in the bytecode VM...</div>
+        </div>
+    </div>
+    <script>
+        const TPLS = {
+            arcade: "print('🕹️ Loading CyberRunner 2088 Engine...')\nMobile.vibrate(30)\nMobile.show_toast('Energy Core Collected!')\nlet theme = M3.theme('#00F5FF', true)\nprint('Theme Primary: ' + theme['primary'])",
+            saas: "let db = DB.open(':memory:')\ndb.execute('CREATE TABLE audit_logs (id INT, event TEXT);')\ndb.insert('audit_logs', {'id': 1, 'event': 'UserLogin'})\nprint('Audit Count: ' + to_string(db.count('audit_logs')))\nlet agent = AI.agent('DocAI', 'Knowledge Assistant')\nprint(agent['name'] + ' is active!')",
+            db: "let db = DB.open(':memory:')\ndb.execute('CREATE TABLE products (name TEXT, price FLOAT);')\ndb.insert('products', {'name': 'Aether Pro', 'price': 99.0})\nlet rows = db.query('SELECT * FROM products WHERE price > 50;')\nprint('Results: ' + to_string(rows))",
+            mobile: "Mobile.show_toast('Hello Android!')\nlet batt = Mobile.battery_level()\nlet info = Mobile.device_info()\nprint('Battery: ' + to_string(batt) + '% on ' + info['brand'])",
+            quantum: "let q = Quantum.circuit(2)\nq.h(0)\nq.cnot(0, 1)\nlet state = q.measure()\nprint('Entangled State: ' + to_string(state))"
+        };
+        function loadTemplate() {
+            const k = document.getElementById('tpl').value;
+            document.getElementById('code').value = TPLS[k] || '';
+        }
+        async function runCode() {
+            const out = document.getElementById('output');
+            out.innerText = '⚡ Executing in AETHER VM...';
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: document.getElementById('code').value })
+                });
+                const data = await res.json();
+                out.innerText = data.output + '\\nResult: ' + data.result + '\\nDuration: ' + data.duration_ms + ' ms';
+            } catch (e) {
+                out.innerText = 'Network error: ' + e;
+            }
+        }
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runCode();
+        });
+        loadTemplate();
+    </script>
+</body>
+</html>"###
 }
 
 fn send_response(

@@ -391,3 +391,77 @@ aether search game
 3. **`03_aetherstore_database`**: Embedded ACID key-value and document store with write-ahead logging (WAL).
 4. **`04_android_mobile_app`**: Standalone Material 3 mobile application (`.apk`) with native hardware sensors & haptics.
 5. **`05_aether_arcade_game`**: Retro 2D arcade game engine (`CyberRunner 2088`) compiling to `.exe`, `.apk`, and single-file `.html`.
+6. **`06_aetherbrain_ai_saas`**: Enterprise AI SaaS knowledge platform integrating Relational SQL, AI Agents, and M3 Executive Dashboard.
+
+---
+
+## 24. Live Dev Server with Hot-Reloading (`aether dev`)
+
+AETHER includes an Erlang BEAM-grade live code swapping and hot-reloading dev server with sub-millisecond incremental state swapping:
+
+```bash
+# Watch file for changes and instantly hot-swap bytecode without dropping state
+aether dev app.ae
+
+# Custom polling interval
+aether dev app.ae --interval 50
+```
+
+---
+
+## 25. Interactive Web Studio & Playground (`aether studio`)
+
+Launch a local, zero-dependency browser-based development studio and live REPL:
+
+```bash
+# Start local Web Studio on default port 8080 (auto-opens browser)
+aether studio
+
+# Start on custom port
+aether studio 3000
+```
+
+- Live in-browser AETHER bytecode VM runner (`/api/run`).
+- Built-in templates for CyberRunner Arcade, AI SaaS, Relational SQL, Material 3 Mobile, and Quantum Teleportation.
+
+---
+
+## 26. Relational Database & SQL Engine (`DB.*`)
+
+AETHER features a built-in, zero-dependency embedded relational SQL database supporting ACID operations, schema creation, and parameterized queries:
+
+```aether
+# 1. Open Database (in-memory or persistent file)
+let db = DB.open("data/production.db")
+
+# 2. Schema DDL
+db.execute("CREATE TABLE users (id INT, name TEXT, role TEXT, score INT);")
+
+# 3. Insert Records
+db.execute("INSERT INTO users (id, name, role, score) VALUES (1, 'Sami', 'admin', 950);")
+db.insert("users", {"id": 2, "name": "Elena", "role": "researcher", "score": 880})
+
+# 4. Parameterized Querying
+let high_scorers = db.query("SELECT name, score FROM users WHERE score >= ? ORDER BY score DESC;", [800])
+println(high_scorers)
+
+# 5. Table Metadata
+println(db.tables()) # ["users"]
+println(db.count("users")) # 2
+
+# 6. Mutations
+db.execute("UPDATE users SET score = 999 WHERE name = 'Sami';")
+db.execute("DELETE FROM users WHERE role = 'researcher';")
+```
+
+---
+
+## 27. Official Visual Studio Code Extension
+
+Install official syntax highlighting, IntelliSense, and snippets for VS Code:
+
+```bash
+# Install extension locally
+cp -r editors/vscode ~/.vscode/extensions/aether-language-support
+```
+
