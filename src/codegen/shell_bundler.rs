@@ -203,22 +203,46 @@ impl ShellBundler {
             format!("<!DOCTYPE html><html><body><h1>{}</h1><p>AetherShell Desktop Container</p></body></html>", self.config.app_name)
         };
 
-        let _inlined_bundle = inline_web_assets(&self.config.dist_dir, &raw_html)?;
+        let inlined_bundle = inline_web_assets(&self.config.dist_dir, &raw_html)?;
 
-        // Write a launcher script that starts local server or runs desktop app
+        // Ensure standalone inlined HTML companion is present next to the binary
+        let html_companion = self.config.output_path.with_extension("html");
+        let html_filename = html_companion
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("index.html");
+
+        let _ = fs::write(&html_companion, &inlined_bundle);
+
+        // Write a launcher script that starts desktop host and opens the application container
         let launcher_script = format!(
             r###"# AetherShell Embedded Desktop Launcher
 let app_name = "{}"
-print(f"🖥️ Launching {{app_name}} Native Desktop Shell...")
+print("================================================================================")
+print(f"🖥️ AETHERSHELL: {{app_name}} NATIVE DESKTOP HOST RUNNING")
+print("================================================================================")
+print("  Status:     Online & Operational")
+print("  Substrate:  AETHER Cranelift + In-Memory Relational Engine")
+print("  Container:  Launching system GUI container...")
 Mobile.show_toast(f"Starting {{app_name}}")
 
-# Provision in-memory relational DB and AI engine for AetherBridge
+# Provision in-memory relational DB for AetherBridge
 let db = DB.open(":memory:")
 db.execute("CREATE TABLE IF NOT EXISTS bridge_events (id INT, event TEXT, time_ms INT);")
 
-print(f"✨ {{app_name}} Native Desktop Host Active.")
+# Launch system default browser to display the application UI
+Sys.open_browser("{}")
+
+print("\n✨ Application window opened successfully.")
+print("   Host process is active. Keep this console open or minimize it.")
+print("   Press Ctrl+C to terminate application host.\n")
+
+# Maintain host process lifecycle
+while true:
+    Sys.sleep(10)
 "###,
-            self.config.app_name
+            self.config.app_name,
+            html_filename
         );
 
         if let Some(parent) = self.config.output_path.parent() {
@@ -305,9 +329,20 @@ print(f"✨ {{app_name}} Native Desktop Host Active.")
 }
 
 /// Inlines CSS, JS, and AetherBridge into a single HTML document
-pub fn inline_web_assets(_dist_dir: &Path, html: &str) -> Result<String, String> {
+pub fn inline_web_assets(dist_dir: &Path, html: &str) -> Result<String, String> {
     let mut output = html.to_string();
-    let bridge_tag = format!("<script>\n{}\n</script>", get_aether_bridge_js());
+
+    let bridge_content = if dist_dir.join("aether_bridge.js").exists() {
+        fs::read_to_string(dist_dir.join("aether_bridge.js")).unwrap_or_else(|_| get_aether_bridge_js().to_string())
+    } else {
+        get_aether_bridge_js().to_string()
+    };
+
+    let bridge_tag = format!("<script>\n{}\n</script>", bridge_content);
+
+    // Strip external references to aether_bridge.js to avoid 404s in inlined bundle
+    output = output.replace("<script src=\"aether_bridge.js\"></script>", "");
+    output = output.replace("<script src=\"./aether_bridge.js\"></script>", "");
 
     if let Some(head_end) = output.find("</head>") {
         output.insert_str(head_end, &format!("{}\n", bridge_tag));

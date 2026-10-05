@@ -394,6 +394,18 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
         Ok(Value::Nil)
     }));
 
+    sys_module.insert("open_browser".to_string(), Value::Native("Sys.open_browser".into(), |args| {
+        if args.is_empty() { return Err("Sys.open_browser(target) requires target URL or file path".into()); }
+        let target = format!("{}", args[0]);
+        #[cfg(target_os = "windows")]
+        let _ = std::process::Command::new("cmd").args(["/C", "start", "", &target]).spawn();
+        #[cfg(target_os = "macos")]
+        let _ = std::process::Command::new("open").arg(&target).spawn();
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        let _ = std::process::Command::new("xdg-open").arg(&target).spawn();
+        Ok(Value::Bool(true))
+    }));
+
     globals.insert("Sys".to_string(), Value::map(sys_module));
 
     // =========================================================================

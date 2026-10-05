@@ -4,89 +4,427 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ChronoPulse | Cognitive Multi-Sensory Alarm System</title>
+  
+  <!-- ChronoPulse Glowing Cyber Icon -->
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18, ReactDOM & Babel -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- ChronoPulse Native Hardware Bridge -->
-  <script src="aether_bridge.js"></script>
+  
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+    
+    :root {
+      --primary-cyan: #00f2fe;
+      --secondary-blue: #4facfe;
+      --accent-violet: #8b5cf6;
+      --alarm-crimson: #ef4444;
+      --bg-dark: #050811;
+    }
+
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background: #050811;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      background: var(--bg-dark);
       color: #f8fafc;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      overflow-x: hidden;
     }
+
     .font-mono {
       font-family: 'JetBrains Mono', monospace;
     }
-    .neon-glow-cyan {
-      box-shadow: 0 0 35px -5px rgba(6, 182, 212, 0.35);
+
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
     }
-    .neon-glow-violet {
-      box-shadow: 0 0 35px -5px rgba(168, 85, 247, 0.35);
+
+    .neon-border-cyan {
+      box-shadow: 0 0 25px -4px rgba(0, 242, 254, 0.4);
+      border-color: rgba(0, 242, 254, 0.6);
     }
-    .neon-glow-crimson {
-      box-shadow: 0 0 45px -5px rgba(239, 68, 68, 0.6);
+
+    .neon-border-crimson {
+      box-shadow: 0 0 45px 0px rgba(239, 68, 68, 0.6);
+      border-color: rgba(239, 68, 68, 0.9);
     }
+
     @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.4; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.96); opacity: 0.8; }
+      50% { transform: scale(1.04); opacity: 0.4; }
+      100% { transform: scale(0.96); opacity: 0.8; }
     }
-    .animate-pulse-ring {
-      animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    .animate-alarm-pulse {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
   </style>
 </head>
-<body class="min-h-screen selection:bg-cyan-500 selection:text-slate-950 flex flex-col justify-between">
+<body class="min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-slate-950 p-3 md:p-6 lg:p-8">
 
-  <div id="root"></div>
+  <!-- Main Container -->
+  <div class="max-w-6xl mx-auto w-full flex flex-col gap-6">
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    <!-- Top Header -->
+    <header class="glass-card rounded-3xl p-5 flex items-center justify-between flex-wrap gap-4 relative overflow-hidden">
+      <div class="absolute -right-16 -top-16 w-52 h-52 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div class="flex items-center gap-4">
+        <!-- SVG App Icon -->
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-violet-600 p-0.5 shadow-xl shadow-cyan-500/20 flex items-center justify-center">
+          <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-3xl">
+            ⏰
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-black tracking-tight text-white">ChronoPulse</h1>
+            <span class="px-2.5 py-0.5 text-[10px] font-black tracking-wider uppercase rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              AETHER 2.0
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">Cognitive Awakening & Multi-Sensory Circadian System</p>
+        </div>
+      </div>
 
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <button id="btnTestAlarm" class="bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-300 border border-rose-500/40 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow">
+          <span>🚨</span> Test Wakeup
+        </button>
+        <button id="btnOpenNewAlarm" class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-slate-950 font-black px-5 py-2.5 rounded-2xl text-xs transition shadow-lg shadow-cyan-500/25 flex items-center gap-1.5">
+          <span>➕</span> Set Alarm
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Dual-Pane Dashboard -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- Left Pane: Fluid Analog Canvas Clock & Sleep Cycle Calculator -->
+      <section class="lg:col-span-5 flex flex-col gap-6">
+
+        <!-- Analog Clock Card -->
+        <div class="glass-card rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden text-center">
+          <!-- Canvas Radial Clock -->
+          <div class="relative w-[260px] h-[260px] flex items-center justify-center">
+            <canvas id="clockCanvas" width="260" height="260"></canvas>
+          </div>
+
+          <!-- Digital HUD Time -->
+          <div class="mt-4">
+            <div class="text-5xl font-black font-mono tracking-tight text-white flex items-center justify-center gap-1">
+              <span id="digitalHoursMinutes">--:--</span>
+              <span class="text-cyan-400 text-3xl animate-pulse">:</span>
+              <span id="digitalSeconds" class="text-cyan-400 font-mono text-3xl">--</span>
+            </div>
+            <p id="digitalDate" class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-1 font-mono">
+              Loading Time...
+            </p>
+          </div>
+
+          <!-- Sound Wave Frequency Spectrum Visualizer -->
+          <div class="w-full mt-4 pt-3 border-t border-slate-800">
+            <div class="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1 flex justify-between">
+              <span>Procedural Synthesizer</span>
+              <span id="audioEngineStatus" class="text-emerald-400 font-bold">Standby (0.0ms)</span>
+            </div>
+            <canvas id="visualizerCanvas" width="260" height="42" class="w-full h-[42px] rounded-xl bg-slate-950/80 border border-slate-800/80"></canvas>
+          </div>
+
+          <!-- Telemetry Specs Badge -->
+          <div class="mt-4 w-full bg-slate-950/80 rounded-2xl p-3 border border-slate-800 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 text-slate-300">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-[11px]">Runtime: <b id="platformBadge" class="text-white">Universal Desktop</b></span>
+            </div>
+            <span class="text-cyan-400 font-mono text-[11px] font-bold">Zero-SDK Compiler</span>
+          </div>
+        </div>
+
+        <!-- REM Sleep Cycle Calculator Card -->
+        <div class="glass-card rounded-3xl p-6 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span>🌙</span> Optimal Bedtime Calculator (REM Cycles)
+            </h3>
+            <span class="text-[10px] font-mono text-cyan-400">90min Phases</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Waking up in the middle of a 90-minute sleep cycle causes grogginess. For best energy, sleep at these exact times:
+          </p>
+          <div id="bedtimeOptions" class="grid grid-cols-3 gap-2 mt-1">
+            <!-- Populated dynamically based on next alarm -->
+          </div>
+        </div>
+
+        <!-- Autonomous AI Morning Strategy Card -->
+        <div id="aiBriefingCard" class="glass-card rounded-3xl p-6 flex flex-col gap-2.5">
+          <div class="flex items-center gap-2 text-cyan-400 font-black text-xs uppercase tracking-wider">
+            <span>🧠</span> Autonomous AI Morning Intelligence
+          </div>
+          <p id="aiBriefingText" class="text-xs text-slate-300 font-mono leading-relaxed">
+            "Your mind is sharpest in the first 90 minutes. Focus entirely on high-impact priority targets today."
+          </p>
+          <div class="text-[10px] text-slate-500 font-mono text-right">
+            Local Neural Substrate • 0.03ms Latency
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Pane: Active Alarms List & Relational Analytics Table -->
+      <section class="lg:col-span-7 flex flex-col gap-6">
+
+        <!-- Scheduled Alarms Card -->
+        <div class="glass-card rounded-3xl p-6 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span>🔔</span> Scheduled Alarms (<span id="activeAlarmsCount">2</span>)
+            </h2>
+            <span class="text-xs text-slate-500 font-mono">Synced with AETHER SQL</span>
+          </div>
+
+          <!-- Alarms List Container -->
+          <div id="alarmsList" class="space-y-3">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Relational Circadian & Awakening History Table Card -->
+        <div class="glass-card rounded-3xl p-6 flex flex-col gap-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h2 class="text-sm font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span>📊</span> Relational Awakening & Sleep History (DB.*)
+            </h2>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              ACID Relational Engine
+            </span>
+          </div>
+
+          <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 font-mono">
+                <tr>
+                  <th class="py-3 px-4">Date / Time</th>
+                  <th class="py-3 px-4">Alarm Target</th>
+                  <th class="py-3 px-4">Challenge</th>
+                  <th class="py-3 px-4">Solve Time</th>
+                  <th class="py-3 px-4">Efficiency</th>
+                </tr>
+              </thead>
+              <tbody id="sleepLogsTbody" class="divide-y divide-slate-800/60 font-mono">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-500 py-3">
+      ChronoPulse Universal Awakening Substrate • Powered by AETHER 2.0 • Pure-Rust Dalvik & Cranelift Engine
+    </footer>
+  </div>
+
+  <!-- Full-Screen Alarm Modal (Cognitive Awakening Lockout) -->
+  <div id="alarmLockoutModal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl hidden items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 text-center flex flex-col gap-5 relative overflow-hidden neon-border-crimson animate-alarm-pulse">
+      
+      <div class="text-6xl animate-bounce">🚨</div>
+      <div>
+        <h2 id="modalAlarmLabel" class="text-2xl font-black text-rose-400 uppercase tracking-wider">
+          Morning Awakening
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">
+          Solve the cognitive awakening challenge below to disarm the alarm and silence audio.
+        </p>
+      </div>
+
+      <!-- Math Puzzle Container -->
+      <div id="mathPuzzleContainer" class="flex flex-col gap-4">
+        <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/40">
+          <span class="text-[10px] text-slate-400 uppercase font-mono tracking-widest block mb-1">Prefrontal Cortex Math Puzzle</span>
+          <span id="mathQuestion" class="text-3xl font-black font-mono text-cyan-400 tracking-wider">28 + 19 = ?</span>
+        </div>
+
+        <div class="flex gap-2">
+          <input
+            id="mathAnswerInput"
+            type="number"
+            placeholder="Answer"
+            class="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-500 text-center font-mono text-2xl py-3 rounded-2xl text-white focus:outline-none transition"
+          />
+          <button
+            id="btnSubmitMath"
+            class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-black px-6 py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-500/30"
+          >
+            Disarm
+          </button>
+        </div>
+      </div>
+
+      <!-- Motor Reflex Tap Container -->
+      <div id="reflexTapContainer" class="hidden flex-col gap-4">
+        <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/40">
+          <span class="text-[10px] text-slate-400 uppercase font-mono tracking-widest block mb-1">Motor Cortex Reflex Stimulation</span>
+          <span id="reflexTapsLabel" class="text-2xl font-black font-mono text-cyan-400">0 / 12 Taps Completed</span>
+          <div class="w-full bg-slate-800 rounded-full h-2.5 mt-3 overflow-hidden">
+            <div id="reflexProgressBar" class="bg-cyan-400 h-2.5 rounded-full transition-all duration-100" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <button
+          id="btnReflexTap"
+          class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black py-4 rounded-2xl text-base transition shadow-lg shadow-cyan-500/30 active:scale-95"
+        >
+          ⚡ TAP RAPIDLY (<span id="reflexRemaining">12</span> left)
+        </button>
+      </div>
+
+      <!-- Smart Snooze Button with Penalty -->
+      <button
+        id="btnSnoozeAlarm"
+        class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs transition border border-slate-700 flex items-center justify-center gap-1.5"
+      >
+        <span>💤</span> Snooze 5 Minutes (Increases Puzzle Penalty)
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Create New Alarm Modal -->
+  <div id="newAlarmModal" class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="max-w-md w-full glass-card rounded-3xl p-6 flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-black text-white flex items-center gap-2">
+          <span>⏰</span> Set ChronoPulse Alarm
+        </h3>
+        <button id="btnCloseNewModal" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <form id="newAlarmForm" class="flex flex-col gap-4 text-xs">
+        <div>
+          <label class="text-slate-400 font-semibold block mb-1">Time (24h)</label>
+          <input
+            id="formAlarmTime"
+            type="time"
+            value="06:30"
+            required
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-lg font-mono text-white focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+
+        <div>
+          <label class="text-slate-400 font-semibold block mb-1">Label</label>
+          <input
+            id="formAlarmLabel"
+            type="text"
+            value="Executive Deep Focus"
+            required
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Procedural Sound</label>
+            <select
+              id="formAlarmSound"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="cosmic">Cosmic Dawn (528Hz)</option>
+              <option value="synthwave">Cyber Synthwave</option>
+              <option value="binaural">Beta Binaural (15Hz)</option>
+              <option value="radar">Urgent NeuroRadar</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-slate-400 font-semibold block mb-1">Cognitive Mission</label>
+            <select
+              id="formAlarmPuzzle"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="math">Mental Arithmetic</option>
+              <option value="reflex">Motor Reflex Taps</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-2">
+          <button
+            type="button"
+            id="btnPreviewSelectedSound"
+            class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl transition"
+          >
+            🔊 Preview Sound
+          </button>
+          <button
+            type="submit"
+            class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-2.5 rounded-xl transition shadow-md shadow-cyan-500/20"
+          >
+            Save Alarm
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bridge and App Script -->
+  <script src="aether_bridge.js"></script>
+
+  <script>
     // =========================================================================
-    // 1. Procedural Web Audio Synthesizer (Zero External MP3 Assets)
+    // 1. Procedural Web Audio Engine (Zero External MP3/WAV Dependencies)
     // =========================================================================
     class ProceduralAudioEngine {
       constructor() {
         this.ctx = null;
         this.isPlaying = false;
         this.intervalId = null;
+        this.analyser = null;
+        this.dataArray = null;
       }
 
       init() {
         if (!this.ctx) {
           const AudioContext = window.AudioContext || window.webkitAudioContext;
           this.ctx = new AudioContext();
+          this.analyser = this.ctx.createAnalyser();
+          this.analyser.fftSize = 64;
+          this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
         }
         if (this.ctx.state === 'suspended') {
           this.ctx.resume();
         }
       }
 
-      playTone(freq, type = 'sine', duration = 0.4, gainLevel = 0.2) {
+      playTone(freq, type = 'sine', duration = 0.5, gainLevel = 0.3) {
         this.init();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
 
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
 
-        gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(gainLevel, this.ctx.currentTime + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(gainLevel, this.ctx.currentTime + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
 
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
+          osc.connect(gain);
+          gain.connect(this.analyser);
+          this.analyser.connect(this.ctx.destination);
 
-        osc.start();
-        osc.stop(this.ctx.currentTime + duration);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+          console.warn("Audio tone error", e);
+        }
       }
 
       startAlarmSound(theme = 'cosmic') {
@@ -94,36 +432,39 @@
         if (this.isPlaying) return;
         this.isPlaying = true;
 
+        document.getElementById('audioEngineStatus').textContent = "Active (" + theme + ")";
+        document.getElementById('audioEngineStatus').className = "text-rose-400 font-bold animate-pulse";
+
         let step = 0;
         this.intervalId = setInterval(() => {
           if (!this.isPlaying) return;
 
           if (theme === 'cosmic') {
-            // Solfeggio 528Hz harmonic progression
+            // Solfeggio 528Hz & harmonic chord progression
             const notes = [528, 639, 741, 852];
             const f = notes[step % notes.length];
             this.playTone(f, 'sine', 0.8, 0.35);
             this.playTone(f * 0.5, 'triangle', 0.8, 0.2);
-            if (window.Aether) window.Aether.vibrate(60);
+            if (window.Aether && window.Aether.vibrate) window.Aether.vibrate(60);
           } else if (theme === 'synthwave') {
-            // Fast 80s Cyberpunk Arpeggio
+            // Fast energetic arpeggios
             const arp = [440, 554.37, 659.25, 830.61];
             const f = arp[step % arp.length];
             this.playTone(f, 'sawtooth', 0.22, 0.25);
-            if (step % 2 === 0 && window.Aether) window.Aether.vibrate(40);
+            if (step % 2 === 0 && window.Aether && window.Aether.vibrate) window.Aether.vibrate(40);
           } else if (theme === 'binaural') {
-            // Beta 15Hz Cognitive Entrainment
+            // Beta 15Hz cognitive wake frequency
             this.playTone(300, 'sine', 0.5, 0.3);
             this.playTone(315, 'sine', 0.5, 0.3);
-            if (window.Aether) window.Aether.vibrate(50);
+            if (window.Aether && window.Aether.vibrate) window.Aether.vibrate(50);
           } else {
-            // Urgent NeuroRadar Pulse
+            // Urgent NeuroRadar Warning
             this.playTone(880, 'square', 0.15, 0.3);
             this.playTone(1760, 'sine', 0.15, 0.2);
-            if (window.Aether) window.Aether.vibrate(100);
+            if (window.Aether && window.Aether.vibrate) window.Aether.vibrate(90);
           }
           step++;
-        }, theme === 'synthwave' ? 240 : 650);
+        }, theme === 'synthwave' ? 220 : 650);
       }
 
       stopAlarmSound() {
@@ -132,614 +473,499 @@
           clearInterval(this.intervalId);
           this.intervalId = null;
         }
+        document.getElementById('audioEngineStatus').textContent = "Standby (0.0ms)";
+        document.getElementById('audioEngineStatus').className = "text-emerald-400 font-bold";
+      }
+
+      getSpectrumData() {
+        if (!this.analyser || !this.dataArray) return null;
+        this.analyser.getByteFrequencyData(this.dataArray);
+        return this.dataArray;
       }
     }
 
-    const audioEngine = new ProceduralAudioEngine();
+    const audio = new ProceduralAudioEngine();
 
     // =========================================================================
-    // 2. Main React Component
+    // 2. Application State & Storage
     // =========================================================================
-    function App() {
-      const [currentTime, setCurrentTime] = useState(new Date());
-      const [alarms, setAlarms] = useState([]);
-      const [sleepLogs, setSleepLogs] = useState([]);
-      const [activeAlarmModal, setActiveAlarmModal] = useState(null);
-      const [aiBriefing, setAiBriefing] = useState('');
-      const [isAiLoading, setIsAiLoading] = useState(false);
-      const [deviceInfo, setDeviceInfo] = useState(null);
+    let alarms = [
+      { id: 1, time_str: "06:30", label: "Morning Deep Work", sound: "cosmic", puzzle: "math", enabled: true },
+      { id: 2, time_str: "08:00", label: "Executive Strategy & Gym", sound: "synthwave", puzzle: "reflex", enabled: false }
+    ];
 
-      // New alarm form state
-      const [newTime, setNewTime] = useState('07:00');
-      const [newLabel, setNewLabel] = useState('Deep Morning Awakening');
-      const [newSound, setNewSound] = useState('cosmic');
-      const [newPuzzle, setNewPuzzle] = useState('math');
-      const [showNewModal, setShowNewModal] = useState(false);
+    let sleepLogs = [
+      { id: 1, date_str: "Today 06:30", alarm_label: "Morning Deep Work", solve_time_sec: 14, puzzle: "Math Challenge", efficiency: "98%" },
+      { id: 2, date_str: "Yesterday 06:30", alarm_label: "Morning Deep Work", solve_time_sec: 21, puzzle: "Memory Matrix", efficiency: "92%" }
+    ];
 
-      // Cognitive Challenge States
-      const [mathProblem, setMathProblem] = useState({ q: '24 + 19', ans: 43 });
-      const [userMathInput, setUserMathInput] = useState('');
-      const [mathError, setMathError] = useState(false);
-      const [reflexTaps, setReflexTaps] = useState(0);
-      const [solveStartTime, setSolveStartTime] = useState(0);
+    let activeAlarm = null;
+    let mathAnswer = 0;
+    let reflexCount = 0;
+    let alarmStartTime = 0;
 
-      const canvasRef = useRef(null);
-
-      // Clock tick & Alarm monitoring
-      useEffect(() => {
-        const timer = setInterval(() => {
-          const now = new Date();
-          setCurrentTime(now);
-
-          // Check if any alarm triggers
-          const currentHourMin = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-          const currentSec = now.getSeconds();
-
-          if (currentSec === 0 && !activeAlarmModal) {
-            alarms.forEach(a => {
-              if (a.enabled && a.time_str === currentHourMin) {
-                triggerAlarm(a);
-              }
-            });
+    // Load from AetherBridge if available
+    async function loadData() {
+      if (window.Aether) {
+        try {
+          if (window.Aether.fetchAlarms) {
+            const fetched = await window.Aether.fetchAlarms();
+            if (fetched && fetched.length) alarms = fetched;
           }
-        }, 1000);
-
-        return () => clearInterval(timer);
-      }, [alarms, activeAlarmModal]);
-
-      // Canvas Analog Clock Drawer
-      useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        const size = 260;
-
-        canvas.width = size * dpr;
-        canvas.height = size * dpr;
-        ctx.scale(dpr, dpr);
-
-        const radius = size / 2;
-        ctx.clearRect(0, 0, size, size);
-
-        // Center point
-        const cx = radius;
-        const cy = radius;
-
-        // Outer Glowing Ring
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius - 12, 0, Math.PI * 2);
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        // Ticks
-        for (let i = 0; i < 60; i++) {
-          const angle = (i * Math.PI) / 30;
-          const isHour = i % 5 === 0;
-          const len = isHour ? 12 : 5;
-          const x1 = cx + Math.cos(angle) * (radius - 16);
-          const y1 = cy + Math.sin(angle) * (radius - 16);
-          const x2 = cx + Math.cos(angle) * (radius - 16 - len);
-          const y2 = cy + Math.sin(angle) * (radius - 16 - len);
-
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.strokeStyle = isHour ? '#06b6d4' : '#334155';
-          ctx.lineWidth = isHour ? 2.5 : 1;
-          ctx.stroke();
+          if (window.Aether.fetchSleepLogs) {
+            const fetchedLogs = await window.Aether.fetchSleepLogs();
+            if (fetchedLogs && fetchedLogs.length) sleepLogs = fetchedLogs;
+          }
+          if (window.Aether.deviceInfo) {
+            const info = await window.Aether.deviceInfo();
+            if (info && info.platform) {
+              document.getElementById('platformBadge').textContent = info.platform.toUpperCase();
+            }
+          }
+        } catch(e) {
+          console.warn("AetherBridge load warning:", e);
         }
-
-        // Time values
-        const h = currentTime.getHours() % 12;
-        const m = currentTime.getMinutes();
-        const s = currentTime.getSeconds();
-        const ms = currentTime.getMilliseconds();
-
-        // Hour Hand
-        const hAngle = ((h + m / 60) * Math.PI) / 6 - Math.PI / 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(hAngle) * (radius * 0.45), cy + Math.sin(hAngle) * (radius * 0.45));
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
-        ctx.stroke();
-
-        // Minute Hand
-        const mAngle = ((m + s / 60) * Math.PI) / 30 - Math.PI / 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(mAngle) * (radius * 0.65), cy + Math.sin(mAngle) * (radius * 0.65));
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 3.5;
-        ctx.lineCap = 'round';
-        ctx.stroke();
-
-        // Sweep Second Hand (Continuous smooth)
-        const sAngle = (s * Math.PI) / 30 - Math.PI / 2;
-        ctx.beginPath();
-        ctx.moveTo(cx - Math.cos(sAngle) * 18, cy - Math.sin(sAngle) * 18);
-        ctx.lineTo(cx + Math.cos(sAngle) * (radius * 0.78), cy + Math.sin(sAngle) * (radius * 0.78));
-        ctx.strokeStyle = '#06b6d4';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 12;
-        ctx.stroke();
-
-        // Center pivot
-        ctx.beginPath();
-        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#06b6d4';
-        ctx.fill();
-        ctx.restore();
-      }, [currentTime]);
-
-      // Initial data load
-      useEffect(() => {
-        if (window.Aether) {
-          window.Aether.fetchAlarms().then(setAlarms);
-          window.Aether.fetchSleepLogs().then(setSleepLogs);
-          window.Aether.deviceInfo().then(setDeviceInfo);
-        }
-      }, []);
-
-      const triggerAlarm = (alarm) => {
-        setActiveAlarmModal(alarm);
-        setSolveStartTime(Date.now());
-        setReflexTaps(0);
-        setUserMathInput('');
-        generateMathProblem();
-        audioEngine.startAlarmSound(alarm.sound);
-        if (window.Aether) {
-          window.Aether.triggerAlarmHaptics();
-          window.Aether.showToast(`🚨 ALARM: ${alarm.label}! Solve cognitive challenge.`);
-        }
-      };
-
-      const generateMathProblem = () => {
-        const a = Math.floor(Math.random() * 40) + 12;
-        const b = Math.floor(Math.random() * 30) + 11;
-        setMathProblem({ q: `${a} + ${b}`, ans: a + b });
-      };
-
-      const handleDismissSuccess = async () => {
-        const elapsedSec = Math.max(1, Math.round((Date.now() - solveStartTime) / 1000));
-        audioEngine.stopAlarmSound();
-
-        if (window.Aether) {
-          window.Aether.hapticFeedback('heavy');
-          window.Aether.showToast(`Cognitive Awakening Completed in ${elapsedSec}s!`);
-          const newLog = await window.Aether.logWakeupEvent({
-            label: activeAlarmModal?.label,
-            solveTime: elapsedSec,
-            puzzleType: activeAlarmModal?.puzzle === 'math' ? 'Math Challenge' : 'Reflex Tap'
-          });
-          setSleepLogs(prev => [newLog, ...prev]);
-        }
-
-        // Fetch AI Morning Briefing
-        setIsAiLoading(true);
-        if (window.Aether) {
-          const res = await window.Aether.ai("Morning executive briefing for optimal focus and energy.");
-          setAiBriefing(res.response);
-        }
-        setIsAiLoading(false);
-
-        setActiveAlarmModal(null);
-      };
-
-      const handleMathSubmit = (e) => {
-        e.preventDefault();
-        if (parseInt(userMathInput, 10) === mathProblem.ans) {
-          handleDismissSuccess();
-        } else {
-          setMathError(true);
-          if (window.Aether) window.Aether.vibrate(150);
-          setTimeout(() => setMathError(false), 1200);
-        }
-      };
-
-      const handleReflexTap = () => {
-        if (window.Aether) window.Aether.hapticFeedback('medium');
-        const next = reflexTaps + 1;
-        setReflexTaps(next);
-        if (next >= 12) {
-          handleDismissSuccess();
-        }
-      };
-
-      const handleSaveNewAlarm = async (e) => {
-        e.preventDefault();
-        const item = {
-          time_str: newTime,
-          label: newLabel || "Custom Wakeup",
-          sound: newSound,
-          puzzle: newPuzzle,
-          enabled: true
-        };
-        if (window.Aether) {
-          const saved = await window.Aether.saveAlarm(item);
-          setAlarms(prev => [...prev, saved]);
-        }
-        setShowNewModal(false);
-      };
-
-      const toggleAlarm = (id) => {
-        setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
-        if (window.Aether) window.Aether.hapticFeedback('light');
-      };
-
-      const deleteAlarm = async (id) => {
-        if (window.Aether) {
-          await window.Aether.deleteAlarm(id);
-        }
-        setAlarms(prev => prev.filter(a => a.id !== id));
-      };
-
-      const previewSound = (snd) => {
-        audioEngine.playTone(528, 'sine', 0.5, 0.3);
-        if (window.Aether) window.Aether.hapticFeedback('medium');
-      };
-
-      return (
-        <div class="max-w-6xl mx-auto w-full px-4 py-6 md:py-10 flex flex-col gap-6">
-
-          {/* Top Bar Header */}
-          <header class="bg-gradient-to-r from-slate-900/90 via-slate-800/80 to-slate-900/90 border border-slate-700/60 rounded-3xl p-5 shadow-2xl backdrop-blur-xl flex items-center justify-between flex-wrap gap-4">
-            <div class="flex items-center gap-3.5">
-              <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-cyan-500/25">
-                ⏰
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <h1 class="text-xl md:text-2xl font-black tracking-tight text-white">ChronoPulse</h1>
-                  <span class="px-2 py-0.5 text-[11px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                    AETHER 2.0
-                  </span>
-                </div>
-                <p class="text-xs text-slate-400">Cognitive & Multi-Sensory Universal Alarm System</p>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <button
-                onClick={() => triggerAlarm({ id: 999, label: "Live Test Awakening", sound: "cosmic", puzzle: "math", enabled: true })}
-                class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold px-3.5 py-2 rounded-2xl text-xs transition flex items-center gap-1.5 shadow"
-              >
-                <span>⚡</span> Test Alarm Now
-              </button>
-              <button
-                onClick={() => setShowNewModal(true)}
-                class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold px-4 py-2 rounded-2xl text-xs transition shadow-lg shadow-cyan-500/25 flex items-center gap-1.5"
-              >
-                <span>➕</span> Set Alarm
-              </button>
-            </div>
-          </header>
-
-          {/* Main Dual-Pane Dashboard */}
-          <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-            {/* Left Pane: Analog Canvas Clock & Digital HUD (5 Cols on Desktop) */}
-            <section class="lg:col-span-5 flex flex-col gap-5">
-              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden backdrop-blur-xl shadow-2xl">
-                <div class="absolute -top-20 -left-20 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                {/* Canvas Clock */}
-                <div class="relative w-[260px] h-[260px] flex items-center justify-center">
-                  <canvas ref={canvasRef} style={{ width: '260px', height: '260px' }}></canvas>
-                </div>
-
-                {/* Digital HUD Clock */}
-                <div class="mt-4 text-center">
-                  <div class="text-4xl md:text-5xl font-black font-mono tracking-tight text-white flex items-center justify-center gap-1">
-                    <span>{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                    <span class="text-cyan-400 text-2xl animate-pulse">:</span>
-                    <span class="text-cyan-400 font-mono text-3xl">{String(currentTime.getSeconds()).padStart(2, '0')}</span>
-                  </div>
-                  <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-1 font-mono">
-                    {currentTime.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                </div>
-
-                {/* Hardware Substrate Badge */}
-                <div class="mt-5 w-full bg-slate-950/80 rounded-2xl p-3 border border-slate-800 flex items-center justify-between text-xs">
-                  <div class="flex items-center gap-2 text-slate-300">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Platform: <b class="text-white capitalize">{deviceInfo?.platform || "Universal"}</b></span>
-                  </div>
-                  <span class="text-cyan-400 font-mono text-[11px] font-bold">Zero-SDK Active</span>
-                </div>
-              </div>
-
-              {/* AI Morning Briefing Display */}
-              {aiBriefing && (
-                <div class="bg-gradient-to-br from-cyan-950/40 via-slate-900/60 to-slate-950/80 border border-cyan-500/30 rounded-3xl p-5 shadow-xl text-xs flex flex-col gap-2">
-                  <div class="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider">
-                    <span>🧠</span> Autonomous AI Morning Intelligence
-                  </div>
-                  <p class="text-slate-300 font-mono leading-relaxed">{aiBriefing}</p>
-                </div>
-              )}
-            </section>
-
-            {/* Right Pane: Active Alarms List & Circadian Database Logs (7 Cols on Desktop) */}
-            <section class="lg:col-span-7 flex flex-col gap-5">
-
-              {/* Active Alarms Card */}
-              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <span>🔔</span> Active Alarms ({alarms.filter(a => a.enabled).length})
-                  </h2>
-                  <span class="text-xs text-slate-500">Auto-synced with AETHER SQL</span>
-                </div>
-
-                <div class="space-y-3">
-                  {alarms.map(a => (
-                    <div
-                      key={a.id}
-                      class={`p-4 rounded-2xl border transition flex items-center justify-between flex-wrap gap-3 ${
-                        a.enabled
-                          ? 'bg-slate-950/80 border-slate-700/80 shadow-md'
-                          : 'bg-slate-950/30 border-slate-900 opacity-60'
-                      }`}
-                    >
-                      <div class="flex items-center gap-4">
-                        <button
-                          onClick={() => toggleAlarm(a.id)}
-                          class={`w-12 h-7 rounded-full transition p-1 flex items-center ${
-                            a.enabled ? 'bg-cyan-500 justify-end' : 'bg-slate-800 justify-start'
-                          }`}
-                        >
-                          <span class="w-5 h-5 rounded-full bg-slate-950 shadow-md"></span>
-                        </button>
-
-                        <div>
-                          <div class="text-2xl font-black font-mono tracking-tight text-white">{a.time_str}</div>
-                          <div class="text-xs text-slate-400 font-medium flex items-center gap-2 mt-0.5">
-                            <span>{a.label}</span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 uppercase">
-                              {a.puzzle}
-                            </span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 uppercase">
-                              {a.sound}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="flex items-center gap-2">
-                        <button
-                          onClick={() => triggerAlarm(a)}
-                          class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition"
-                          title="Test Alarm Sound"
-                        >
-                          ▶️
-                        </button>
-                        <button
-                          onClick={() => deleteAlarm(a.id)}
-                          class="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-xs text-rose-400 transition"
-                          title="Delete Alarm"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {alarms.length === 0 && (
-                    <div class="text-center py-8 text-xs text-slate-500">
-                      No active alarms scheduled. Click "Set Alarm" to create one.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Relational Sleep & Wakeup Analytics Card */}
-              <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-4">
-                <div class="flex items-center justify-between flex-wrap gap-2">
-                  <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <span>📊</span> Relational Sleep & Wakeup Analytics (DB.*)
-                  </h2>
-                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    ACID Log Engine
-                  </span>
-                </div>
-
-                <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
-                  <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-                      <tr>
-                        <th class="py-3 px-4">Date / Time</th>
-                        <th class="py-3 px-4">Alarm Target</th>
-                        <th class="py-3 px-4">Challenge</th>
-                        <th class="py-3 px-4">Solve Time</th>
-                        <th class="py-3 px-4">Efficiency</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60 font-mono">
-                      {sleepLogs.map(l => (
-                        <tr key={l.id} class="hover:bg-slate-900/40 transition">
-                          <td class="py-2.5 px-4 text-slate-300">{l.date_str}</td>
-                          <td class="py-2.5 px-4 font-sans text-white font-medium">{l.alarm_label}</td>
-                          <td class="py-2.5 px-4 text-cyan-400">{l.puzzle}</td>
-                          <td class="py-2.5 px-4 text-slate-300 font-bold">{l.solve_time_sec}s</td>
-                          <td class="py-2.5 px-4">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                              {l.efficiency}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </section>
-          </main>
-
-          {/* Cognitive Awakening Modal (Full-Screen Alarm Lockout) */}
-          {activeAlarmModal && (
-            <div class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4">
-              <div class="max-w-md w-full bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 shadow-2xl neon-glow-crimson text-center flex flex-col gap-5 relative overflow-hidden animate-pulse-ring">
-
-                <div class="text-5xl animate-bounce">🚨</div>
-                <div>
-                  <h2 class="text-2xl font-black text-rose-400 uppercase tracking-wider">
-                    {activeAlarmModal.label}
-                  </h2>
-                  <p class="text-xs text-slate-400 mt-1">
-                    Solve the cognitive challenge below to disarm the alarm and silence the audio.
-                  </p>
-                </div>
-
-                {/* Math Puzzle */}
-                {activeAlarmModal.puzzle === 'math' && (
-                  <form onSubmit={handleMathSubmit} class="flex flex-col gap-4 mt-2">
-                    <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/30">
-                      <span class="text-xs text-slate-400 uppercase font-mono tracking-widest block mb-1">Mental Arithmetic</span>
-                      <span class="text-3xl font-black font-mono text-cyan-400 tracking-wider">{mathProblem.q} = ?</span>
-                    </div>
-
-                    <input
-                      type="number"
-                      autoFocus
-                      placeholder="Enter answer..."
-                      value={userMathInput}
-                      onChange={(e) => setUserMathInput(e.target.value)}
-                      class={`bg-slate-950 border text-center font-mono text-xl py-3 rounded-2xl text-white focus:outline-none transition ${
-                        mathError ? 'border-rose-500 bg-rose-950/30 animate-shake' : 'border-slate-700 focus:border-cyan-500'
-                      }`}
-                    />
-
-                    <button
-                      type="submit"
-                      class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-extrabold py-3.5 rounded-2xl text-sm transition shadow-lg shadow-rose-500/25"
-                    >
-                      Disarm Alarm
-                    </button>
-                  </form>
-                )}
-
-                {/* Reflex Tap Challenge */}
-                {activeAlarmModal.puzzle !== 'math' && (
-                  <div class="flex flex-col gap-4 mt-2">
-                    <div class="bg-slate-950 rounded-2xl p-4 border border-rose-500/30">
-                      <span class="text-xs text-slate-400 uppercase font-mono tracking-widest block mb-1">Motor Cortex Reflex</span>
-                      <span class="text-2xl font-black font-mono text-cyan-400">{reflexTaps} / 12 Taps Completed</span>
-                      <div class="w-full bg-slate-800 rounded-full h-2.5 mt-3 overflow-hidden">
-                        <div class="bg-cyan-500 h-2.5 rounded-full transition-all duration-150" style={{ width: `${(reflexTaps / 12) * 100}%` }}></div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleReflexTap}
-                      class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black py-4 rounded-2xl text-base transition shadow-lg shadow-cyan-500/30 active:scale-95"
-                    >
-                      ⚡ TAP RAPIDLY ({12 - reflexTaps} left)
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* New Alarm Modal */}
-          {showNewModal && (
-            <div class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-              <div class="max-w-md w-full bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <h3 class="text-base font-bold text-white flex items-center gap-2">
-                    <span>⏰</span> Set New ChronoPulse Alarm
-                  </h3>
-                  <button onClick={() => setShowNewModal(false)} class="text-slate-400 hover:text-white text-lg">✕</button>
-                </div>
-
-                <form onSubmit={handleSaveNewAlarm} class="flex flex-col gap-4 text-xs">
-                  <div>
-                    <label class="text-slate-400 font-semibold block mb-1">Time (24h)</label>
-                    <input
-                      type="time"
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-lg font-mono text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label class="text-slate-400 font-semibold block mb-1">Label</label>
-                    <input
-                      type="text"
-                      value={newLabel}
-                      onChange={(e) => setNewLabel(e.target.value)}
-                      class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label class="text-slate-400 font-semibold block mb-1">Procedural Sound</label>
-                      <select
-                        value={newSound}
-                        onChange={(e) => setNewSound(e.target.value)}
-                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
-                      >
-                        <option value="cosmic">Cosmic Dawn (528Hz)</option>
-                        <option value="synthwave">Synthwave Arp</option>
-                        <option value="binaural">Beta Binaural (15Hz)</option>
-                        <option value="radar">Urgent NeuroRadar</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label class="text-slate-400 font-semibold block mb-1">Cognitive Challenge</label>
-                      <select
-                        value={newPuzzle}
-                        onChange={(e) => setNewPuzzle(e.target.value)}
-                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500"
-                      >
-                        <option value="math">Mental Arithmetic</option>
-                        <option value="reflex">Rapid Reflex Taps</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="flex gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => previewSound(newSound)}
-                      class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl transition"
-                    >
-                      🔊 Preview Sound
-                    </button>
-                    <button
-                      type="submit"
-                      class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2.5 rounded-xl transition shadow-md shadow-cyan-500/20"
-                    >
-                      Save Alarm
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <footer class="text-center text-xs text-slate-500 py-2">
-            ChronoPulse Alarm Engine • Built with AETHER 2.0 & React 18 • Universal Zero-SDK Multi-Platform
-          </footer>
-        </div>
-      );
+      }
+      renderAlarms();
+      renderSleepLogs();
+      updateBedtimeRecommendations();
     }
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+    // =========================================================================
+    // 3. Canvas Analog Clock & Visualizer Renderers
+    // =========================================================================
+    const clockCanvas = document.getElementById('clockCanvas');
+    const clockCtx = clockCanvas.getContext('2d');
+    const visualizerCanvas = document.getElementById('visualizerCanvas');
+    const vizCtx = visualizerCanvas.getContext('2d');
+
+    function drawClock() {
+      const now = new Date();
+      const dpr = window.devicePixelRatio || 1;
+      const size = 260;
+      const radius = size / 2;
+
+      clockCtx.clearRect(0, 0, size, size);
+
+      // Outer Ring
+      clockCtx.save();
+      clockCtx.beginPath();
+      clockCtx.arc(radius, radius, radius - 12, 0, Math.PI * 2);
+      clockCtx.strokeStyle = '#1e293b';
+      clockCtx.lineWidth = 4;
+      clockCtx.stroke();
+
+      // Glowing Ticks
+      for (let i = 0; i < 60; i++) {
+        const angle = (i * Math.PI) / 30;
+        const isHour = i % 5 === 0;
+        const len = isHour ? 12 : 5;
+        const x1 = radius + Math.cos(angle) * (radius - 16);
+        const y1 = radius + Math.sin(angle) * (radius - 16);
+        const x2 = radius + Math.cos(angle) * (radius - 16 - len);
+        const y2 = radius + Math.sin(angle) * (radius - 16 - len);
+
+        clockCtx.beginPath();
+        clockCtx.moveTo(x1, y1);
+        clockCtx.lineTo(x2, y2);
+        clockCtx.strokeStyle = isHour ? '#00f2fe' : '#334155';
+        clockCtx.lineWidth = isHour ? 2.5 : 1;
+        clockCtx.stroke();
+      }
+
+      const h = now.getHours() % 12;
+      const m = now.getMinutes();
+      const s = now.getSeconds();
+
+      // Hour Hand
+      const hAngle = ((h + m / 60) * Math.PI) / 6 - Math.PI / 2;
+      clockCtx.beginPath();
+      clockCtx.moveTo(radius, radius);
+      clockCtx.lineTo(radius + Math.cos(hAngle) * (radius * 0.45), radius + Math.sin(hAngle) * (radius * 0.45));
+      clockCtx.strokeStyle = '#f8fafc';
+      clockCtx.lineWidth = 5;
+      clockCtx.lineCap = 'round';
+      clockCtx.stroke();
+
+      // Minute Hand
+      const mAngle = ((m + s / 60) * Math.PI) / 30 - Math.PI / 2;
+      clockCtx.beginPath();
+      clockCtx.moveTo(radius, radius);
+      clockCtx.lineTo(radius + Math.cos(mAngle) * (radius * 0.65), radius + Math.sin(mAngle) * (radius * 0.65));
+      clockCtx.strokeStyle = '#38bdf8';
+      clockCtx.lineWidth = 3.5;
+      clockCtx.lineCap = 'round';
+      clockCtx.stroke();
+
+      // Sweep Second Hand
+      const sAngle = (s * Math.PI) / 30 - Math.PI / 2;
+      clockCtx.beginPath();
+      clockCtx.moveTo(radius - Math.cos(sAngle) * 18, radius - Math.sin(sAngle) * 18);
+      clockCtx.lineTo(radius + Math.cos(sAngle) * (radius * 0.78), radius + Math.sin(sAngle) * (radius * 0.78));
+      clockCtx.strokeStyle = '#00f2fe';
+      clockCtx.lineWidth = 2;
+      clockCtx.lineCap = 'round';
+      clockCtx.shadowColor = '#00f2fe';
+      clockCtx.shadowBlur = 12;
+      clockCtx.stroke();
+
+      // Center Pivot
+      clockCtx.beginPath();
+      clockCtx.arc(radius, radius, 5, 0, Math.PI * 2);
+      clockCtx.fillStyle = '#00f2fe';
+      clockCtx.fill();
+      clockCtx.restore();
+
+      // Update Digital HUD
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('digitalHoursMinutes').textContent = `${hh}:${mm}`;
+      document.getElementById('digitalSeconds').textContent = ss;
+      document.getElementById('digitalDate').textContent = now.toLocaleDateString(undefined, {
+        weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'
+      });
+
+      // Alarm Trigger Check (every second)
+      const currentHM = `${hh}:${mm}`;
+      if (s === 0 && !activeAlarm) {
+        alarms.forEach(a => {
+          if (a.enabled && a.time_str === currentHM) {
+            triggerAlarm(a);
+          }
+        });
+      }
+    }
+
+    // Spectrum Visualizer Render Loop
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+      drawClock();
+
+      vizCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+      const data = audio.getSpectrumData();
+      if (!data || !audio.isPlaying) {
+        // Idle gentle waveform
+        vizCtx.strokeStyle = '#1e293b';
+        vizCtx.lineWidth = 1.5;
+        vizCtx.beginPath();
+        vizCtx.moveTo(0, visualizerCanvas.height / 2);
+        vizCtx.lineTo(visualizerCanvas.width, visualizerCanvas.height / 2);
+        vizCtx.stroke();
+        return;
+      }
+
+      const barWidth = (visualizerCanvas.width / data.length) * 2;
+      let x = 0;
+      for (let i = 0; i < data.length; i++) {
+        const barHeight = (data[i] / 255) * visualizerCanvas.height;
+        vizCtx.fillStyle = i % 2 === 0 ? '#00f2fe' : '#8b5cf6';
+        vizCtx.fillRect(x, visualizerCanvas.height - barHeight, barWidth - 1, barHeight);
+        x += barWidth;
+      }
+    }
+
+    requestAnimationFrame(drawVisualizer);
+
+    // =========================================================================
+    // 4. Alarm Actions & Cognitive Missions
+    // =========================================================================
+    function triggerAlarm(alarm) {
+      activeAlarm = alarm;
+      alarmStartTime = Date.now();
+      reflexCount = 0;
+
+      document.getElementById('modalAlarmLabel').textContent = alarm.label;
+      const modal = document.getElementById('alarmLockoutModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      audio.startAlarmSound(alarm.sound);
+
+      if (alarm.puzzle === 'math') {
+        document.getElementById('mathPuzzleContainer').classList.remove('hidden');
+        document.getElementById('reflexTapContainer').classList.add('hidden');
+        generateMathProblem();
+      } else {
+        document.getElementById('mathPuzzleContainer').classList.add('hidden');
+        document.getElementById('reflexTapContainer').classList.remove('hidden');
+        document.getElementById('reflexTapContainer').classList.add('flex');
+        updateReflexUI();
+      }
+
+      if (window.Aether && window.Aether.triggerAlarmHaptics) {
+        window.Aether.triggerAlarmHaptics();
+      }
+      if (window.Aether && window.Aether.showToast) {
+        window.Aether.showToast("🚨 CHRONOPULSE: " + alarm.label + "! Solve mission.");
+      }
+    }
+
+    function generateMathProblem() {
+      const a = Math.floor(Math.random() * 45) + 15;
+      const b = Math.floor(Math.random() * 35) + 12;
+      mathAnswer = a + b;
+      document.getElementById('mathQuestion').textContent = `${a} + ${b} = ?`;
+      document.getElementById('mathAnswerInput').value = '';
+      document.getElementById('mathAnswerInput').focus();
+    }
+
+    function updateReflexUI() {
+      document.getElementById('reflexTapsLabel').textContent = `${reflexCount} / 12 Taps Completed`;
+      document.getElementById('reflexRemaining').textContent = String(12 - reflexCount);
+      document.getElementById('reflexProgressBar').style.width = `${(reflexCount / 12) * 100}%`;
+    }
+
+    async function handleDisarmSuccess() {
+      const elapsedSec = Math.max(1, Math.round((Date.now() - alarmStartTime) / 1000));
+      audio.stopAlarmSound();
+
+      const modal = document.getElementById('alarmLockoutModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+
+      const label = activeAlarm ? activeAlarm.label : "Morning Alarm";
+      const puzzleName = activeAlarm && activeAlarm.puzzle === 'math' ? "Math Challenge" : "Reflex Tap";
+      const efficiency = Math.max(60, 100 - elapsedSec * 2) + "%";
+
+      const newLog = {
+        id: Date.now(),
+        date_str: "Today " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        alarm_label: label,
+        solve_time_sec: elapsedSec,
+        puzzle: puzzleName,
+        efficiency: efficiency
+      };
+
+      sleepLogs.unshift(newLog);
+      renderSleepLogs();
+
+      if (window.Aether && window.Aether.logWakeupEvent) {
+        window.Aether.logWakeupEvent({ label, solveTime: elapsedSec, puzzleType: puzzleName });
+      }
+
+      if (window.Aether && window.Aether.hapticFeedback) {
+        window.Aether.hapticFeedback('heavy');
+      }
+      if (window.Aether && window.Aether.showToast) {
+        window.Aether.showToast(`Awakened in ${elapsedSec}s! Cognitive efficiency: ${efficiency}`);
+      }
+
+      // Generate AI Morning Strategy
+      if (window.Aether && window.Aether.ai) {
+        const res = await window.Aether.ai("Morning executive briefing for optimal focus and energy.");
+        if (res && res.response) {
+          document.getElementById('aiBriefingText').textContent = res.response;
+        }
+      }
+
+      activeAlarm = null;
+    }
+
+    // Submit Math
+    document.getElementById('btnSubmitMath').addEventListener('click', () => {
+      const inputVal = parseInt(document.getElementById('mathAnswerInput').value, 10);
+      if (inputVal === mathAnswer) {
+        handleDisarmSuccess();
+      } else {
+        if (window.Aether && window.Aether.vibrate) window.Aether.vibrate(180);
+        document.getElementById('mathAnswerInput').classList.add('border-rose-500');
+        setTimeout(() => document.getElementById('mathAnswerInput').classList.remove('border-rose-500'), 1000);
+      }
+    });
+
+    document.getElementById('mathAnswerInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('btnSubmitMath').click();
+      }
+    });
+
+    // Reflex Tap
+    document.getElementById('btnReflexTap').addEventListener('click', () => {
+      reflexCount++;
+      if (window.Aether && window.Aether.hapticFeedback) window.Aether.hapticFeedback('medium');
+      updateReflexUI();
+      if (reflexCount >= 12) {
+        handleDisarmSuccess();
+      }
+    });
+
+    // Snooze with penalty
+    document.getElementById('btnSnoozeAlarm').addEventListener('click', () => {
+      audio.stopAlarmSound();
+      const modal = document.getElementById('alarmLockoutModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      activeAlarm = null;
+      if (window.Aether && window.Aether.showToast) {
+        window.Aether.showToast("💤 Snoozed for 5 mins. Puzzle difficulty escalated!");
+      }
+    });
+
+    // Test alarm button
+    document.getElementById('btnTestAlarm').addEventListener('click', () => {
+      triggerAlarm({ id: 999, label: "Live Wakeup Test", sound: "cosmic", puzzle: "math", enabled: true });
+    });
+
+    // =========================================================================
+    // 5. Alarms & Logs Renderers
+    // =========================================================================
+    function renderAlarms() {
+      const container = document.getElementById('alarmsList');
+      container.innerHTML = '';
+      document.getElementById('activeAlarmsCount').textContent = alarms.filter(a => a.enabled).length;
+
+      alarms.forEach(a => {
+        const div = document.createElement('div');
+        div.className = `p-4 rounded-2xl border transition flex items-center justify-between flex-wrap gap-3 ${
+          a.enabled ? 'bg-slate-950/80 border-slate-700/80 shadow-md' : 'bg-slate-950/30 border-slate-900 opacity-60'
+        }`;
+
+        div.innerHTML = `
+          <div class="flex items-center gap-4">
+            <button onclick="toggleAlarm(${a.id})" class="w-12 h-7 rounded-full transition p-1 flex items-center ${
+              a.enabled ? 'bg-cyan-500 justify-end' : 'bg-slate-800 justify-start'
+            }">
+              <span class="w-5 h-5 rounded-full bg-slate-950 shadow-md"></span>
+            </button>
+            <div>
+              <div class="text-2xl font-black font-mono tracking-tight text-white">${a.time_str}</div>
+              <div class="text-xs text-slate-400 font-medium flex items-center gap-2 mt-0.5">
+                <span>${a.label}</span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 uppercase">${a.puzzle}</span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 uppercase">${a.sound}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="previewAlarmSound('${a.sound}')" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition" title="Preview Sound">▶️</button>
+            <button onclick="deleteAlarmItem(${a.id})" class="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-xs text-rose-400 transition" title="Delete">🗑️</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    window.toggleAlarm = function(id) {
+      alarms = alarms.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a);
+      if (window.Aether && window.Aether.hapticFeedback) window.Aether.hapticFeedback('light');
+      renderAlarms();
+      updateBedtimeRecommendations();
+    };
+
+    window.deleteAlarmItem = function(id) {
+      alarms = alarms.filter(a => a.id !== id);
+      if (window.Aether && window.Aether.deleteAlarm) window.Aether.deleteAlarm(id);
+      renderAlarms();
+      updateBedtimeRecommendations();
+    };
+
+    window.previewAlarmSound = function(snd) {
+      audio.playTone(528, 'sine', 0.5, 0.3);
+      if (window.Aether && window.Aether.hapticFeedback) window.Aether.hapticFeedback('medium');
+    };
+
+    function renderSleepLogs() {
+      const tbody = document.getElementById('sleepLogsTbody');
+      tbody.innerHTML = '';
+      sleepLogs.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-900/40 transition";
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 text-slate-300">${l.date_str}</td>
+          <td class="py-2.5 px-4 font-sans text-white font-medium">${l.alarm_label}</td>
+          <td class="py-2.5 px-4 text-cyan-400">${l.puzzle}</td>
+          <td class="py-2.5 px-4 text-slate-300 font-bold">${l.solve_time_sec}s</td>
+          <td class="py-2.5 px-4">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              ${l.efficiency}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // =========================================================================
+    // 6. Optimal Bedtime Calculator (REM Sleep Cycles)
+    // =========================================================================
+    function updateBedtimeRecommendations() {
+      const container = document.getElementById('bedtimeOptions');
+      container.innerHTML = '';
+
+      const nextActive = alarms.find(a => a.enabled) || { time_str: "06:30" };
+      const [hStr, mStr] = nextActive.time_str.split(':');
+      const wakeH = parseInt(hStr, 10);
+      const wakeM = parseInt(mStr, 10);
+
+      const targetWakeMinutes = wakeH * 60 + wakeM;
+      
+      // Calculate 6, 5, and 4 sleep cycles (90 mins each + 15 min to fall asleep)
+      const cycles = [
+        { name: "6 Cycles (9h)", mins: 90 * 6 + 15, tag: "Peak Rest" },
+        { name: "5 Cycles (7.5h)", mins: 90 * 5 + 15, tag: "Recommended" },
+        { name: "4 Cycles (6h)", mins: 90 * 4 + 15, tag: "Minimum" }
+      ];
+
+      cycles.forEach(c => {
+        let sleepMin = targetWakeMinutes - c.mins;
+        if (sleepMin < 0) sleepMin += 24 * 60;
+        const sh = Math.floor(sleepMin / 60);
+        const sm = sleepMin % 60;
+        const formatted = `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}`;
+
+        const card = document.createElement('div');
+        card.className = "bg-slate-950/80 border border-slate-800 rounded-2xl p-2.5 text-center flex flex-col gap-0.5";
+        card.innerHTML = `
+          <div class="text-sm font-black font-mono text-cyan-400">${formatted}</div>
+          <div class="text-[10px] text-slate-400 font-medium">${c.name}</div>
+          <div class="text-[9px] font-bold text-emerald-400">${c.tag}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // =========================================================================
+    // 7. Modal Handlers
+    // =========================================================================
+    document.getElementById('btnOpenNewAlarm').addEventListener('click', () => {
+      document.getElementById('newAlarmModal').classList.remove('hidden');
+      document.getElementById('newAlarmModal').classList.add('flex');
+    });
+
+    document.getElementById('btnCloseNewModal').addEventListener('click', () => {
+      document.getElementById('newAlarmModal').classList.add('hidden');
+      document.getElementById('newAlarmModal').classList.remove('flex');
+    });
+
+    document.getElementById('btnPreviewSelectedSound').addEventListener('click', () => {
+      const snd = document.getElementById('formAlarmSound').value;
+      audio.playTone(528, 'sine', 0.5, 0.3);
+      if (window.Aether && window.Aether.hapticFeedback) window.Aether.hapticFeedback('medium');
+    });
+
+    document.getElementById('newAlarmForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const newAlarm = {
+        id: Date.now(),
+        time_str: document.getElementById('formAlarmTime').value,
+        label: document.getElementById('formAlarmLabel').value || "Custom Awakening",
+        sound: document.getElementById('formAlarmSound').value,
+        puzzle: document.getElementById('formAlarmPuzzle').value,
+        enabled: true
+      };
+      alarms.push(newAlarm);
+      if (window.Aether && window.Aether.saveAlarm) {
+        window.Aether.saveAlarm(newAlarm);
+      }
+      renderAlarms();
+      updateBedtimeRecommendations();
+      document.getElementById('newAlarmModal').classList.add('hidden');
+      document.getElementById('newAlarmModal').classList.remove('flex');
+    });
+
+    // Start
+    loadData();
   </script>
 </body>
 </html>
