@@ -6192,11 +6192,51 @@ fn main() {
                     eprintln!("Studio Server Error: {}", e);
                 }
             }
-            "dev" | "watch" => {
+            "live" | "dev" | "watch" => {
                 if args.len() < 3 {
-                    eprintln!("Usage: aether dev <script.ae> [--interval <ms>]");
+                    eprintln!("Usage: aether live <dir_or_script> [--port <port>] [--interval <ms>] [--open]");
                     return;
                 }
+                let target_path = std::path::PathBuf::from(&args[2]);
+
+                // Check if target is a frontend directory or contains web assets
+                let is_dir = target_path.is_dir();
+                let has_index = target_path.join("index.html").exists();
+                let is_script = target_path.extension().map_or(false, |ext| ext == "ae" || ext == "aether");
+
+                if (is_dir || has_index || !is_script) && target_path.exists() {
+                    let mut port = 8080u16;
+                    let mut interval = 80u64;
+                    let mut auto_open = false;
+                    let mut i = 3;
+                    while i < args.len() {
+                        if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                            port = args[i + 1].parse().unwrap_or(8080);
+                            i += 2;
+                        } else if (args[i] == "--interval" || args[i] == "-i") && i + 1 < args.len() {
+                            interval = args[i + 1].parse().unwrap_or(80);
+                            i += 2;
+                        } else if args[i] == "--open" || args[i] == "-o" {
+                            auto_open = true;
+                            i += 1;
+                        } else {
+                            i += 1;
+                        }
+                    }
+
+                    let mut config = aether::codegen::live_server::LiveServerConfig::new(target_path);
+                    config.port = port;
+                    config.poll_interval_ms = interval;
+                    config.auto_open_browser = auto_open;
+
+                    let server = aether::codegen::live_server::LiveDevServer::new(config);
+                    if let Err(e) = server.start() {
+                        eprintln!("Live Dev Server Error: {}", e);
+                    }
+                    return;
+                }
+
+                // Fallback to VM bytecode live watcher
                 let file_path = &args[2];
                 let mut interval = 100u64;
                 let mut i = 3;
@@ -6861,7 +6901,7 @@ fn main() {
                     println!("Usage: aether verify <script.ae>");
                 }
             }
-            "live" | "hotreload" => {
+            "hotreload" => {
                 if args.len() > 2 {
                     let file_path = &args[2];
                     let poll_interval: u64 = if args.len() > 3 {

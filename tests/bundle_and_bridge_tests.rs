@@ -164,3 +164,20 @@ fn test_flagship_08_chronopulse_alarm_execution_and_artifacts() {
     let html = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.html");
     assert!(html.exists(), "ChronoPulse.html must exist");
 }
+
+#[test]
+fn test_live_hotreload_server_and_bridge() {
+    let bridge = get_aether_bridge_js();
+    assert!(bridge.contains("initLiveHotReload"), "Default bridge must have Live Hot-Reload engine");
+    assert!(bridge.contains("/api/live-status"), "Default bridge must query /api/live-status");
+    assert!(bridge.contains("/api/live-poll"), "Default bridge must query /api/live-poll");
+
+    let custom_bridge_path = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/frontend/aether_bridge.js");
+    let custom_bridge = std::fs::read_to_string(custom_bridge_path).unwrap();
+    assert!(custom_bridge.contains("initLiveHotReload"), "ChronoPulse bridge must have Live Hot-Reload engine");
+    assert!(custom_bridge.contains("aether-live-hud-pill"), "ChronoPulse bridge must have live HUD pill");
+
+    let config = aether::codegen::live_server::LiveServerConfig::new("flagship_projects/08_aether_chronopulse_alarm/frontend");
+    assert_eq!(config.port, 8080);
+    assert_eq!(config.poll_interval_ms, 80);
+}

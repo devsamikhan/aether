@@ -192,6 +192,131 @@
     };
 
     window.Aether = Aether;
+
+    // =========================================================================
+    // AETHER Live Hot-Reload Client Engine (Zero-SDK Fast Refresh)
+    // =========================================================================
+    (function initLiveHotReload() {
+        if (typeof window === "undefined") return;
+
+        const devPort = 8080;
+        const devHost = "http://127.0.0.1:" + devPort;
+        let currentVersion = 0;
+        let isConnected = false;
+        let badgeEl = null;
+
+        function getOrCreateBadge() {
+            if (badgeEl) return badgeEl;
+            badgeEl = document.createElement("div");
+            badgeEl.id = "aether-live-hud-pill";
+            badgeEl.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999999;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.04em;padding:6px 14px;border-radius:20px;display:flex;align-items:center;gap:7px;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);box-shadow:0 6px 20px rgba(0,0,0,0.5);pointer-events:none;opacity:0;transform:translateY(-10px);backdrop-filter:blur(8px);";
+            document.body.appendChild(badgeEl);
+            return badgeEl;
+        }
+
+        function flashBadge(text, bg, fg, border, duration = 3000) {
+            const b = getOrCreateBadge();
+            b.innerHTML = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${fg};box-shadow:0 0 10px ${fg};animation:pulse 1.4s infinite;"></span> ${text}`;
+            b.style.background = bg;
+            b.style.color = fg;
+            b.style.border = `1px solid ${border}`;
+            b.style.opacity = "1";
+            b.style.transform = "translateY(0)";
+            if (duration > 0) {
+                setTimeout(() => {
+                    b.style.opacity = "0";
+                    b.style.transform = "translateY(-10px)";
+                }, duration);
+            }
+        }
+
+        function preserveUiState() {
+            try {
+                const state = {
+                    scrollX: window.scrollX,
+                    scrollY: window.scrollY,
+                    ts: Date.now()
+                };
+                sessionStorage.setItem("__aether_live_ui_state__", JSON.stringify(state));
+            } catch(e) {}
+        }
+
+        function restoreUiState() {
+            try {
+                const raw = sessionStorage.getItem("__aether_live_ui_state__");
+                if (raw) {
+                    const state = JSON.parse(raw);
+                    if (Date.now() - state.ts < 12000) {
+                        window.scrollTo(state.scrollX, state.scrollY);
+                    }
+                    sessionStorage.removeItem("__aether_live_ui_state__");
+                }
+            } catch(e) {}
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", restoreUiState);
+        } else {
+            restoreUiState();
+        }
+
+        async function checkServer() {
+            try {
+                const res = await fetch(`${devHost}/api/live-status`, { cache: "no-store", mode: "cors" });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (!isConnected) {
+                        isConnected = true;
+                        currentVersion = data.version || 1;
+                        flashBadge("AETHER LIVE CONNECTED", "rgba(5, 46, 22, 0.92)", "#4ade80", "rgba(74, 222, 128, 0.4)", 3200);
+                        startPollingLoop();
+                    }
+                }
+            } catch(e) {
+                setTimeout(checkServer, 3500);
+            }
+        }
+
+        async function startPollingLoop() {
+            try {
+                const res = await fetch(`${devHost}/api/live-poll?v=${currentVersion}`, { cache: "no-store", mode: "cors" });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.reload && data.version > currentVersion) {
+                        currentVersion = data.version;
+                        executeHotReload(data.file || "assets");
+                        return;
+                    }
+                }
+            } catch(e) {
+                isConnected = false;
+                setTimeout(checkServer, 2000);
+                return;
+            }
+            setTimeout(startPollingLoop, 150);
+        }
+
+        function executeHotReload(fileName) {
+            flashBadge(`HOT-RELOAD • ${fileName}`, "rgba(15, 23, 42, 0.95)", "#38bdf8", "rgba(56, 189, 248, 0.6)", 0);
+            preserveUiState();
+
+            if (window.Aether && window.Aether.hapticFeedback) {
+                window.Aether.hapticFeedback("light");
+            }
+
+            if (window.location.protocol === "file:" && isConnected) {
+                setTimeout(() => {
+                    window.location.href = `${devHost}/index.html`;
+                }, 80);
+            } else {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 80);
+            }
+        }
+
+        setTimeout(checkServer, 150);
+    })();
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>

@@ -560,6 +560,7 @@ r#"<?xml version="1.0" encoding="utf-8"?>
         android:label="{app_name}"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity

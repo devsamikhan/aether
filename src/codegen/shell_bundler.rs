@@ -449,6 +449,58 @@ pub fn get_aether_bridge_js() -> &'static str {
     };
 
     window.Aether = Aether;
+
+    // AETHER Universal Live Hot-Reload Engine
+    (function initLiveHotReload() {
+        if (typeof window === "undefined") return;
+        const devHost = "http://127.0.0.1:8080";
+        let currentVersion = 0;
+        let isConnected = false;
+
+        async function checkServer() {
+            try {
+                const res = await fetch(`${devHost}/api/live-status`, { cache: "no-store", mode: "cors" });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (!isConnected) {
+                        isConnected = true;
+                        currentVersion = data.version || 1;
+                        if (window.Aether && window.Aether.showToast) {
+                            window.Aether.showToast("⚡ AETHER Live Dev Connected");
+                        }
+                        poll();
+                    }
+                }
+            } catch(e) {
+                setTimeout(checkServer, 3500);
+            }
+        }
+
+        async function poll() {
+            try {
+                const res = await fetch(`${devHost}/api/live-poll?v=${currentVersion}`, { cache: "no-store", mode: "cors" });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.reload && data.version > currentVersion) {
+                        currentVersion = data.version;
+                        if (window.location.protocol === "file:" && isConnected) {
+                            window.location.href = `${devHost}/index.html`;
+                        } else {
+                            window.location.reload();
+                        }
+                        return;
+                    }
+                }
+            } catch(e) {
+                isConnected = false;
+                setTimeout(checkServer, 2000);
+                return;
+            }
+            setTimeout(poll, 150);
+        }
+
+        setTimeout(checkServer, 200);
+    })();
 })(typeof window !== "undefined" ? window : globalThis);
 "###
 }
