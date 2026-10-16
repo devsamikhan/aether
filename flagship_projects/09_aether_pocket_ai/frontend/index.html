@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AETHER Pocket AI & Hardware Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Pocket AI — AETHER Autonomous Mobile Executive</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
   <script src="aether_bridge.js"></script>
 </head>
@@ -11,117 +12,288 @@
   <!-- App Header -->
   <header class="app-header">
     <div class="brand">
-      <div class="logo-badge">AE</div>
+      <div class="logo-wrapper">
+        <img src="logo.svg" alt="AETHER Iris" class="app-logo">
+      </div>
       <div class="brand-text">
-        <h1>Pocket AI</h1>
-        <p>AETHER 2.0 Native Hub</p>
+        <div class="brand-row">
+          <h1>Pocket AI</h1>
+          <span class="version-tag">2.0</span>
+        </div>
+        <p id="engine-status-pill" class="engine-pill local">
+          <span class="pill-dot"></span>
+          <span id="engine-status-text">On-Device AETHER (128-D)</span>
+        </p>
       </div>
     </div>
     <div class="header-actions">
-      <button id="theme-toggle" class="icon-btn" title="Toggle Theme">☀️</button>
+      <button id="btn-open-settings" class="icon-btn settings-btn" title="Intelligence & API Key Settings" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+      <button id="theme-toggle" class="icon-btn" title="Toggle Light/Dark Theme" aria-label="Theme">
+        <svg id="theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
     </div>
   </header>
 
-  <!-- Navigation Tabs -->
-  <nav class="nav-tabs">
-    <button class="tab-btn active" data-tab="ai">🤖 AI Copilot</button>
-    <button class="tab-btn" data-tab="hardware">⚡ Hardware</button>
-    <button class="tab-tab tab-btn" data-tab="swarm">🌐 Swarm Mesh</button>
+  <!-- Navigation Dock -->
+  <nav class="nav-dock">
+    <button class="dock-btn active" data-tab="ai">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span>Copilot</span>
+    </button>
+    <button class="dock-btn" data-tab="hardware">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+      </svg>
+      <span>Hardware</span>
+    </button>
+    <button class="dock-btn" data-tab="swarm">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M2 12h20"></path>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>
+      <span>Swarm</span>
+    </button>
   </nav>
 
-  <!-- Main Container -->
+  <!-- Main Content Container -->
   <main class="main-container">
     <!-- TAB 1: AI Copilot -->
     <section id="tab-ai" class="tab-content active">
-      <div class="card chat-box">
-        <div class="card-title">
-          <span>🧠 On-Device Neural Agent (128-D RAG)</span>
-        </div>
-        <div id="chat-history" class="chat-history">
-          <div class="chat-bubble bot">
-            Hello! I am your native on-device AI Copilot running in pure Rust on the AETHER 2.0 VM runtime. How can I assist you today?
+      <!-- Quick Chips Bar -->
+      <div class="chips-container">
+        <button class="chip" data-prompt="Where am I right now?">📍 Where am I?</button>
+        <button class="chip" data-prompt="Set an exact alarm for 7:00 AM">⏰ Set 7 AM Alarm</button>
+        <button class="chip" data-prompt="Scan a QR code from my camera">📷 Scan QR</button>
+        <button class="chip" data-prompt="Tell me about AETHER performance versus Python">⚡ Benchmark</button>
+      </div>
+
+      <!-- Chat Conversation History -->
+      <div id="chat-history" class="chat-history">
+        <div class="chat-message bot">
+          <div class="avatar-badge">
+            <img src="logo.svg" alt="Pocket AI" class="avatar-img">
+          </div>
+          <div class="bubble-content">
+            <div class="bubble-header">
+              <span class="bot-name">Pocket AI</span>
+              <span class="engine-tag" id="welcome-engine-tag">Hybrid Executive</span>
+            </div>
+            <div class="message-text">
+              Assalam-o-Alaikum! Main aapka <strong>Pocket AI</strong> assistant hoon. Google Gemini 2.0 Cloud Brain ya on-device AETHER Neural Engine ke sath live hardware access (GPS, Camera QR, Alarms, Swarm) operational hai.
+            </div>
           </div>
         </div>
-        <div class="chat-input-bar">
-          <input type="text" id="chat-input" class="chat-input" placeholder="Ask anything offline..." autocomplete="off">
-          <button id="send-btn" class="send-btn">Send</button>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="chat-input-wrapper">
+        <div class="chat-input-box">
+          <button id="btn-mic" class="mic-btn" title="Voice Input (Speech-to-Text)" aria-label="Microphone">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+          </button>
+          <textarea id="chat-input" class="chat-input" placeholder="Poochiye ya command dijiye (Urdu/English)..." rows="1" autocomplete="off"></textarea>
+          <button id="send-btn" class="send-btn" title="Send Query" aria-label="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
         </div>
       </div>
     </section>
 
     <!-- TAB 2: Hardware Hub -->
     <section id="tab-hardware" class="tab-content">
-      <div class="card">
-        <div class="card-title">📍 High-Precision GPS Tracker</div>
-        <div class="sensor-grid">
-          <div class="sensor-card">
-            <span class="label">Latitude</span>
-            <span id="val-gps-lat" class="value">--.----</span>
-          </div>
-          <div class="sensor-card">
-            <span class="label">Longitude</span>
-            <span id="val-gps-lon" class="value">--.----</span>
-          </div>
-        </div>
-        <button id="btn-get-gps" class="btn-primary">Fetch Real-time Location</button>
+      <div class="section-title">
+        <h2>⚡ Native Hardware Substrate</h2>
+        <p>Zero-Latency Direct OS Bindings via AetherBridge</p>
       </div>
 
-      <div class="card">
-        <div class="card-title">📷 Native Camera QR Scanner</div>
-        <div id="qr-result-box" style="padding: 10px; background: rgba(0,0,0,0.25); border-radius: 8px; font-size: 0.85rem; color: var(--accent-cyan); word-break: break-all;">
-          Ready to scan QR / Barcode
+      <!-- GPS Card -->
+      <div class="card hardware-card">
+        <div class="card-head">
+          <div class="head-left">
+            <span class="icon-circle cyan">📍</span>
+            <div>
+              <h3>High-Precision GPS Location</h3>
+              <p>Fused GPS & Network Triangulation</p>
+            </div>
+          </div>
+          <span class="status-indicator live">READY</span>
         </div>
-        <button id="btn-scan-qr" class="btn-primary">Scan QR Code</button>
+        <div class="sensor-readout">
+          <div class="readout-col">
+            <span class="ro-label">LATITUDE</span>
+            <span id="val-gps-lat" class="ro-value">34.0152 N</span>
+          </div>
+          <div class="readout-divider"></div>
+          <div class="readout-col">
+            <span class="ro-label">LONGITUDE</span>
+            <span id="val-gps-lon" class="ro-value">71.5249 E</span>
+          </div>
+        </div>
+        <button id="btn-get-gps" class="btn-action">
+          <span>Fetch GPS Fix</span>
+        </button>
       </div>
 
-      <div class="card">
-        <div class="card-title">⏰ ChronoPulse Alarm & Alerts</div>
-        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
-          Direct native Android AlarmManager exact wake-lock integration.
-        </p>
-        <button id="btn-set-alarm" class="btn-primary" style="background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));">
-          Set Exact Alarm (+1 Min)
+      <!-- Camera QR Scanner Card -->
+      <div class="card hardware-card">
+        <div class="card-head">
+          <div class="head-left">
+            <span class="icon-circle purple">📷</span>
+            <div>
+              <h3>Native Camera QR Scanner</h3>
+              <p>Real-time Barcode & Matrix Decoder</p>
+            </div>
+          </div>
+        </div>
+        <div id="qr-result-box" class="readout-box">
+          Ready to scan. Tap button to activate hardware camera viewfinder.
+        </div>
+        <button id="btn-scan-qr" class="btn-action">
+          <span>Launch Camera Scanner</span>
         </button>
-        <button id="btn-notify" class="btn-primary" style="background: linear-gradient(135deg, var(--accent-emerald), #059669); margin-top: 8px;">
-          Trigger Native Push Notification
-        </button>
+      </div>
+
+      <!-- ChronoPulse Alarm & Alerts Card -->
+      <div class="card hardware-card">
+        <div class="card-head">
+          <div class="head-left">
+            <span class="icon-circle pink">⏰</span>
+            <div>
+              <h3>ChronoPulse Alarm & Notifications</h3>
+              <p>Android AlarmManager Exact Wake-Lock</p>
+            </div>
+          </div>
+        </div>
+        <div class="action-grid">
+          <button id="btn-set-alarm" class="btn-secondary">
+            <span>Set 1-Min Alarm</span>
+          </button>
+          <button id="btn-notify" class="btn-secondary">
+            <span>Push Notification</span>
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- TAB 3: Swarm Mesh Radar -->
     <section id="tab-swarm" class="tab-content">
-      <div class="card">
-        <div class="card-title">🌐 P2P Swarm Network Radar</div>
-        <div class="radar-container">
-          <div class="radar-circle">
-            <div class="radar-dot"></div>
-          </div>
-          <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 14px;">
-            UDP Multicast Beaconing active on Port 19892
-          </p>
+      <div class="section-title">
+        <h2>🌐 P2P Swarm Network Mesh</h2>
+        <p>Zero-Server Local Device Auto-Discovery (Port 19892)</p>
+      </div>
+
+      <div class="card radar-card">
+        <div class="radar-box">
+          <div class="radar-sweep"></div>
+          <div class="radar-ring ring-1"></div>
+          <div class="radar-ring ring-2"></div>
+          <div class="radar-ring ring-3"></div>
+          <div class="radar-blip blip-center" title="Self Node"></div>
+          <div class="radar-blip blip-1" title="Peer Node"></div>
         </div>
+        <p class="radar-status-note">
+          UDP Beacon active • <strong>2 Nodes Discovered</strong> on Mesh
+        </p>
 
         <div class="peer-list">
-          <div class="peer-item">
-            <div>
-              <strong>AetherDesktop-Main</strong>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">192.168.1.10:19890 (Local Node)</div>
+          <div class="peer-row">
+            <div class="peer-info">
+              <span class="peer-name">AetherDesktop-Host</span>
+              <span class="peer-addr">192.168.1.10:19890 (Workstation)</span>
             </div>
-            <span class="badge online">Host</span>
+            <span class="peer-tag host">Host Active</span>
           </div>
-          <div class="peer-item">
-            <div>
-              <strong>AetherNode-MED-LX9</strong>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">192.168.1.15:19892 (Connected Phone)</div>
+          <div class="peer-row">
+            <div class="peer-info">
+              <span class="peer-name">Huawei MED-LX9</span>
+              <span class="peer-addr">192.168.1.15:19892 (Connected Phone)</span>
             </div>
-            <span class="badge online">Live 4ms</span>
+            <span class="peer-tag phone">Online 4ms</span>
           </div>
         </div>
 
-        <button id="btn-swarm-sync" class="btn-primary">Sync Notes Across Swarm</button>
+        <button id="btn-swarm-sync" class="btn-action">
+          <span>Sync Neural Memory Across Swarm</span>
+        </button>
       </div>
     </section>
   </main>
+
+  <!-- ========================================================================= -->
+  <!-- SETTINGS MODAL (GEMINI API KEY & INTELLIGENCE CONTROLLER)                -->
+  <!-- ========================================================================= -->
+  <div id="settings-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon">🧠</span>
+          <div>
+            <h3>Intelligence Settings</h3>
+            <p>Google Gemini Cloud API & On-Device Engine</p>
+          </div>
+        </div>
+        <button id="btn-close-settings" class="icon-btn close-btn" aria-label="Close Settings">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- API Key Input Field -->
+        <div class="form-group">
+          <label for="gemini-key-input">
+            <strong>Google Gemini API Key</strong>
+            <span class="badge-free">Free Tier Supported</span>
+          </label>
+          <div class="input-with-eye">
+            <input type="password" id="gemini-key-input" placeholder="AIzaSy... Paste your Gemini API key here" autocomplete="off" spellcheck="false">
+            <button id="btn-toggle-key-visibility" type="button" class="eye-btn" title="Show/Hide Key">👁️</button>
+          </div>
+          <p class="field-help">
+            Key aapke device ke secure storage mein save hoti hai. Free key lene ke liye 
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> par jayein.
+          </p>
+        </div>
+
+        <!-- Model Selection -->
+        <div class="form-group">
+          <label for="gemini-model-select"><strong>Gemini Model Selection</strong></label>
+          <select id="gemini-model-select" class="form-select">
+            <option value="gemini-2.0-flash" selected>gemini-2.0-flash (Recommended: Fastest & Smartest)</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash (Balanced & Lightweight)</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro (Deep Reasoning & Analysis)</option>
+          </select>
+        </div>
+
+        <!-- Connection Test Status -->
+        <div id="api-status-box" class="status-banner local">
+          <span class="status-icon">⚪</span>
+          <span id="api-status-msg">Local AETHER Neural Engine active (Offline mode).</span>
+        </div>
+
+        <!-- Modal Actions -->
+        <div class="modal-actions">
+          <button id="btn-save-key" class="btn-primary">Save & Connect Gemini</button>
+          <button id="btn-clear-key" class="btn-danger">Clear Key (Use Local AI)</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

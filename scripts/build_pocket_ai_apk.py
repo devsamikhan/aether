@@ -2,6 +2,7 @@ import os
 import subprocess
 import zipfile
 import shutil
+from PIL import Image, ImageDraw
 
 android_jar = r'C:\Users\Latif Ullah Khan\AppData\Local\Android\Sdk\platforms\android-34\android.jar'
 d8_bat = r'C:\Users\Latif Ullah Khan\AppData\Local\Android\Sdk\build-tools\34.0.0\d8.bat'
@@ -31,7 +32,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setAllowFileAccessFromFileURLs(true);
-        webView.setBackgroundColor(Color.parseColor("#0a0e17"));
+        webView.setBackgroundColor(Color.parseColor("#07090e"));
         webView.setWebViewClient(new WebViewClient());
         setContentView(webView);
 
@@ -65,11 +66,37 @@ with open('temp_dex_ai/com/aether/runtime/MainActivity.java', 'w') as f:
 subprocess.run(['javac', '-cp', android_jar, 'temp_dex_ai/com/aether/runtime/MainActivity.java'], check=True)
 subprocess.run([d8_bat, '--lib', android_jar, 'temp_dex_ai/com/aether/runtime/MainActivity.class', '--output', 'temp_dex_ai'], shell=True, check=True)
 
+# Generate Custom App Launcher Icon (192x192 xxhdpi)
+res_dir = 'temp_dex_ai/res/drawable'
+os.makedirs(res_dir, exist_ok=True)
+size = 192
+img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+draw = ImageDraw.Draw(img)
+
+# Squircle outer base
+draw.rounded_rectangle([8, 8, size-8, size-8], radius=46, fill=(12, 14, 23, 255), outline=(0, 245, 255, 220), width=4)
+
+# Quantum neural orbital rings
+draw.ellipse([36, 56, size-36, size-56], outline=(99, 102, 241, 200), width=5)
+draw.ellipse([56, 36, size-56, size-36], outline=(0, 245, 255, 220), width=5)
+
+# Glowing Iris center
+center = size // 2
+draw.ellipse([center-32, center-32, center+32, center+32], fill=(0, 245, 255, 180))
+draw.ellipse([center-20, center-20, center+20, center+20], fill=(255, 255, 255, 255))
+draw.ellipse([center-12, center-12, center+12, center+12], fill=(12, 14, 23, 255))
+draw.ellipse([center-6, center-6, center+6, center+6], fill=(0, 245, 255, 255))
+
+icon_path = os.path.join(res_dir, 'ic_launcher.png')
+img.save(icon_path)
+# Save in frontend too
+img.save('flagship_projects/09_aether_pocket_ai/frontend/icon.png')
+
 manifest_xml = """<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.aether.pocketai"
     android:versionCode="1"
-    android:versionName="1.0.0">
+    android:versionName="2.0.0">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -83,6 +110,7 @@ manifest_xml = """<?xml version="1.0" encoding="utf-8"?>
 
     <application
         android:label="Pocket AI"
+        android:icon="@drawable/ic_launcher"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
@@ -101,7 +129,13 @@ manifest_xml = """<?xml version="1.0" encoding="utf-8"?>
 with open('temp_dex_ai/AndroidManifest.xml', 'w') as f:
     f.write(manifest_xml)
 
-subprocess.run([aapt_exe, 'package', '-f', '-M', 'temp_dex_ai/AndroidManifest.xml', '-I', android_jar, '-F', 'temp_dex_ai/base.apk'], check=True)
+subprocess.run([
+    aapt_exe, 'package', '-f',
+    '-M', 'temp_dex_ai/AndroidManifest.xml',
+    '-S', 'temp_dex_ai/res',
+    '-I', android_jar,
+    '-F', 'temp_dex_ai/base.apk'
+], check=True)
 
 unaligned = 'temp_dex_ai/unaligned.apk'
 final_apk = 'flagship_projects/09_aether_pocket_ai/PocketAI.apk'
@@ -131,4 +165,4 @@ subprocess.run([
 ], shell=True, check=True)
 
 shutil.rmtree('temp_dex_ai', ignore_errors=True)
-print('Successfully built and signed PocketAI.apk!')
+print('[OK] Successfully built and signed PocketAI.apk with Custom Launcher Icon!')
