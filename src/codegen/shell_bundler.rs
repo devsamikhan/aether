@@ -118,8 +118,21 @@ impl ShellBundler {
             asset_files.push(("index.html".to_string(), default_html.into_bytes()));
         }
 
-        // Add AetherBridge JS
-        asset_files.push(("aether_bridge.js".to_string(), bridge_js.as_bytes().to_vec()));
+        // Add AetherBridge JS if not already present
+        let has_bridge = asset_files.iter().any(|(p, _)| p == "aether_bridge.js" || p.ends_with("/aether_bridge.js"));
+        if !has_bridge {
+            asset_files.push(("aether_bridge.js".to_string(), bridge_js.as_bytes().to_vec()));
+        }
+
+        // Deduplicate asset_files by relative path
+        let mut unique_assets: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut seen_asset_paths = std::collections::HashSet::new();
+        for (rel_path, data) in asset_files {
+            if seen_asset_paths.insert(rel_path.clone()) {
+                unique_assets.push((rel_path, data));
+            }
+        }
+        let asset_files = unique_assets;
 
         // Prepare files to sign
         let mut files_to_sign_refs: Vec<(&str, &[u8])> = Vec::new();
@@ -136,6 +149,10 @@ impl ShellBundler {
         for (path, slice) in &formatted_asset_paths {
             files_to_sign_refs.push((path.as_str(), *slice));
         }
+
+        // Ensure unique sign entries
+        let mut seen_sign_names = std::collections::HashSet::new();
+        files_to_sign_refs.retain(|(name, _)| seen_sign_names.insert(*name));
 
         println!("[AetherShell] Synthesizing Dalvik DEX & APK META-INF signatures...");
         let (manifest_mf, cert_sf, cert_rsa) = generate_meta_inf_signatures(&files_to_sign_refs);

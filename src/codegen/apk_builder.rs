@@ -168,6 +168,11 @@ impl ZipWriter {
 
     /// Adds a file entry to the ZIP archive (Stored / Uncompressed format)
     pub fn add_file(&mut self, name: &str, content: &[u8]) {
+        if self.entries.iter().any(|e| e.name == name) {
+            eprintln!("[ZipWriter] Warning: duplicate file entry '{}' skipped", name);
+            return;
+        }
+
         let offset = self.buffer.len() as u32;
         let crc = calculate_crc32(content);
         let len = content.len() as u32;
@@ -207,6 +212,9 @@ impl ZipWriter {
         } else {
             format!("{}/", name)
         };
+        if self.entries.iter().any(|e| e.name == dir_name) {
+            return;
+        }
         let offset = self.buffer.len() as u32;
         let name_bytes = dir_name.as_bytes();
         let name_len = name_bytes.len() as u16;
