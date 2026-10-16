@@ -8,3 +8,4 @@ pub mod wasm;
 pub mod aot;
 pub mod adb_deployer;
 pub mod vsix_builder;
+pub mod edge_server;

@@ -216,6 +216,11 @@ impl AetherPackageManager {
         Ok(installed)
     }
 
+    /// Installs a specific package spec into the project (vendors into aether_modules and updates lockfile)
+    pub fn install(&self, pkg_spec: &str) -> Result<PackageDependency, String> {
+        self.add(pkg_spec)
+    }
+
     /// Resolves, vendors or caches a package
     fn resolve_package(
         &self,
@@ -247,6 +252,17 @@ impl AetherPackageManager {
 
         // Calculate cryptographic SHA256 checksum
         let checksum = compute_file_sha256(&entrypoint)?;
+
+        // Vendor into project's aether_modules directory
+        let modules_dir = self.base_dir.join("aether_modules").join(name);
+        if let Err(e) = fs::create_dir_all(&modules_dir) {
+            eprintln!("[AetherPM ⚠️] Warning: Could not create aether_modules: {}", e);
+        } else {
+            let target_entry = modules_dir.join("lib.ae");
+            if let Ok(content) = fs::read(&entrypoint) {
+                let _ = fs::write(target_entry, content);
+            }
+        }
 
         Ok(PackageDependency {
             name: name.to_string(),
@@ -322,11 +338,29 @@ impl AetherPackageManager {
             .map_err(|e| format!("Failed to generate package archive: {}", e))?;
 
         let checksum = compute_file_sha256(&package_archive)?;
+
+        // Register in global registry cache: ~/.aether/packages/<name>/<version>/
+        let global_cache = self.packages_cache_dir().join(&manifest.name).join(&manifest.version);
+        if let Ok(_) = fs::create_dir_all(&global_cache) {
+            let _ = fs::copy(&package_archive, global_cache.join(format!("{}-{}.aepkg", manifest.name, manifest.version)));
+            let entrypoint = global_cache.join("lib.ae");
+            if !entrypoint.exists() {
+                let main_ae = src_dir.join("main.ae");
+                if main_ae.exists() {
+                    let _ = fs::copy(main_ae, &entrypoint);
+                } else {
+                    let stub = format!("# Package: {}\nclass {}:\n    pass\n", manifest.name, sanitize_identifier(&manifest.name));
+                    let _ = fs::write(&entrypoint, stub);
+                }
+            }
+        }
+
         Ok(format!(
-            "📦 Successfully packaged '{}' v{}\n  Archive: {}\n  SHA-256: {}",
+            "📦 Successfully packaged and published '{}' v{}\n  Archive:  {}\n  Registry: {}\n  SHA-256:  {}",
             manifest.name,
             manifest.version,
             package_archive.display(),
+            global_cache.display(),
             checksum
         ))
     }

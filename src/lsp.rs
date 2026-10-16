@@ -57,6 +57,44 @@ impl AetherLanguageServer {
     /// Returns Markdown hover documentation for a symbol or keyword
     pub fn get_hover(&self, word: &str) -> Option<String> {
         match word {
+            "AI" => Some(
+                "### AETHER Native On-Device AI Engine\n\
+                Pure Rust high-speed 128-D dense semantic embeddings, vector cosine RAG store, and offline autonomous local agents.\n\
+                * `AI.embed(text)`: Generates normalized 128-D float vector\n\
+                * `AI.similarity(v1, v2)`: Cosine similarity (-1.0 to 1.0)\n\
+                * `AI.rag_search(query, docs, top_k)`: Fast vector retrieval\n\
+                * `AI.Agent(name, role)`: Creates local intelligent agent\n\
+                * `AI.chat(prompt)`: Chats with default on-device agent".to_string(),
+            ),
+            "AetherBridge" => Some(
+                "### AetherBridge Native Mobile & Web Substrate\n\
+                Bidirectional hardware bridge connecting frontends directly to mobile hardware:\n\
+                * `AetherBridge.getLocation()`: Real-time GPS coordinates\n\
+                * `AetherBridge.scanQR()`: Camera viewfinder barcode/QR scanner\n\
+                * `AetherBridge.scheduleAlarm(title, timeMs)`: Native exact OS alarm\n\
+                * `AetherBridge.showNotification(title, body)`: System push notifications\n\
+                * `AetherBridge.pickFile(accept)`: Native file picker\n\
+                * `AetherBridge.isDarkMode()`: System theme detection".to_string(),
+            ),
+            "DB" => Some(
+                "### AETHER Embedded Relational SQL Engine\n\
+                In-memory or file-backed ACID relational tables with high-speed query execution:\n\
+                * `DB.open(path)`: Opens SQLite or in-memory DB\n\
+                * `db.execute(sql)`: Executes DDL/DML statements\n\
+                * `db.query(sql)`: Returns array of result rows as maps".to_string(),
+            ),
+            "fn" | "def" => Some(
+                "### Function Declaration\n\
+                Defines a function with optional typed parameters and trailing expression returns.\n\
+                ```aether\n\
+                fn calculate_total(price: Float, qty: Int) -> Float:\n\
+                    price * qty\n\
+                ```".to_string(),
+            ),
+            "let" => Some(
+                "### Variable Binding\n\
+                Binds an immutable variable. Use `let mut` for mutable variables.".to_string(),
+            ),
             "intent" => Some(
                 "### AETHER Intent Contract\n\
                 Declarative specification block bounding execution constraints and invariant schemas.\n\
@@ -67,6 +105,18 @@ impl AetherLanguageServer {
                 }\n\
                 ```"
                 .to_string(),
+            ),
+            "require" => Some(
+                "### Intent Precondition Invariant\n\
+                Asserts constraints that must hold prior to intent function execution.".to_string(),
+            ),
+            "ensure" => Some(
+                "### Intent Postcondition Invariant\n\
+                Asserts constraints that must hold upon function return.".to_string(),
+            ),
+            "M3" => Some(
+                "### Google Material 3 UI Engine\n\
+                Generates dynamic color harmonies, surface elevations, and responsive card widgets.".to_string(),
             ),
             "QuantumSimulator" | "qubit" => Some(
                 "### AETHER Quantum State Vector Simulator\n\
@@ -162,6 +212,7 @@ impl AetherLanguageServer {
                 let result = "{\"capabilities\":{\
                     \"textDocumentSync\":1,\
                     \"hoverProvider\":true,\
+                    \"definitionProvider\":true,\
                     \"completionProvider\":{\"triggerCharacters\":[\".\",\":\"]}\
                 }}";
                 Some(format_jsonrpc_response(id, result))
@@ -187,7 +238,18 @@ impl AetherLanguageServer {
                 }
             }
             "textDocument/hover" => {
-                if let Some(word) = extract_hover_word(payload) {
+                let mut word_opt = extract_hover_word(payload);
+                if word_opt.is_none() {
+                    if let Some(uri) = extract_json_string(payload, "uri") {
+                        if let Some(doc) = self.documents.get(&uri) {
+                            if let Some((line, char_idx)) = extract_position(payload) {
+                                word_opt = get_word_at_position(doc, line, char_idx);
+                            }
+                        }
+                    }
+                }
+
+                if let Some(word) = word_opt {
                     if let Some(docs) = self.get_hover(&word) {
                         let res = format!(
                             "{{\"contents\":{{\"kind\":\"markdown\",\"value\":{}}}}}",
@@ -198,16 +260,91 @@ impl AetherLanguageServer {
                 }
                 Some(format_jsonrpc_response(id, "{\"contents\":[]}"))
             }
+            "textDocument/definition" => {
+                if let Some(uri) = extract_json_string(payload, "uri") {
+                    if let Some(doc) = self.documents.get(&uri) {
+                        if let Some((line, char_idx)) = extract_position(payload) {
+                            if let Some(word) = get_word_at_position(doc, line, char_idx) {
+                                if let Some((def_line, def_col)) = find_definition_in_doc(doc, &word) {
+                                    let res = format!(
+                                        "{{\"uri\":\"{}\",\"range\":{{\"start\":{{\"line\":{},\"character\":{}}},\"end\":{{\"line\":{},\"character\":{}}}}}}}",
+                                        uri, def_line, def_col, def_line, def_col + word.len()
+                                    );
+                                    return Some(format_jsonrpc_response(id, &res));
+                                }
+                            }
+                        }
+                    }
+                }
+                Some(format_jsonrpc_response(id, "null"))
+            }
             "textDocument/completion" => {
-                let completions = "{\"isIncomplete\":false,\"items\":[\
-                    {\"label\":\"intent\",\"kind\":14,\"detail\":\"Intent Contract Block\"},\
-                    {\"label\":\"Tensor\",\"kind\":7,\"detail\":\"Tensor Autograd Engine\"},\
-                    {\"label\":\"Graph\",\"kind\":7,\"detail\":\"AetherGraph Knowledge Engine\"},\
-                    {\"label\":\"QuantumSimulator\",\"kind\":7,\"detail\":\"Quantum Matrix Simulator\"},\
-                    {\"label\":\"LiveReloader\",\"kind\":7,\"detail\":\"Zero-Downtime Hot Reload\"},\
-                    {\"label\":\"spawn\",\"kind\":14,\"detail\":\"Spawn Green Fiber\"}\
-                ]}";
-                Some(format_jsonrpc_response(id, completions))
+                let mut items: Vec<String> = Vec::new();
+
+                // Check for module member completion (e.g. AI. or AetherBridge.)
+                if payload.contains("\"AI.\"") || payload.contains("AI.") {
+                    items.push("{\"label\":\"embed\",\"kind\":2,\"detail\":\"AI.embed(text) -> 128-D Dense Vector\"}".to_string());
+                    items.push("{\"label\":\"similarity\",\"kind\":2,\"detail\":\"AI.similarity(v1, v2) -> Float Cosine\"}".to_string());
+                    items.push("{\"label\":\"rag_search\",\"kind\":2,\"detail\":\"AI.rag_search(query, docs, top_k) -> Array\"}".to_string());
+                    items.push("{\"label\":\"chat\",\"kind\":2,\"detail\":\"AI.chat(prompt) -> String Offline LLM Reply\"}".to_string());
+                    items.push("{\"label\":\"Agent\",\"kind\":7,\"detail\":\"AI.Agent(name, role) -> Local Intelligent Agent\"}".to_string());
+                } else if payload.contains("AetherBridge.") {
+                    items.push("{\"label\":\"getLocation\",\"kind\":2,\"detail\":\"AetherBridge.getLocation() -> Promise<Location>\"}".to_string());
+                    items.push("{\"label\":\"scanQR\",\"kind\":2,\"detail\":\"AetherBridge.scanQR() -> Promise<QRResult>\"}".to_string());
+                    items.push("{\"label\":\"scheduleAlarm\",\"kind\":2,\"detail\":\"AetherBridge.scheduleAlarm(title, timeMs)\"}".to_string());
+                    items.push("{\"label\":\"showNotification\",\"kind\":2,\"detail\":\"AetherBridge.showNotification(title, body)\"}".to_string());
+                    items.push("{\"label\":\"pickFile\",\"kind\":2,\"detail\":\"AetherBridge.pickFile(accept) -> Promise<File>\"}".to_string());
+                    items.push("{\"label\":\"isDarkMode\",\"kind\":2,\"detail\":\"AetherBridge.isDarkMode() -> Promise<Bool>\"}".to_string());
+                } else if payload.contains("DB.") {
+                    items.push("{\"label\":\"open\",\"kind\":2,\"detail\":\"DB.open(path) -> DatabaseHandle\"}".to_string());
+                    items.push("{\"label\":\"execute\",\"kind\":2,\"detail\":\"db.execute(sql) -> Result\"}".to_string());
+                    items.push("{\"label\":\"query\",\"kind\":2,\"detail\":\"db.query(sql) -> Array<Map>\"}".to_string());
+                } else {
+                    // Core Keywords
+                    let kws = [
+                        ("fn", 14, "Function Declaration"),
+                        ("let", 14, "Immutable Variable"),
+                        ("mut", 14, "Mutable Variable Modifier"),
+                        ("intent", 14, "Formal Contract Invariant Block"),
+                        ("require", 14, "Intent Precondition Requirement"),
+                        ("ensure", 14, "Intent Postcondition Guarantee"),
+                        ("struct", 7, "Custom Composite Struct Type"),
+                        ("match", 14, "Pattern Matching Expression"),
+                        ("spawn", 14, "Spawn Concurrent M:N Green Fiber"),
+                        ("channel", 14, "Thread-Safe Channel Primitive"),
+                        ("return", 14, "Return Value from Function"),
+                        ("AI", 9, "Native On-Device AI & Embeddings Module"),
+                        ("AetherBridge", 9, "Hardware Bridge & Native Mobile API"),
+                        ("DB", 9, "Embedded Relational SQL & DataFrame Engine"),
+                        ("M3", 9, "Google Material 3 Dynamic UI Engine"),
+                        ("Sys", 9, "Operating System Primitives"),
+                        ("Mobile", 9, "Mobile Haptics & Notification Substrate"),
+                    ];
+                    for (lbl, kind, detail) in kws {
+                        items.push(format!("{{\"label\":\"{}\",\"kind\":{},\"detail\":\"{}\"}}", lbl, kind, detail));
+                    }
+
+                    // Dynamically scan cached documents for user functions & variables
+                    for doc in self.documents.values() {
+                        for line in doc.lines() {
+                            let trimmed = line.trim();
+                            if let Some(rest) = trimmed.strip_prefix("fn ").or_else(|| trimmed.strip_prefix("def ")) {
+                                let name = rest.split('(').next().unwrap_or("").trim();
+                                if !name.is_empty() {
+                                    items.push(format!("{{\"label\":\"{}\",\"kind\":3,\"detail\":\"User Function\"}}", name));
+                                }
+                            } else if let Some(rest) = trimmed.strip_prefix("let ") {
+                                let name = rest.split('=').next().unwrap_or("").trim().trim_start_matches("mut ").trim();
+                                if !name.is_empty() {
+                                    items.push(format!("{{\"label\":\"{}\",\"kind\":6,\"detail\":\"Local Variable\"}}", name));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let completions = format!("{{\"isIncomplete\":false,\"items\":[{}]}}", items.join(","));
+                Some(format_jsonrpc_response(id, &completions))
             }
             _ => None,
         }
@@ -309,3 +446,73 @@ fn escape_json(s: &str) -> String {
     out.push('"');
     out
 }
+
+fn extract_position(payload: &str) -> Option<(usize, usize)> {
+    let line_str = extract_json_raw(payload, "line")?;
+    let char_str = extract_json_raw(payload, "character")?;
+    let line = line_str.parse::<usize>().ok()?;
+    let character = char_str.parse::<usize>().ok()?;
+    Some((line, character))
+}
+
+fn get_word_at_position(doc: &str, target_line: usize, target_col: usize) -> Option<String> {
+    let line = doc.lines().nth(target_line)?;
+    let chars: Vec<char> = line.chars().collect();
+    if target_col >= chars.len() {
+        return None;
+    }
+
+    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+    if !is_ident(chars[target_col]) {
+        return None;
+    }
+
+    let mut start = target_col;
+    while start > 0 && is_ident(chars[start - 1]) {
+        start -= 1;
+    }
+
+    let mut end = target_col;
+    while end < chars.len() && is_ident(chars[end]) {
+        end += 1;
+    }
+
+    let word: String = chars[start..end].iter().collect();
+    if word.is_empty() {
+        None
+    } else {
+        Some(word)
+    }
+}
+
+fn find_definition_in_doc(doc: &str, word: &str) -> Option<(usize, usize)> {
+    for (line_idx, line) in doc.lines().enumerate() {
+        let trimmed = line.trim();
+        // fn foo(...) or def foo(...)
+        if let Some(rest) = trimmed.strip_prefix("fn ").or_else(|| trimmed.strip_prefix("def ")) {
+            let func_name = rest.split('(').next().unwrap_or("").trim();
+            if func_name == word {
+                let col = line.find(word).unwrap_or(0);
+                return Some((line_idx, col));
+            }
+        }
+        // struct Foo
+        if let Some(rest) = trimmed.strip_prefix("struct ") {
+            let struct_name = rest.split_whitespace().next().unwrap_or("").trim_end_matches('{').trim();
+            if struct_name == word {
+                let col = line.find(word).unwrap_or(0);
+                return Some((line_idx, col));
+            }
+        }
+        // let foo = ... or let mut foo = ...
+        if let Some(rest) = trimmed.strip_prefix("let ") {
+            let var_name = rest.split('=').next().unwrap_or("").trim().trim_start_matches("mut ").trim();
+            if var_name == word {
+                let col = line.find(word).unwrap_or(0);
+                return Some((line_idx, col));
+            }
+        }
+    }
+    None
+}
+

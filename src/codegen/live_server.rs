@@ -29,6 +29,9 @@ pub struct LiveServerConfig {
     pub poll_interval_ms: u64,
     pub enable_adb_reverse: bool,
     pub auto_open_browser: bool,
+    pub desktop_app_mode: bool,
+    pub window_width: u32,
+    pub window_height: u32,
 }
 
 impl LiveServerConfig {
@@ -39,6 +42,9 @@ impl LiveServerConfig {
             poll_interval_ms: 80,
             enable_adb_reverse: true,
             auto_open_browser: false,
+            desktop_app_mode: false,
+            window_width: 480,
+            window_height: 850,
         }
     }
 }
@@ -77,12 +83,18 @@ impl LiveDevServer {
             setup_adb_reverse(self.config.port);
         }
 
-        // Open local browser if requested
-        if self.config.auto_open_browser {
+        // Open local browser or native desktop app container if requested
+        if self.config.auto_open_browser || self.config.desktop_app_mode {
             let url = format!("http://localhost:{}", self.config.port);
+            let is_desktop = self.config.desktop_app_mode;
+            let width = self.config.window_width;
+            let height = self.config.window_height;
+            let title = self.config.dist_dir.file_name().and_then(|s| s.to_str()).unwrap_or("AetherApp").to_string();
             thread::spawn(move || {
                 thread::sleep(Duration::from_millis(300));
-                if cfg!(windows) {
+                if is_desktop {
+                    let _ = launch_desktop_window(&url, &title, width, height);
+                } else if cfg!(windows) {
                     let _ = Command::new("cmd").args(["/C", "start", &url]).spawn();
                 } else if cfg!(target_os = "macos") {
                     let _ = Command::new("open").arg(&url).spawn();
@@ -370,4 +382,91 @@ fn get_local_ip() -> Option<String> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
     Some(socket.local_addr().ok()?.ip().to_string())
+}
+
+/// Spawns a dedicated standalone application window (Edge/Chrome App Mode, zero Electron / zero Tauri)
+pub fn launch_desktop_window(
+    url: &str,
+    _title: &str,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    if cfg!(windows) {
+        let edge_candidates = [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        ];
+        for path in &edge_candidates {
+            if Path::new(path).exists() {
+                let temp_profile = std::env::temp_dir().join("aether_desktop_edge_profile");
+                let status = Command::new(path)
+                    .args([
+                        &format!("--app={}", url),
+                        &format!("--window-size={},{}", width, height),
+                        &format!("--user-data-dir={}", temp_profile.display()),
+                        "--no-first-run",
+                        "--no-default-browser-check",
+                    ])
+                    .spawn();
+                if status.is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+
+        let chrome_candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ];
+        for path in &chrome_candidates {
+            if Path::new(path).exists() {
+                let temp_profile = std::env::temp_dir().join("aether_desktop_chrome_profile");
+                let status = Command::new(path)
+                    .args([
+                        &format!("--app={}", url),
+                        &format!("--window-size={},{}", width, height),
+                        &format!("--user-data-dir={}", temp_profile.display()),
+                        "--no-first-run",
+                        "--no-default-browser-check",
+                    ])
+                    .spawn();
+                if status.is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Fallback to system browser
+        Command::new("cmd")
+            .args(["/C", "start", url])
+            .spawn()
+            .map_err(|e| format!("Failed to open system browser: {}", e))?;
+        Ok(())
+    } else if cfg!(target_os = "macos") {
+        let status = Command::new("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+            .args([&format!("--app={}", url), &format!("--window-size={},{}", width, height)])
+            .spawn();
+        if status.is_ok() {
+            return Ok(());
+        }
+        Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("Failed to open macOS browser: {}", e))?;
+        Ok(())
+    } else {
+        for browser in &["google-chrome", "chromium-browser", "chromium", "microsoft-edge"] {
+            let status = Command::new(browser)
+                .args([&format!("--app={}", url), &format!("--window-size={},{}", width, height)])
+                .spawn();
+            if status.is_ok() {
+                return Ok(());
+            }
+        }
+        Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("Failed to open Linux browser: {}", e))?;
+        Ok(())
+    }
 }

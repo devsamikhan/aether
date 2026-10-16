@@ -6198,9 +6198,160 @@ fn main() {
                     eprintln!("Studio Server Error: {}", e);
                 }
             }
+            "desktop" => {
+                let target_arg = if args.len() > 2 && !args[2].starts_with('-') {
+                    Some(args[2].clone())
+                } else {
+                    None
+                };
+
+                let target_path = if let Some(ref path_str) = target_arg {
+                    std::path::PathBuf::from(path_str)
+                } else if std::path::Path::new("frontend").exists() {
+                    std::path::PathBuf::from("frontend")
+                } else if std::path::Path::new("index.html").exists() {
+                    std::path::PathBuf::from(".")
+                } else if std::path::Path::new("src/main.ae").exists() {
+                    std::path::PathBuf::from("src/main.ae")
+                } else {
+                    std::path::PathBuf::from(".")
+                };
+
+                let mut port = 8080u16;
+                let mut width = 480u32;
+                let mut height = 850u32;
+                let mut interval = 80u64;
+
+                let mut i = if target_arg.is_some() { 3 } else { 2 };
+                while i < args.len() {
+                    if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                        port = args[i + 1].parse().unwrap_or(8080);
+                        i += 2;
+                    } else if (args[i] == "--width" || args[i] == "-w") && i + 1 < args.len() {
+                        width = args[i + 1].parse().unwrap_or(480);
+                        i += 2;
+                    } else if (args[i] == "--height" || args[i] == "-h") && i + 1 < args.len() {
+                        height = args[i + 1].parse().unwrap_or(850);
+                        i += 2;
+                    } else if (args[i] == "--interval" || args[i] == "-i") && i + 1 < args.len() {
+                        interval = args[i + 1].parse().unwrap_or(80);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                let serving_dir = if target_path.is_file() && target_path.extension().map_or(false, |ext| ext == "ae" || ext == "aether") {
+                    let temp_dir = std::env::temp_dir().join("aether_desktop_app");
+                    let _ = std::fs::create_dir_all(&temp_dir);
+                    let out_html = temp_dir.join("index.html");
+                    let app_name = target_path.file_stem().and_then(|s| s.to_str()).unwrap_or("AetherApp");
+                    let builder = aether::codegen::web_builder::WebBuilder::new(app_name);
+                    if let Err(e) = builder.build_web_app(&target_path, &out_html) {
+                        eprintln!("[AetherDesktop ⚠️] Web compile warning: {}", e);
+                    }
+                    temp_dir
+                } else {
+                    target_path
+                };
+
+                println!("================================================================================");
+                println!("🖥️ AETHER DESKTOP: ZERO-DEPENDENCY NATIVE GUI CONTAINER");
+                println!("================================================================================");
+                println!("  Target:    {}", serving_dir.display());
+                println!("  Runtime:   Microsoft Edge / Google Chrome App Mode (Zero Electron / Zero Tauri)");
+                println!("  Window:    {} x {} px (Standalone Borderless Frame)", width, height);
+                println!("  Live Link: http://localhost:{}", port);
+                println!("  Hot Reload Sub-100ms File Swapping Active");
+                println!("================================================================================\n");
+
+                let mut config = aether::codegen::live_server::LiveServerConfig::new(serving_dir);
+                config.port = port;
+                config.poll_interval_ms = interval;
+                config.auto_open_browser = false;
+                config.desktop_app_mode = true;
+                config.window_width = width;
+                config.window_height = height;
+
+                let server = aether::codegen::live_server::LiveDevServer::new(config);
+                if let Err(e) = server.start() {
+                    eprintln!("Desktop GUI Error: {}", e);
+                }
+                return;
+            }
+            "serve" | "serverless" | "microservice" => {
+                let target_arg = if args.len() > 2 && !args[2].starts_with('-') {
+                    Some(args[2].clone())
+                } else {
+                    None
+                };
+
+                let mut port = 3000u16;
+                let mut host = "0.0.0.0".to_string();
+                let mut auto_open = false;
+                let mut threads = 8usize;
+
+                let mut i = if target_arg.is_some() { 3 } else { 2 };
+                while i < args.len() {
+                    if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                        port = args[i + 1].parse().unwrap_or(3000);
+                        i += 2;
+                    } else if (args[i] == "--host" || args[i] == "-h") && i + 1 < args.len() {
+                        host = args[i + 1].clone();
+                        i += 2;
+                    } else if (args[i] == "--threads" || args[i] == "-t") && i + 1 < args.len() {
+                        threads = args[i + 1].parse().unwrap_or(8);
+                        i += 2;
+                    } else if args[i] == "--open" || args[i] == "-o" {
+                        auto_open = true;
+                        i += 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                let mut static_dir = None;
+                let mut script_path = None;
+
+                if let Some(ref arg_path) = target_arg {
+                    let p = std::path::PathBuf::from(arg_path);
+                    if p.is_dir() {
+                        static_dir = Some(p);
+                    } else if p.is_file() {
+                        if p.extension().map_or(false, |e| e == "ae" || e == "aether") {
+                            script_path = Some(p);
+                        } else if p.extension().map_or(false, |e| e == "html" || e == "htm") {
+                            static_dir = p.parent().map(|d| d.to_path_buf());
+                        }
+                    }
+                } else {
+                    if std::path::Path::new("frontend").exists() {
+                        static_dir = Some(std::path::PathBuf::from("frontend"));
+                    } else if std::path::Path::new("dist").exists() {
+                        static_dir = Some(std::path::PathBuf::from("dist"));
+                    } else if std::path::Path::new("index.html").exists() {
+                        static_dir = Some(std::path::PathBuf::from("."));
+                    }
+                }
+
+                let config = aether::codegen::edge_server::EdgeServerConfig {
+                    host,
+                    port,
+                    static_dir,
+                    script_path,
+                    thread_pool_size: threads,
+                    auto_open_browser: auto_open,
+                };
+
+                let server = aether::codegen::edge_server::EdgeServer::new(config);
+                if let Err(e) = server.start() {
+                    eprintln!("Edge Server Error: {}", e);
+                }
+                return;
+            }
             "live" | "dev" | "watch" => {
                 if args.len() < 3 {
-                    eprintln!("Usage: aether live <dir_or_script> [--port <port>] [--interval <ms>] [--open]");
+                    eprintln!("Usage: aether live <dir_or_script> [--port <port>] [--interval <ms>] [--open] [--desktop]");
                     return;
                 }
                 let target_path = std::path::PathBuf::from(&args[2]);
@@ -6214,6 +6365,7 @@ fn main() {
                     let mut port = 8080u16;
                     let mut interval = 80u64;
                     let mut auto_open = false;
+                    let mut desktop_mode = false;
                     let mut i = 3;
                     while i < args.len() {
                         if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
@@ -6225,6 +6377,9 @@ fn main() {
                         } else if args[i] == "--open" || args[i] == "-o" {
                             auto_open = true;
                             i += 1;
+                        } else if args[i] == "--desktop" || args[i] == "-d" {
+                            desktop_mode = true;
+                            i += 1;
                         } else {
                             i += 1;
                         }
@@ -6233,7 +6388,8 @@ fn main() {
                     let mut config = aether::codegen::live_server::LiveServerConfig::new(target_path);
                     config.port = port;
                     config.poll_interval_ms = interval;
-                    config.auto_open_browser = auto_open;
+                    config.auto_open_browser = auto_open && !desktop_mode;
+                    config.desktop_app_mode = desktop_mode;
 
                     let server = aether::codegen::live_server::LiveDevServer::new(config);
                     if let Err(e) = server.start() {
@@ -6349,6 +6505,7 @@ fn main() {
                 let mut device_id: Option<String> = None;
                 let mut port = Some(8080u16);
                 let mut launch = true;
+                let mut package_name: Option<String> = None;
 
                 let mut i = 3;
                 while i < args.len() {
@@ -6357,6 +6514,9 @@ fn main() {
                         i += 2;
                     } else if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
                         port = args[i + 1].parse().ok();
+                        i += 2;
+                    } else if (args[i] == "--package" || args[i] == "-pkg") && i + 1 < args.len() {
+                        package_name = Some(args[i + 1].clone());
                         i += 2;
                     } else if args[i] == "--no-launch" {
                         launch = false;
@@ -6381,12 +6541,24 @@ fn main() {
                     apk_out
                 };
 
-                let pkg_name = "com.aether.frontend";
+                let detected_pkg = if let Some(pkg) = package_name {
+                    pkg
+                } else {
+                    let fname = target_apk.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+                    if fname.contains("pocket") {
+                        "com.aether.pocketai".to_string()
+                    } else if fname.contains("chrono") {
+                        "com.aether.chronopulse".to_string()
+                    } else {
+                        "com.aether.frontend".to_string()
+                    }
+                };
+
                 match aether::codegen::adb_deployer::AdbDeployer::deploy(
                     device_id.as_deref(),
                     &target_apk,
-                    pkg_name,
-                    Some(".MainActivity"),
+                    &detected_pkg,
+                    Some("com.aether.runtime.MainActivity"),
                     launch,
                     port,
                 ) {
@@ -7178,11 +7350,29 @@ fn main() {
                         Err(e) => eprintln!("System Install Error: {}", e),
                     }
                 } else if args.len() > 2 {
-                    if let Err(e) = install_library(&args[2]) {
-                        eprintln!("Install Error: {}", e);
+                    let pm = aether::package_manager::AetherPackageManager::new(".");
+                    match pm.install(&args[2]) {
+                        Ok(dep) => {
+                            println!("================================================================================");
+                            println!("📦 AETHER PACKAGE MANAGER (AetherPM) - PACKAGE INSTALLED");
+                            println!("================================================================================");
+                            println!("Package:    {} (v{})", dep.name, dep.version);
+                            if let Some(ref cs) = dep.checksum {
+                                println!("SHA-256:    {}", cs);
+                            }
+                            println!("Vendored:   ./aether_modules/{}/", dep.name);
+                            println!("Lockfile:   ./aether.lock updated ✅");
+                            println!("================================================================================");
+                        }
+                        Err(e) => {
+                            eprintln!("AetherPM Notice: {}. Falling back to system library install...", e);
+                            if let Err(err) = install_library(&args[2]) {
+                                eprintln!("Install Error: {}", err);
+                            }
+                        }
                     }
                 } else {
-                    eprintln!("Usage: aether install [--system] OR aether install <library_name>");
+                    eprintln!("Usage: aether install [--system] OR aether install <package_name>[@version]");
                 }
             }
             "install-system" | "setup" => {
@@ -7294,7 +7484,8 @@ fn main() {
                 println!("  lsp [--check <f.ae>]  Launch Language Server Protocol daemon for VS Code & IDEs");
                 println!("  playground [port]     Launch interactive in-browser WASM playground");
                 println!("  mcp                   Launch Model Context Protocol (MCP) server for AI assistants");
-                println!("  ai                    Output full AI pair-programming system prompt");
+                println!("  desktop [path]        Launch zero-dependency standalone native desktop GUI container");
+                println!("  serve [path]          Launch 1-click Edge Microservices & Cloud Serverless HTTP/1.1 runtime");
                 println!("  publish               Package current library for decentralized AetherPM distribution");
             }
         }

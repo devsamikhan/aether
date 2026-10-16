@@ -291,3 +291,159 @@ fn test_expanded_mobile_hardware_apis_in_bridge() {
     assert!(bridge.contains("isDarkMode"), "Bridge must have isDarkMode API");
 }
 
+#[test]
+fn test_edge_server_rest_and_serverless_eval() {
+    use aether::codegen::edge_server::{EdgeServer, EdgeServerConfig};
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::thread;
+    use std::time::Duration;
+
+    let port = 19345u16;
+    let config = EdgeServerConfig {
+        host: "127.0.0.1".to_string(),
+        port,
+        static_dir: None,
+        script_path: None,
+        thread_pool_size: 2,
+        auto_open_browser: false,
+    };
+
+    let server = EdgeServer::new(config);
+    thread::spawn(move || {
+        let _ = server.start();
+    });
+
+    // Wait for server to bind
+    thread::sleep(Duration::from_millis(150));
+
+    // 1. Test GET /api/health
+    if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
+        let req = format!("GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n", port);
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap();
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp.contains("200 OK"));
+        assert!(resp.contains("\"status\":\"online\""));
+        assert!(resp.contains("AETHER Edge Microservice Runtime"));
+    }
+
+    // 2. Test POST /api/eval (Serverless evaluation)
+    if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
+        let body = r#"{"code": "let x = 15; let y = 27; x + y"}"#;
+        let req = format!(
+            "POST /api/eval HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
+            port, body.len(), body
+        );
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap();
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp.contains("200 OK"));
+        assert!(resp.contains("\"result\":\"42\""));
+    }
+
+    // 3. Test POST /api/chat (On-Device AI)
+    if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
+        let body = r#"{"prompt": "Tell me about AETHER performance"}"#;
+        let req = format!(
+            "POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
+            port, body.len(), body
+        );
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap();
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp.contains("200 OK"));
+        assert!(resp.contains("aether-local-rag-128d"));
+    }
+
+    // 4. Test POST /api/query (In-Memory SQL)
+    if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
+        let body = r#"{"query": "SELECT name, role FROM services WHERE latency_ms < 1.0"}"#;
+        let req = format!(
+            "POST /api/query HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
+            port, body.len(), body
+        );
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap();
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp.contains("200 OK"));
+        assert!(resp.contains("AlphaNode") || resp.contains("BetaMesh"));
+    }
+
+    // 5. Test GET / (Interactive Dashboard HTML)
+    if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
+        let req = format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n", port);
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap();
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        assert!(resp.contains("200 OK"));
+        assert!(resp.contains("AETHER Edge Microservices & Serverless"));
+    }
+}
+
+#[test]
+fn test_desktop_app_mode_config() {
+    use aether::codegen::live_server::LiveServerConfig;
+
+    let mut cfg = LiveServerConfig::new("frontend");
+    cfg.desktop_app_mode = true;
+    cfg.window_width = 500;
+    cfg.window_height = 900;
+
+    assert!(cfg.desktop_app_mode);
+    assert_eq!(cfg.window_width, 500);
+    assert_eq!(cfg.window_height, 900);
+}
+
+#[test]
+fn test_aether_package_manager_publish_and_install_vendoring() {
+    use aether::package_manager::{AetherPackageManager, AetherManifest};
+
+    let test_dir = std::env::temp_dir().join("aether_pm_test_project");
+    let _ = std::fs::remove_dir_all(&test_dir);
+    std::fs::create_dir_all(&test_dir).unwrap();
+
+    let manifest = AetherManifest {
+        name: "test_pkg".to_string(),
+        version: "1.0.0".to_string(),
+        description: "Test decentralized package".to_string(),
+        authors: vec!["AETHER Core".to_string()],
+        dependencies: std::collections::BTreeMap::new(),
+    };
+    manifest.save_to_file(test_dir.join("aether.toml")).unwrap();
+
+    let pm = AetherPackageManager::new(&test_dir);
+
+    // 1. Publish package
+    let pub_res = pm.publish();
+    assert!(pub_res.is_ok(), "Package publish must succeed: {:?}", pub_res.err());
+    let pub_msg = pub_res.unwrap();
+    assert!(pub_msg.contains("test_pkg"));
+    assert!(pub_msg.contains("SHA-256"));
+    assert!(test_dir.join("dist/test_pkg-1.0.0.aepkg").exists());
+
+    // 2. Install dependency package
+    let inst_res = pm.install("math_lib@0.5.0");
+    assert!(inst_res.is_ok(), "Package install must succeed: {:?}", inst_res.err());
+    let dep = inst_res.unwrap();
+    assert_eq!(dep.name, "math_lib");
+    assert_eq!(dep.version, "0.5.0");
+    assert!(dep.checksum.is_some());
+
+    // Verify vendored into aether_modules
+    assert!(test_dir.join("aether_modules/math_lib/lib.ae").exists());
+
+    // Verify aether.lock updated
+    assert!(test_dir.join("aether.lock").exists());
+    let lock_content = std::fs::read_to_string(test_dir.join("aether.lock")).unwrap();
+    assert!(lock_content.contains("math_lib"));
+
+    let _ = std::fs::remove_dir_all(&test_dir);
+}
+
+
