@@ -6,3 +6,5 @@ pub mod shell_bundler;
 pub mod live_server;
 pub mod wasm;
 pub mod aot;
+pub mod adb_deployer;
+pub mod vsix_builder;

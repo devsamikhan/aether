@@ -901,19 +901,92 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
         Ok(Value::map(res))
     }));
 
-    // AI.embeddings(text)
-    ai_module.insert("embeddings".to_string(), Value::Native("AI.embeddings".into(), |args| {
+    // AI.embed(text) / AI.embeddings(text) -> 128-D dense vector
+    let embed_native = Value::Native("AI.embed".into(), |args| {
         let text = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
-        let mut vec = Vec::new();
-        for i in 0..16 {
-            let byte_sum: u32 = text.bytes().map(|b| (b as u32).wrapping_mul((i + 1) as u32)).sum();
-            let norm = ((byte_sum % 1000) as f64) / 1000.0;
-            vec.push(Value::Float(norm));
-        }
-        Ok(Value::array(vec))
+        let emb = crate::vm::ai_engine::generate_embedding(&text);
+        let vals = emb.into_iter().map(Value::Float).collect();
+        Ok(Value::array(vals))
+    });
+    ai_module.insert("embed".to_string(), embed_native.clone());
+    ai_module.insert("embeddings".to_string(), embed_native);
+
+    // AI.similarity(vec1, vec2) -> float (-1.0 to 1.0)
+    ai_module.insert("similarity".to_string(), Value::Native("AI.similarity".into(), |args| {
+        if args.len() < 2 { return Err("AI.similarity(vec1, vec2) requires two vector arrays".into()); }
+        let extract_vec = |v: &Value| -> Vec<f64> {
+            match v {
+                Value::Array(arr) => arr.lock().iter().map(|item| match item {
+                    Value::Float(f) => *f,
+                    Value::Int(i) => *i as f64,
+                    _ => 0.0,
+                }).collect(),
+                _ => Vec::new(),
+            }
+        };
+        let v1 = extract_vec(&args[0]);
+        let v2 = extract_vec(&args[1]);
+        let sim = crate::vm::ai_engine::cosine_similarity(&v1, &v2);
+        Ok(Value::Float(sim))
     }));
 
-    globals.insert("AI".to_string(), Value::map(ai_module));
+    // AI.rag_search(query, docs, top_k)
+    ai_module.insert("rag_search".to_string(), Value::Native("AI.rag_search".into(), |args| {
+        if args.len() < 2 { return Err("AI.rag_search(query, docs, [top_k]) requires query and doc array".into()); }
+        let query = format!("{}", args[0]);
+        let top_k = if args.len() > 2 {
+            match args[2] { Value::Int(i) => i.max(1) as usize, _ => 3 }
+        } else { 3 };
+
+        let mut store = crate::vm::ai_engine::VectorRagStore::new();
+        if let Value::Array(docs) = &args[1] {
+            for d in docs.lock().iter() {
+                store.add(&format!("{}", d));
+            }
+        }
+        let results = store.search(&query, top_k);
+        let mut out = Vec::new();
+        for (id, score, text) in results {
+            let mut m = HashMap::new();
+            m.insert("id".to_string(), Value::Int(id as i64));
+            m.insert("score".to_string(), Value::Float(score));
+            m.insert("text".to_string(), Value::string(text));
+            out.push(Value::map(m));
+        }
+        Ok(Value::array(out))
+    }));
+
+    // AI.chat(prompt) -> string
+    ai_module.insert("chat".to_string(), Value::Native("AI.chat".into(), |args| {
+        if args.is_empty() { return Err("AI.chat(prompt) requires prompt string".into()); }
+        let prompt = format!("{}", args[0]);
+        let agent_id = {
+            let mut reg = crate::vm::ai_engine::get_agent_registry().lock().unwrap();
+            if !reg.contains_key(&1) {
+                reg.insert(1, crate::vm::ai_engine::LocalAgent::new("AetherCore", "Native Runtime Copilot"));
+            }
+            1
+        };
+        let reply = crate::vm::ai_engine::agent_chat(agent_id, &prompt)?;
+        Ok(Value::string(reply))
+    }));
+
+    // AI.Agent(name, [role]) -> Agent instance map
+    ai_module.insert("Agent".to_string(), Value::Native("AI.Agent".into(), |args| {
+        let name = if !args.is_empty() { format!("{}", args[0]) } else { "AetherAgent".to_string() };
+        let role = if args.len() > 1 { format!("{}", args[1]) } else { "Autonomous Engine Specialist".to_string() };
+        let agent_id = crate::vm::ai_engine::allocate_agent(&name, &role);
+
+        let mut map = HashMap::new();
+        map.insert("_agent_id".to_string(), Value::Int(agent_id as i64));
+        map.insert("name".to_string(), Value::string(name));
+        map.insert("role".to_string(), Value::string(role));
+
+        Ok(Value::map(map))
+    }));
+
+    globals.insert("AI".to_string(), Value::map(ai_module.clone()));
+    globals.insert("aether_ai".to_string(), Value::map(ai_module));
 }
 
 // =========================================================================

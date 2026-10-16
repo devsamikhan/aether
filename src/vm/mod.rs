@@ -21,6 +21,8 @@ pub mod flow;
 pub mod proof;
 pub mod graph;
 pub mod hotreload;
+pub mod ai_engine;
+pub mod swarm;
 
 pub use bytecode::{Chunk, OpCode};
 pub use compiler::BytecodeCompiler;

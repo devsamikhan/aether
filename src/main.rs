@@ -6340,6 +6340,126 @@ fn main() {
                 }
                 return;
             }
+            "deploy" | "run-mobile" => {
+                if args.len() < 3 {
+                    eprintln!("Usage: aether deploy <app.apk | frontend_dir> [--device <id>] [--port <8080>] [--no-launch]");
+                    return;
+                }
+                let input_path = PathBuf::from(&args[2]);
+                let mut device_id: Option<String> = None;
+                let mut port = Some(8080u16);
+                let mut launch = true;
+
+                let mut i = 3;
+                while i < args.len() {
+                    if (args[i] == "--device" || args[i] == "-d") && i + 1 < args.len() {
+                        device_id = Some(args[i + 1].clone());
+                        i += 2;
+                    } else if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                        port = args[i + 1].parse().ok();
+                        i += 2;
+                    } else if args[i] == "--no-launch" {
+                        launch = false;
+                        i += 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                let target_apk = if input_path.extension().and_then(|s| s.to_str()) == Some("apk") {
+                    input_path
+                } else {
+                    // Bundle from directory first
+                    let apk_out = input_path.join("app.apk");
+                    let mut config = aether::codegen::shell_bundler::ShellConfig::new(input_path.clone(), apk_out.clone());
+                    config.target = "apk".to_string();
+                    let bundler = aether::codegen::shell_bundler::ShellBundler::new(config);
+                    if let Err(e) = bundler.bundle() {
+                        eprintln!("Deploy Error: Failed to bundle APK: {}", e);
+                        return;
+                    }
+                    apk_out
+                };
+
+                let pkg_name = "com.aether.frontend";
+                match aether::codegen::adb_deployer::AdbDeployer::deploy(
+                    device_id.as_deref(),
+                    &target_apk,
+                    pkg_name,
+                    Some(".MainActivity"),
+                    launch,
+                    port,
+                ) {
+                    Ok(rep) => {
+                        println!("✨ Deployment finished successfully to {}!", rep.device.model);
+                    }
+                    Err(e) => eprintln!("Deploy Error: {}", e),
+                }
+                return;
+            }
+            "devices" => {
+                match aether::codegen::adb_deployer::AdbDeployer::list_devices() {
+                    Ok(devs) => {
+                        println!("Connected Android Devices (ADB):");
+                        if devs.is_empty() {
+                            println!("  No devices detected. Please connect phone via USB with USB Debugging enabled.");
+                        } else {
+                            for d in devs {
+                                println!("  • {} | Model: {} | Product: {} [{}]", d.id, d.model, d.product, d.status);
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("ADB Error: {}", e),
+                }
+                return;
+            }
+            "vsix" | "vscode" => {
+                let mut source_dir = PathBuf::from("editors/vscode");
+                let mut output_path = PathBuf::from("editors/vscode/aether-language-support-2.0.0.vsix");
+                let mut i = 2;
+                while i < args.len() {
+                    if (args[i] == "-o" || args[i] == "--out") && i + 1 < args.len() {
+                        output_path = PathBuf::from(&args[i + 1]);
+                        i += 2;
+                    } else if (args[i] == "--source" || args[i] == "-s") && i + 1 < args.len() {
+                        source_dir = PathBuf::from(&args[i + 1]);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                let builder = aether::codegen::vsix_builder::VsixBuilder::new(source_dir, output_path);
+                if let Err(e) = builder.package() {
+                    eprintln!("VSIX Packaging Error: {}", e);
+                }
+                return;
+            }
+            "swarm" | "mesh" => {
+                let mut port = aether::vm::swarm::DEFAULT_SWARM_PORT;
+                let mut duration = 60u64;
+                let mut i = 2;
+                while i < args.len() {
+                    if (args[i] == "--port" || args[i] == "-p") && i + 1 < args.len() {
+                        port = args[i + 1].parse().unwrap_or(port);
+                        i += 2;
+                    } else if (args[i] == "--duration" || args[i] == "-d") && i + 1 < args.len() {
+                        duration = args[i + 1].parse().unwrap_or(duration);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                let mut cfg = aether::vm::swarm::SwarmConfig::default();
+                cfg.swarm_port = port;
+                let node = aether::vm::swarm::SwarmNode::new(cfg);
+                if let Err(e) = node.start() {
+                    eprintln!("Swarm Error: Failed to start: {}", e);
+                    return;
+                }
+                node.run_cli_monitor(duration);
+                node.stop();
+                return;
+            }
             "web" => {
                 if args.len() < 3 {
                     eprintln!("Usage: aether web <script.ae> [-o output.html] [--name 'App Name']");

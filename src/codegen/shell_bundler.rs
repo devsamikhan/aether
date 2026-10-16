@@ -91,6 +91,10 @@ impl ShellBundler {
         apk_config.permissions.push("android.permission.INTERNET".to_string());
         apk_config.permissions.push("android.permission.VIBRATE".to_string());
         apk_config.permissions.push("android.permission.ACCESS_NETWORK_STATE".to_string());
+        apk_config.permissions.push("android.permission.CAMERA".to_string());
+        apk_config.permissions.push("android.permission.ACCESS_FINE_LOCATION".to_string());
+        apk_config.permissions.push("android.permission.SCHEDULE_EXACT_ALARM".to_string());
+        apk_config.permissions.push("android.permission.POST_NOTIFICATIONS".to_string());
 
         let binary_manifest = generate_binary_manifest(&apk_config);
         let classes_dex = generate_classes_dex(&apk_config);
@@ -445,6 +449,88 @@ pub fn get_aether_bridge_js() -> &'static str {
         // Native Relational SQL Query
         dbQuery: async function(sql, params = []) {
             return await this.invoke("db_query", { sql, params });
+        },
+
+        // Geolocation & GPS coordinates
+        getLocation: async function() {
+            if (window.AndroidBridge && window.AndroidBridge.getLocation) {
+                return JSON.parse(window.AndroidBridge.getLocation());
+            }
+            return new Promise((resolve) => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => resolve({
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy,
+                            altitude: pos.coords.altitude
+                        }),
+                        (err) => resolve({ latitude: 33.6844, longitude: 73.0479, simulated: true, error: err.message })
+                    );
+                } else {
+                    resolve({ latitude: 33.6844, longitude: 73.0479, simulated: true });
+                }
+            });
+        },
+
+        // Native Camera & QR / Barcode Scanner
+        scanQR: async function() {
+            if (window.AndroidBridge && window.AndroidBridge.scanQR) {
+                return await this.invoke("scan_qr", {});
+            }
+            return new Promise((resolve) => {
+                const mockCode = "AETHER-PAY-" + Math.floor(100000 + Math.random() * 900000);
+                this.showToast("📷 Scanner Active: " + mockCode);
+                resolve({ text: mockCode, format: "QR_CODE" });
+            });
+        },
+
+        // Native Background Alarm & Notification Scheduler
+        scheduleAlarm: async function(timestamp, title = "AETHER Alarm", sound = "default") {
+            return await this.invoke("schedule_alarm", { timestamp, title, sound });
+        },
+
+        // System Push / Local Notification
+        showNotification: async function(title, body = "") {
+            if (window.AndroidBridge && window.AndroidBridge.showNotification) {
+                window.AndroidBridge.showNotification(title, body);
+            } else if (typeof Notification !== "undefined") {
+                if (Notification.permission === "granted") {
+                    new Notification(title, { body });
+                } else if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then(p => {
+                        if (p === "granted") new Notification(title, { body });
+                    });
+                }
+            }
+            this.showToast("🔔 " + title + (body ? ": " + body : ""));
+        },
+
+        // Native File & Media Picker
+        pickFile: function(accept = "*/*") {
+            return new Promise((resolve) => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = accept;
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return resolve(null);
+                    const reader = new FileReader();
+                    reader.onload = (evt) => resolve({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        data: evt.target.result
+                    });
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            });
+        },
+
+        // System Dark Mode Detection
+        isDarkMode: function() {
+            return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
         }
     };
 

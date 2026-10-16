@@ -215,3 +215,79 @@ fn test_live_hotreload_server_and_bridge() {
     assert_eq!(config.port, 8080);
     assert_eq!(config.poll_interval_ms, 80);
 }
+
+#[test]
+fn test_adb_deployer_device_discovery() {
+    use aether::codegen::adb_deployer::AdbDeployer;
+    let devices = AdbDeployer::list_devices();
+    assert!(devices.is_ok(), "AdbDeployer::list_devices() must run without error");
+    let list = devices.unwrap();
+    println!("Found {} connected ADB device(s): {:?}", list.len(), list);
+}
+
+#[test]
+fn test_vsix_extension_packager() {
+    use aether::codegen::vsix_builder::VsixBuilder;
+    let out_dir = std::path::Path::new("target/test_vsix_out");
+    let _ = std::fs::create_dir_all(out_dir);
+    let vsix_path = out_dir.join("aether-language-support-2.0.0.vsix");
+    let builder = VsixBuilder::new("editors/vscode", &vsix_path);
+    let res = builder.package();
+    assert!(res.is_ok(), "VsixBuilder::package() should succeed: {:?}", res.err());
+    assert!(vsix_path.exists(), "Packaged .vsix extension must exist on disk");
+    let size = std::fs::metadata(&vsix_path).unwrap().len();
+    assert!(size > 500, "VSIX file must contain valid zipped package contents");
+    let _ = std::fs::remove_dir_all(out_dir);
+}
+
+#[test]
+fn test_native_ai_engine_rag_and_agent() {
+    use aether::vm::ai_engine::{generate_embedding, cosine_similarity, VectorRagStore, LocalAgent};
+
+    let v1 = generate_embedding("AETHER native fast ahead of time compiler");
+    let v2 = generate_embedding("AETHER compiler performance benchmark");
+    let v3 = generate_embedding("banana apple cooking recipes");
+
+    assert_eq!(v1.len(), 128);
+    let sim_related = cosine_similarity(&v1, &v2);
+    let sim_unrelated = cosine_similarity(&v1, &v3);
+    assert!(sim_related > sim_unrelated, "Semantic similarity between related phrases must exceed unrelated phrases");
+
+    let mut store = VectorRagStore::new();
+    store.add("AETHER compiles directly to native binary code via Cranelift.");
+    store.add("AETHER features embedded zero-dependency SQLite and DataFrame engine.");
+    let hits = store.search("Cranelift native compiler", 1);
+    assert_eq!(hits.len(), 1);
+    assert!(hits[0].2.contains("Cranelift"));
+
+    let mut agent = LocalAgent::new("Nova", "System Architect");
+    let reply = agent.chat("Who are you?");
+    assert!(reply.contains("Nova"));
+
+    // Test AETHER VM script integration with AI module
+    let script = "let emb = AI.embed(\"aether on-device ai\")\nlet bot = AI.Agent(\"Alpha\", \"Autonomous Copilot\")\nbot.add_knowledge(\"AETHER 2.0 has zero external dependencies.\")\nlet res = bot.chat(\"Tell me about AETHER\")\nres\n";
+    let vm_res = aether::vm::run_source(script);
+    assert!(vm_res.is_ok(), "VM script with AI module must succeed: {:?}", vm_res.err());
+}
+
+#[test]
+fn test_p2p_swarm_node_and_beacons() {
+    use aether::vm::swarm::{SwarmConfig, SwarmNode, DEFAULT_SWARM_PORT};
+
+    let config = SwarmConfig::default();
+    let node = SwarmNode::new(config);
+    assert_eq!(node.config.swarm_port, DEFAULT_SWARM_PORT);
+    assert_eq!(node.get_active_peers().len(), 0);
+}
+
+#[test]
+fn test_expanded_mobile_hardware_apis_in_bridge() {
+    let bridge = get_aether_bridge_js();
+    assert!(bridge.contains("getLocation"), "Bridge must have getLocation API");
+    assert!(bridge.contains("scanQR"), "Bridge must have scanQR API");
+    assert!(bridge.contains("scheduleAlarm"), "Bridge must have scheduleAlarm API");
+    assert!(bridge.contains("showNotification"), "Bridge must have showNotification API");
+    assert!(bridge.contains("pickFile"), "Bridge must have pickFile API");
+    assert!(bridge.contains("isDarkMode"), "Bridge must have isDarkMode API");
+}
+

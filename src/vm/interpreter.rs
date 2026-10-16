@@ -1591,7 +1591,8 @@ impl VM {
                                         if let Some(val) = map.get(s.as_str()) {
                                             self.stack.push(val.clone());
                                         } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
-                                            || (map.contains_key("_db_id") && matches!(s.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact")) {
+                                            || (map.contains_key("_db_id") && matches!(s.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
+                                            || (map.contains_key("_agent_id") && matches!(s.as_str(), "chat" | "add_knowledge" | "history" | "clear")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: (**s).clone(),
@@ -1605,7 +1606,8 @@ impl VM {
                                         if let Some(val) = map.get(&k) {
                                             self.stack.push(val.clone());
                                         } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
-                                            || (map.contains_key("_db_id") && matches!(k.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact")) {
+                                            || (map.contains_key("_db_id") && matches!(k.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
+                                            || (map.contains_key("_agent_id") && matches!(k.as_str(), "chat" | "add_knowledge" | "history" | "clear")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: k,
@@ -1894,6 +1896,7 @@ impl VM {
             "proof" | "aetherproof" | "verify" => self.globals.get("Proof").cloned(),
             "graph" | "aethergraph" | "knowledge" => self.globals.get("Graph").cloned(),
             "hotreload" | "live" | "aetherlive" => self.globals.get("HotReload").or_else(|| self.globals.get("__native_hotreload")).cloned(),
+            "ai" | "aether_ai" | "aetherai" | "agent" | "agents" => self.globals.get("AI").cloned(),
             _ => None,
         };
 
@@ -2246,6 +2249,40 @@ impl VM {
                             }
                         }
                         Err(format!("Unknown method '{}' on database handle", method))
+                    } else if m.lock().contains_key("_agent_id") {
+                        let agent_id = match m.lock().get("_agent_id") {
+                            Some(Value::Int(id)) => *id as u64,
+                            _ => 1,
+                        };
+                        match method {
+                            "chat" => {
+                                if args.is_empty() { return Err("agent.chat(prompt) requires prompt string".into()); }
+                                let prompt = format!("{}", args[0]);
+                                let reply = crate::vm::ai_engine::agent_chat(agent_id, &prompt)?;
+                                Ok(Value::string(reply))
+                            }
+                            "add_knowledge" => {
+                                if args.is_empty() { return Err("agent.add_knowledge(text) requires text string".into()); }
+                                let text = format!("{}", args[0]);
+                                crate::vm::ai_engine::agent_add_knowledge(agent_id, &text)?;
+                                Ok(Value::Bool(true))
+                            }
+                            "history" => {
+                                let hist = crate::vm::ai_engine::agent_get_history(agent_id)?;
+                                let arr = hist.into_iter().map(|(u, a)| {
+                                    let mut hm = HashMap::new();
+                                    hm.insert("user".to_string(), Value::string(u));
+                                    hm.insert("assistant".to_string(), Value::string(a));
+                                    Value::map(hm)
+                                }).collect();
+                                Ok(Value::array(arr))
+                            }
+                            "clear" => {
+                                crate::vm::ai_engine::agent_clear(agent_id)?;
+                                Ok(Value::Bool(true))
+                            }
+                            _ => Err(format!("Unknown method '{}' on AI Agent", method)),
+                        }
                     } else {
                         Err(format!("Unknown method '{}' on dict", method))
                     }
