@@ -341,195 +341,37 @@ channel = "stable"
     fs::write(root.join(".gitignore"), gitignore_content)
         .map_err(|e| format!("Failed to write .gitignore: {}", e))?;
 
-    // Template selection
-    let (main_src, test_src, description) = match template.to_lowercase().as_str() {
-        "ai" | "rag" | "agent" => (
-            r#"# ==============================================================================
-# AI Autonomous Agent & Knowledge Graph Service
-# ==============================================================================
-import aether_graph
-import aether_agent
+    // Template generation via Universal Multi-Framework Engine
+    let template_data = crate::toolchain_templates::get_template(name, template);
 
-print("🤖 Initializing AI Agent with Knowledge Graph...")
-let kg = aether_graph.Graph("LocalKnowledge")
-let n1 = kg.add_node("AETHER_Engine", {"type": "Core"}, [0.95, 0.20, 0.10])
-let n2 = kg.add_node("Autonomous_Agent", {"type": "Worker"}, [0.90, 0.60, 0.20])
-kg.add_edge(n1, n2, "EMPOWERS", 1.2)
-
-let route = kg.shortest_path(n1, n2)
-print("✓ Agent reasoning pathway verified! Cost:", route["cost"])
-"#,
-            r#"import aether_graph
-
-let kg = aether_graph.Graph("TestGraph")
-let a = kg.add_node("A")
-let b = kg.add_node("B")
-kg.add_edge(a, b, "CONNECTS", 1.0)
-let p = kg.shortest_path(a, b)
-assert(p["cost"] == 1.0, "Path cost should be 1.0")
-print("All tests passed ✅")
-"#,
-            "AI Agent + Knowledge Graph Template",
-        ),
-        "web" | "api" | "service" => (
-            r#"# ==============================================================================
-# High-Throughput Web Microservice & API
-# ==============================================================================
-import aether_web
-import aether_live
-
-let app = aether_web.AetherWeb("0.0.0.0", 8080)
-
-def handle_home(req):
-    return {"status": "ok", "service": "AETHER 2.0 Web", "version": "1.1.0"}
-
-app.route("/", handle_home)
-print("🚀 AETHER Web Microservice listening on http://0.0.0.0:8080")
-"#,
-            r#"import aether_web
-
-let app = aether_web.AetherWeb("127.0.0.1", 9999)
-print("Web microservice test suite passed ✅")
-"#,
-            "Web Microservice & API Template",
-        ),
-        "fintech" | "rpc" => (
-            r#"# ==============================================================================
-# Low-Latency FinTech RPC Engine with Formal Contract Verification
-# ==============================================================================
-import aether_rpc
-
-intent secure_settlement(sender_bal, amount, fee):
-    require: sender_bal >= (amount + fee)
-    require: amount > 0
-    require: fee >= 0
-    ensure: result == sender_bal - (amount + fee)
-    body:
-        return sender_bal - amount - fee
-
-print("💳 FinTech Settlement Core Initialized")
-let final_bal = secure_settlement(1000, 200, 5)
-print("✓ Settlement processed cleanly. Remaining balance:", final_bal)
-"#,
-            r#"intent transfer_test(bal, amt):
-    require: bal >= amt
-    ensure: result == bal - amt
-    body:
-        return bal - amt
-
-assert(transfer_test(100, 40) == 60, "Transfer contract verified")
-print("FinTech formal contract tests passed ✅")
-"#,
-            "FinTech RPC & Formal Verification Template",
-        ),
-        "react" | "next" | "vite" => (
-            r#"# ==============================================================================
-# AETHER Universal React Native Host
-# ==============================================================================
-let db = DB.open("data/app.db")
-db.execute("CREATE TABLE IF NOT EXISTS app_state (key TEXT, val TEXT);")
-
-print("⚡ AETHER React Native Bridge Active.")
-print("Run `aether bundle frontend/ --target apk` to build Android APK in 1 second!")
-"#,
-            r#"assert(DB != nil)
-print("React host tests passed ✅")
-"#,
-            "React 18 + Tailwind + AetherBridge Template",
-        ),
-        "vue" => (
-            r#"# ==============================================================================
-# AETHER Universal Vue 3 Host
-# ==============================================================================
-print("⚡ AETHER Vue 3 Native Host Active.")
-"#,
-            r#"print("Vue host tests passed ✅")"#,
-            "Vue 3 + Vite + AetherBridge Template",
-        ),
-        "svelte" => (
-            r#"# ==============================================================================
-# AETHER Universal Svelte 5 Host
-# ==============================================================================
-print("⚡ AETHER Svelte 5 Native Host Active.")
-"#,
-            r#"print("Svelte host tests passed ✅")"#,
-            "Svelte 5 + AetherBridge Template",
-        ),
-        "tailwind" => (
-            r#"# ==============================================================================
-# AETHER Universal Tailwind UI Host
-# ==============================================================================
-print("⚡ AETHER Tailwind Native Host Active.")
-"#,
-            r#"print("Tailwind host tests passed ✅")"#,
-            "Tailwind CSS + HTML5 + AetherBridge Template",
-        ),
-        _ => (
-            r#"# ==============================================================================
-# AETHER 2.0 Application
-# ==============================================================================
-
-def main():
-    print("✨ Welcome to AETHER 2.0!")
-    print("Zero-ceremony syntax, native C/C++ performance, and built-in AI superpowers.")
-
-main()
-"#,
-            r#"def test_sanity():
-    assert(2 + 2 == 4, "Math sanity check")
-    print("Sanity test passed ✅")
-
-test_sanity()
-"#,
-            "Clean Standard Starter Template",
-        ),
-    };
-
-    fs::write(root.join("src/main.ae"), main_src)
+    fs::write(root.join("src/main.ae"), &template_data.main_ae)
         .map_err(|e| format!("Failed to write src/main.ae: {}", e))?;
-    fs::write(root.join("tests/test_main.ae"), test_src)
+    fs::write(root.join("tests/test_main.ae"), &template_data.test_main_ae)
         .map_err(|e| format!("Failed to write tests/test_main.ae: {}", e))?;
 
-    // If UI template, scaffold frontend/ directory
-    if matches!(template.to_lowercase().as_str(), "react" | "next" | "vite" | "vue" | "svelte" | "tailwind") {
+    // If UI template includes frontend assets
+    let has_frontend = template_data.index_html.is_some();
+    if let Some(html_content) = &template_data.index_html {
         let frontend_dir = root.join("frontend");
         let _ = fs::create_dir_all(&frontend_dir);
-        let sample_html = format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{} (AetherShell App)</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="aether_bridge.js"></script>
-</head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-6">
-  <div class="max-w-md w-full bg-slate-800/80 backdrop-blur rounded-2xl p-6 border border-slate-700 shadow-2xl text-center">
-    <div class="text-4xl mb-3">⚡</div>
-    <h1 class="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">{}</h1>
-    <p class="text-sm text-slate-400 mt-1">Universal Multi-Platform UI ({})</p>
-    <div class="mt-6 flex flex-col gap-3">
-      <button onclick="window.Aether && window.Aether.vibrate(40); window.Aether && window.Aether.showToast('Native Hardware Haptics Active!')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-2.5 px-4 rounded-xl transition shadow">
-        📳 Trigger Haptics
-      </button>
-      <button onclick="window.Aether && window.Aether.showToast('Builds directly into APK & EXE with zero external tools!')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-2.5 px-4 rounded-xl transition">
-        📱 Zero-SDK Architecture
-      </button>
-    </div>
-  </div>
-</body>
-</html>"#,
-            name, name, template
-        );
-        let _ = fs::write(frontend_dir.join("index.html"), sample_html);
+        let _ = fs::write(frontend_dir.join("index.html"), html_content);
         let _ = fs::write(frontend_dir.join("aether_bridge.js"), crate::codegen::shell_bundler::get_aether_bridge_js());
+        if let Some(svg_icon) = &template_data.icon_svg {
+            let _ = fs::write(frontend_dir.join("icon.svg"), svg_icon);
+        }
     }
 
-    let readme = format!(
-        "# {}\n\nCreated with AETHER 2.0 ({})\n\n## Run\n```bash\naether run src/main.ae\n```\n\n## Bundle Android APK (Zero Android Studio)\n```bash\naether bundle frontend/ --target apk -o {}_app.apk\n```\n\n## Bundle Windows Native (.exe)\n```bash\naether bundle frontend/ --target desktop -o {}_app.exe\n```\n",
-        name, description, name, name
-    );
+    let readme = if has_frontend {
+        format!(
+            "# {}\n\nCreated with AETHER 2.0 Universal Multi-Framework Engine\nTemplate: {}\n\n## 1. Run Host Service\n```bash\naether run src/main.ae\n```\n\n## 2. Live Hot-Reload UI (Browser Live Dev)\n```bash\naether live frontend/ --open\n```\n\n## 3. Bundle Android APK (Zero Android Studio / Gradle)\n```bash\naether bundle frontend/ --target apk -o {}_app.apk\n```\n\n## 4. Bundle Windows Native (.exe)\n```bash\naether bundle frontend/ --target desktop -o {}_app.exe\n```\n",
+            name, template_data.description, name, name
+        )
+    } else {
+        format!(
+            "# {}\n\nCreated with AETHER 2.0 ({})\n\n## Run\n```bash\naether run src/main.ae\n```\n\n## Test\n```bash\naether test\n```\n",
+            name, template_data.description
+        )
+    };
     fs::write(root.join("README.md"), readme)
         .map_err(|e| format!("Failed to write README.md: {}", e))?;
 

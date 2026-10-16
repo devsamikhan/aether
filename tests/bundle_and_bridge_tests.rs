@@ -112,7 +112,7 @@ fn test_bundle_apk_distribution() {
 
 #[test]
 fn test_scaffold_frontend_templates() {
-    let templates = ["react", "vue", "svelte", "tailwind"];
+    let templates = ["react", "vue", "svelte", "3d", "fullstack"];
     for tpl in &templates {
         let proj_name = format!("target/test_proj_{}", tpl);
         let _ = fs::remove_dir_all(&proj_name);
@@ -124,6 +124,40 @@ fn test_scaffold_frontend_templates() {
         assert!(proj_path.join("src/main.ae").exists());
         assert!(proj_path.join("frontend/index.html").exists());
         assert!(proj_path.join("frontend/aether_bridge.js").exists());
+        assert!(proj_path.join("frontend/icon.svg").exists());
+
+        // Verify HTML content has framework signatures
+        let index_html = fs::read_to_string(proj_path.join("frontend/index.html")).unwrap();
+        match *tpl {
+            "react" => {
+                assert!(index_html.contains("React") || index_html.contains("react"));
+                assert!(index_html.contains("useState") || index_html.contains("AETHER React"));
+            }
+            "vue" => {
+                assert!(index_html.contains("Vue") || index_html.contains("vue"));
+                assert!(index_html.contains("createApp") || index_html.contains("AETHER Vue"));
+            }
+            "svelte" => {
+                assert!(index_html.contains("Svelte") || index_html.contains("svelte"));
+                assert!(index_html.contains("Store") || index_html.contains("Signals"));
+            }
+            "3d" => {
+                assert!(index_html.contains("WebGL") || index_html.contains("Canvas") || index_html.contains("Universe"));
+                assert!(index_html.contains("requestAnimationFrame"));
+            }
+            "fullstack" => {
+                assert!(index_html.contains("Fullstack") || index_html.contains("Relational"));
+            }
+            _ => {}
+        }
+
+        // Test that it can be bundled into standalone HTML with zero external tools
+        let bundle_out = proj_path.join(format!("{}.html", tpl));
+        let mut config = ShellConfig::new(proj_path.join("frontend"), bundle_out.clone());
+        config.target = "web".to_string();
+        let bundler = ShellBundler::new(config);
+        assert!(bundler.bundle_web().is_ok());
+        assert!(bundle_out.exists());
 
         let _ = fs::remove_dir_all(proj_path);
     }

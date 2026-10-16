@@ -6092,7 +6092,7 @@ fn main() {
 
         let subcommand = &args[1];
         match subcommand.as_str() {
-            "init" | "new" => {
+            "init" | "new" | "create" => {
                 if args.len() > 2 {
                     let project_name = &args[2];
                     let mut template = "default";
@@ -6111,12 +6111,18 @@ fn main() {
                             println!("  Location: {}", p.display());
                             println!("  To get started:");
                             println!("    cd {}", project_name);
-                            println!("    aether run src/main.ae\n");
+                            println!("    aether run src/main.ae");
+                            if p.join("frontend").exists() {
+                                println!("    aether live frontend/ --open           (Live Hot-Reload in Browser)");
+                                println!("    aether bundle frontend/ --target apk   (Bundle Android APK)");
+                                println!("    aether bundle frontend/ --target desktop (Bundle Windows .EXE)");
+                            }
+                            println!();
                         }
                         Err(e) => eprintln!("Error: {}", e),
                     }
                 } else {
-                    eprintln!("Usage: aether new <project_name> [--template ai|web|fintech|minimal]");
+                    eprintln!("Usage: aether create <project_name> [--template react|vue|svelte|3d|fullstack|ai|fintech]");
                 }
             }
             "add" => {
@@ -7140,8 +7146,8 @@ fn main() {
             }
             _ => {
                 println!("AETHER Compiler Toolchain CLI");
-                println!("Subcommands:");
-                println!("  init <project_name>   Scaffold a new AETHER project");
+                println!("  create <name> [--template react|vue|svelte|3d|fullstack|ai|fintech]");
+                println!("                        Scaffold a new AETHER multi-framework project");
                 println!("  add <package_name>    Add dependency package to Aether.toml");
                 println!("  build [script.ae]     Compile script to native binary (.exe) or Android APK (.apk)");
                 println!("  apk <script.ae>       Package application into signed Android package (.apk)");

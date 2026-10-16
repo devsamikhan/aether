@@ -23,3 +23,4 @@ pub mod package_manager;
 pub mod playground_server;
 pub mod mcp_server;
 pub mod tour;
+pub mod toolchain_templates;
