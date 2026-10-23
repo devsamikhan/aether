@@ -146,6 +146,8 @@ impl InferenceContext {
                         subst.extend(unified2);
                         Ok((Type::Bool, subst))
                     }
+                    BinaryOp::NullCoalesce => Ok((apply_subst(&t_rhs, &subst), subst)),
+                    BinaryOp::Range | BinaryOp::RangeInclusive => Ok((Type::Vec(Box::new(Type::Int)), subst)),
                 }
             }
             Expr::Unary(op, inner, _) => {

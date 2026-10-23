@@ -14,6 +14,7 @@ pub struct CompiledFunction {
     pub varargs_param: Option<String>,
     pub has_kwargs: bool,        // **kwargs
     pub kwargs_param: Option<String>,
+    pub upvalue_count: usize,
     pub chunk: super::bytecode::Chunk,
 }
 
@@ -29,6 +30,7 @@ impl CompiledFunction {
             varargs_param: None,
             has_kwargs: false,
             kwargs_param: None,
+            upvalue_count: 0,
             chunk: super::bytecode::Chunk::new(),
         }
     }
@@ -64,10 +66,17 @@ impl ChannelHandle {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct StructDef {
     pub name: String,
     pub fields: Vec<String>,
+    pub methods: Arc<Mutex<HashMap<String, Arc<CompiledFunction>>>>,
+}
+
+impl PartialEq for StructDef {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.fields == other.fields
+    }
 }
 
 #[derive(Clone)]
@@ -104,12 +113,16 @@ pub enum Value {
     Function(Arc<CompiledFunction>),
     Closure {
         function: Arc<CompiledFunction>,
-        upvalues: Arc<Vec<Value>>,
+        upvalues: Arc<Mutex<Vec<Value>>>,
     },
     Native(String, NativeFn),
     BoundMethod { receiver: Arc<Value>, method: String },
     BoundUserMethod {
         receiver: Arc<ClassInstance>,
+        function: Arc<CompiledFunction>,
+    },
+    BoundStructMethod {
+        receiver: StructInstance,
         function: Arc<CompiledFunction>,
     },
     SuperInstance {
@@ -121,6 +134,20 @@ pub enum Value {
     StructInstance(StructInstance),
     ClassDef(Arc<ClassDef>),
     ClassInstance(ClassInstance),
+    EnumConstructor {
+        enum_name: String,
+        variant: String,
+        arity: usize,
+    },
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        fields: Arc<Vec<Value>>,
+    },
+    Memoized {
+        func: Box<Value>,
+        cache: Arc<Mutex<HashMap<String, Value>>>,
+    },
     DefaultSentinel,
 }
 
@@ -183,12 +210,16 @@ impl Value {
             Value::Native(_, _) => "native_fn",
             Value::BoundMethod { .. } => "bound_method",
             Value::BoundUserMethod { .. } => "method",
+            Value::BoundStructMethod { .. } => "method",
             Value::SuperInstance { .. } => "super",
             Value::Channel(_) => "channel",
             Value::StructDef(_) => "struct_def",
             Value::StructInstance(_) => "struct",
             Value::ClassDef(_) => "class",
             Value::ClassInstance(_) => "instance",
+            Value::EnumConstructor { .. } => "enum_constructor",
+            Value::EnumVariant { .. } => "enum_variant",
+            Value::Memoized { .. } => "function",
             Value::DefaultSentinel => "default",
         }
     }
@@ -336,7 +367,26 @@ impl fmt::Display for Value {
             Value::BoundUserMethod { receiver, function } => {
                 write!(f, "<bound method {} of <{} object>>", function.name, receiver.class.name)
             }
+            Value::BoundStructMethod { receiver, function } => {
+                write!(f, "<bound method {} of {}>", function.name, receiver.name)
+            }
             Value::SuperInstance { class, .. } => write!(f, "<super: <class {}>>", class.name),
+            Value::EnumConstructor { enum_name, variant, .. } => {
+                write!(f, "<enum constructor {}::{}>", enum_name, variant)
+            }
+            Value::EnumVariant { enum_name, variant, fields } => {
+                if fields.is_empty() {
+                    write!(f, "{}::{}", enum_name, variant)
+                } else {
+                    write!(f, "{}::{}(", enum_name, variant)?;
+                    for (i, item) in fields.iter().enumerate() {
+                        if i > 0 { write!(f, ", ")?; }
+                        write!(f, "{}", item)?;
+                    }
+                    write!(f, ")")
+                }
+            }
+            Value::Memoized { func, .. } => write!(f, "<memoized {}>", func),
         }
     }
 }
@@ -373,7 +423,9 @@ impl PartialEq for Value {
             }
             (Value::Map(a), Value::Map(b)) => *a.lock() == *b.lock(),
             (Value::Function(a), Value::Function(b)) => a == b,
-            (Value::Closure { function: f1, upvalues: u1 }, Value::Closure { function: f2, upvalues: u2 }) => f1 == f2 && u1 == u2,
+            (Value::Closure { function: f1, upvalues: u1 }, Value::Closure { function: f2, upvalues: u2 }) => {
+                f1 == f2 && *u1.lock() == *u2.lock()
+            }
             (Value::StructDef(a), Value::StructDef(b)) => a.name == b.name && a.fields == b.fields,
             (Value::StructInstance(a), Value::StructInstance(b)) => {
                 a.name == b.name && *a.fields.lock() == *b.fields.lock()
@@ -386,6 +438,15 @@ impl PartialEq for Value {
             }
             (Value::BoundUserMethod { receiver: r1, function: f1 }, Value::BoundUserMethod { receiver: r2, function: f2 }) => {
                 Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2
+            }
+            (Value::BoundStructMethod { receiver: r1, function: f1 }, Value::BoundStructMethod { receiver: r2, function: f2 }) => {
+                Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2
+            }
+            (Value::EnumConstructor { enum_name: e1, variant: v1, arity: a1 }, Value::EnumConstructor { enum_name: e2, variant: v2, arity: a2 }) => {
+                e1 == e2 && v1 == v2 && a1 == a2
+            }
+            (Value::EnumVariant { enum_name: e1, variant: v1, fields: f1 }, Value::EnumVariant { enum_name: e2, variant: v2, fields: f2 }) => {
+                (e1 == e2 || e1.is_empty() || e2.is_empty()) && v1 == v2 && f1 == f2
             }
             _ => false,
         }

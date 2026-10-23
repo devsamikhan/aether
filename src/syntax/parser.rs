@@ -6,16 +6,18 @@ use super::lexer::Lexer;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
     None,
-    Pipe,       // |>
-    Or,         // or, ||
-    And,        // and, &&
-    Equality,   // ==, !=
-    Comparison, // <, <=, >, >=
-    Term,       // +, -
-    Factor,     // *, /, %
-    Power,      // ^
-    Unary,      // -, not, !
-    Call,       // (), [], .
+    Pipe,         // |>
+    NullCoalesce, // ??
+    Or,           // or, ||
+    And,          // and, &&
+    Equality,     // ==, !=
+    Comparison,   // <, <=, >, >=, in
+    Range,        // .., ..=
+    Term,         // +, -
+    Factor,       // *, /, %
+    Power,        // ^
+    Unary,        // -, not, !
+    Call,         // (), [], ., ?., ?, ::
 }
 
 pub struct Parser {
@@ -84,6 +86,15 @@ impl Parser {
             }
             TokenKind::Spawn => self.parse_spawn_statement(),
             TokenKind::Struct => self.parse_struct_definition(),
+            TokenKind::Enum => self.parse_enum_definition(),
+            TokenKind::Trait => self.parse_trait_definition(),
+            TokenKind::Impl => self.parse_impl_definition(),
+            TokenKind::Type => self.parse_type_alias(),
+            TokenKind::At => self.parse_decorated_statement(),
+            TokenKind::Export => {
+                self.advance(); // consume 'export'
+                self.parse_statement()
+            }
             TokenKind::Class => self.parse_class_statement(),
             TokenKind::Defer => self.parse_defer_statement(),
             TokenKind::Try => self.parse_try_statement(),
@@ -103,6 +114,132 @@ impl Parser {
             false
         };
 
+        // Check for structural destructuring: let (a, b) = ..., let [a, ..rest] = ..., let { x, y } = ...
+        if self.match_token(&TokenKind::LParen) {
+            self.advance();
+            self.skip_braced_whitespace();
+            let mut vars = Vec::new();
+            while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if let TokenKind::Ident(s) = &self.peek().kind {
+                    vars.push(s.clone());
+                    self.advance();
+                } else {
+                    return Err(("Expected identifier in tuple destructuring".to_string(), self.current_span()));
+                }
+                self.skip_braced_whitespace();
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RParen, "Expected ')' in tuple destructuring")?;
+            if self.match_token(&TokenKind::Colon) {
+                self.advance();
+                let _ = self.parse_type_annotation();
+            }
+            self.consume(&TokenKind::Assign, "Expected '=' after tuple destructuring")?;
+            let initializer = self.parse_expression(Precedence::None)?;
+            let end_span = initializer.span();
+            self.consume_statement_terminator();
+            return Ok(Statement::LetDestructure {
+                pattern: DestructurePattern::Tuple(vars),
+                is_mut,
+                initializer,
+                span: let_token.span.merge(end_span),
+            });
+        } else if self.match_token(&TokenKind::LBracket) {
+            self.advance();
+            self.skip_braced_whitespace();
+            let mut elements = Vec::new();
+            let mut rest = None;
+            while !self.check(&TokenKind::RBracket) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if self.match_token(&TokenKind::DotDot) || self.match_token(&TokenKind::Star) {
+                    self.advance();
+                    if let TokenKind::Ident(s) = &self.peek().kind {
+                        rest = Some(s.clone());
+                        self.advance();
+                    }
+                    self.skip_braced_whitespace();
+                    if self.match_token(&TokenKind::Comma) {
+                        self.advance();
+                    }
+                    break;
+                }
+                if let TokenKind::Ident(s) = &self.peek().kind {
+                    elements.push(s.clone());
+                    self.advance();
+                } else {
+                    return Err(("Expected identifier in array destructuring".to_string(), self.current_span()));
+                }
+                self.skip_braced_whitespace();
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBracket, "Expected ']' in array destructuring")?;
+            if self.match_token(&TokenKind::Colon) {
+                self.advance();
+                let _ = self.parse_type_annotation();
+            }
+            self.consume(&TokenKind::Assign, "Expected '=' after array destructuring")?;
+            let initializer = self.parse_expression(Precedence::None)?;
+            let end_span = initializer.span();
+            self.consume_statement_terminator();
+            return Ok(Statement::LetDestructure {
+                pattern: DestructurePattern::Array { elements, rest },
+                is_mut,
+                initializer,
+                span: let_token.span.merge(end_span),
+            });
+        } else if self.match_token(&TokenKind::LBrace) {
+            self.advance();
+            self.skip_braced_whitespace();
+            let mut entries = Vec::new();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                let key = match &self.peek().kind {
+                    TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
+                    _ => return Err(("Expected field name in map destructuring".to_string(), self.current_span())),
+                };
+                self.advance();
+                let mut bind_var = key.clone();
+                if self.match_token(&TokenKind::Colon) || self.match_token(&TokenKind::As) {
+                    self.advance();
+                    if let TokenKind::Ident(b) = &self.peek().kind {
+                        bind_var = b.clone();
+                        self.advance();
+                    }
+                }
+                entries.push((key, bind_var));
+                self.skip_braced_whitespace();
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBrace, "Expected '}' in map destructuring")?;
+            if self.match_token(&TokenKind::Colon) {
+                self.advance();
+                let _ = self.parse_type_annotation();
+            }
+            self.consume(&TokenKind::Assign, "Expected '=' after map destructuring")?;
+            let initializer = self.parse_expression(Precedence::None)?;
+            let end_span = initializer.span();
+            self.consume_statement_terminator();
+            return Ok(Statement::LetDestructure {
+                pattern: DestructurePattern::Map(entries),
+                is_mut,
+                initializer,
+                span: let_token.span.merge(end_span),
+            });
+        }
+
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
             _ => return Err(("Expected variable name after 'let'".to_string(), self.current_span())),
@@ -112,10 +249,7 @@ impl Parser {
         let mut type_annotation = None;
         if self.match_token(&TokenKind::Colon) {
             self.advance();
-            if let TokenKind::Ident(t) = &self.peek().kind {
-                type_annotation = Some(t.clone());
-                self.advance();
-            }
+            type_annotation = Some(self.parse_type_annotation());
         }
 
         let mut initializer = None;
@@ -134,6 +268,126 @@ impl Parser {
             initializer,
             span: let_token.span.merge(end_span),
         })
+    }
+
+    fn parse_optional_type_params(&mut self) -> Vec<String> {
+        let mut params = Vec::new();
+        if self.match_token(&TokenKind::Less) {
+            self.advance();
+            while !self.check(&TokenKind::Greater) && !self.is_at_end() {
+                if let TokenKind::Ident(t) = &self.peek().kind {
+                    params.push(t.clone());
+                    self.advance();
+                } else {
+                    self.advance();
+                }
+                if self.match_token(&TokenKind::Colon) {
+                    self.advance();
+                    if let TokenKind::Ident(_) = &self.peek().kind {
+                        self.advance();
+                    }
+                }
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+            if self.match_token(&TokenKind::Greater) {
+                self.advance();
+            }
+        }
+        params
+    }
+
+    fn parse_type_annotation(&mut self) -> String {
+        let mut ty = String::new();
+        let mut angle_depth = 0usize;
+        let mut bracket_depth = 0usize;
+
+        while !self.is_at_end() {
+            match &self.peek().kind {
+                TokenKind::Ident(s) => {
+                    ty.push_str(s);
+                    self.advance();
+                }
+                TokenKind::Nil => {
+                    ty.push_str("Nil");
+                    self.advance();
+                }
+                TokenKind::Type => {
+                    ty.push_str("Type");
+                    self.advance();
+                }
+                TokenKind::Fn => {
+                    ty.push_str("fn");
+                    self.advance();
+                    if self.match_token(&TokenKind::LParen) {
+                        self.advance();
+                        ty.push('(');
+                        while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                            ty.push_str(&self.parse_type_annotation());
+                            if self.match_token(&TokenKind::Comma) {
+                                self.advance();
+                                ty.push_str(", ");
+                            } else {
+                                break;
+                            }
+                        }
+                        if self.match_token(&TokenKind::RParen) {
+                            self.advance();
+                            ty.push(')');
+                        }
+                    }
+                    if self.match_token(&TokenKind::Arrow) {
+                        self.advance();
+                        ty.push_str(" -> ");
+                        ty.push_str(&self.parse_type_annotation());
+                    }
+                }
+                TokenKind::Less => {
+                    angle_depth += 1;
+                    ty.push('<');
+                    self.advance();
+                }
+                TokenKind::Greater => {
+                    if angle_depth > 0 {
+                        angle_depth -= 1;
+                        ty.push('>');
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                TokenKind::LBracket => {
+                    bracket_depth += 1;
+                    ty.push('[');
+                    self.advance();
+                }
+                TokenKind::RBracket => {
+                    if bracket_depth > 0 {
+                        bracket_depth -= 1;
+                        ty.push(']');
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                TokenKind::Comma if angle_depth > 0 || bracket_depth > 0 => {
+                    ty.push_str(", ");
+                    self.advance();
+                }
+                TokenKind::Pipe => {
+                    ty.push_str(" | ");
+                    self.advance();
+                }
+                TokenKind::Question => {
+                    ty.push('?');
+                    self.advance();
+                }
+                _ => break,
+            }
+        }
+        ty
     }
 
     fn parse_global_statement(&mut self) -> Result<Statement, (String, Span)> {
@@ -170,6 +424,9 @@ impl Parser {
         };
         self.advance();
 
+        // Optional generic type parameters: fn map<T, U>(...)
+        let _type_params = self.parse_optional_type_params();
+
         self.consume(&TokenKind::LParen, "Expected '(' after function name")?;
         self.skip_braced_whitespace();
         let mut params = Vec::new();
@@ -200,10 +457,7 @@ impl Parser {
             let mut type_ann = None;
             if self.match_token(&TokenKind::Colon) {
                 self.advance();
-                if let TokenKind::Ident(t) = &self.peek().kind {
-                    type_ann = Some(t.clone());
-                    self.advance();
-                }
+                type_ann = Some(self.parse_type_annotation());
             }
 
             let mut default_val = None;
@@ -232,10 +486,7 @@ impl Parser {
         let mut return_type = None;
         if self.match_token(&TokenKind::Arrow) {
             self.advance();
-            if let TokenKind::Ident(t) = &self.peek().kind {
-                return_type = Some(t.clone());
-                self.advance();
-            }
+            return_type = Some(self.parse_type_annotation());
         }
 
         let body = self.parse_block()?;
@@ -259,20 +510,50 @@ impl Parser {
         };
         self.advance();
 
+        let _type_params = self.parse_optional_type_params();
+
         let mut params = Vec::new();
         if self.match_token(&TokenKind::LParen) {
             self.advance();
+            self.skip_braced_whitespace();
             while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                self.skip_braced_whitespace();
                 if let TokenKind::Ident(p) = &self.peek().kind {
-                    params.push(Param::new(p.clone()));
+                    let p_name = p.clone();
                     self.advance();
+                    let mut type_ann = None;
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        type_ann = Some(self.parse_type_annotation());
+                    }
+                    let mut default_val = None;
+                    if self.match_token(&TokenKind::Assign) {
+                        self.advance();
+                        default_val = Some(self.parse_expression(Precedence::None)?);
+                    }
+                    params.push(Param {
+                        name: p_name,
+                        type_ann,
+                        default_val,
+                        is_vararg: false,
+                        is_kwarg: false,
+                    });
+                } else {
+                    break;
                 }
+                self.skip_braced_whitespace();
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
                 self.advance();
+                self.skip_braced_whitespace();
             }
             self.consume(&TokenKind::RParen, "Expected ')'")?;
+        }
+
+        if self.match_token(&TokenKind::Arrow) {
+            self.advance();
+            let _ = self.parse_type_annotation();
         }
 
         if self.match_token(&TokenKind::Colon) {
@@ -284,11 +565,17 @@ impl Parser {
         let mut ensure = Vec::new();
         let mut statements = Vec::new();
 
-        if self.match_token(&TokenKind::Indent) {
+        let is_braced = self.match_token(&TokenKind::LBrace);
+        if is_braced || self.match_token(&TokenKind::Indent) {
             self.advance();
-            while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
-                self.skip_newlines();
-                if self.check(&TokenKind::Dedent) {
+            let close_tok = if is_braced { TokenKind::RBrace } else { TokenKind::Dedent };
+            while !self.check(&close_tok) && !self.is_at_end() {
+                if is_braced {
+                    self.skip_braced_whitespace();
+                } else {
+                    self.skip_newlines();
+                }
+                if self.check(&close_tok) {
                     break;
                 }
 
@@ -302,26 +589,24 @@ impl Parser {
                     if self.match_token(&TokenKind::Colon) { self.advance(); }
                     ensure.push(self.parse_expression(Precedence::None)?);
                     self.consume_statement_terminator();
-                } else if matches!(&self.peek().kind, TokenKind::Ident(s) if s == "body") {
+                } else if matches!(&self.peek().kind, TokenKind::Ident(s) if s == "body" || s == "do") {
                     self.advance();
-                    if self.match_token(&TokenKind::Colon) { self.advance(); }
-                    self.skip_newlines();
-                    if self.match_token(&TokenKind::Indent) {
-                        self.advance();
-                        while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
-                            self.skip_newlines();
-                            if self.check(&TokenKind::Dedent) { break; }
-                            statements.push(self.parse_statement()?);
-                            self.skip_newlines();
-                        }
-                        self.consume(&TokenKind::Dedent, "Expected dedent after body block")?;
-                    }
+                    let sub_block = self.parse_block()?;
+                    statements.extend(sub_block.statements);
                 } else {
                     statements.push(self.parse_statement()?);
                 }
-                self.skip_newlines();
+                if is_braced {
+                    self.skip_braced_whitespace();
+                } else {
+                    self.skip_newlines();
+                }
             }
-            self.consume(&TokenKind::Dedent, "Expected dedent after intent body")?;
+            if is_braced {
+                self.consume(&TokenKind::RBrace, "Expected '}' after intent body")?;
+            } else {
+                self.consume(&TokenKind::Dedent, "Expected dedent after intent body")?;
+            }
         }
 
         let span = intent_token.span;
@@ -444,6 +729,8 @@ impl Parser {
         };
         self.advance();
 
+        let _type_params = self.parse_optional_type_params();
+
         let mut fields = Vec::new();
 
         if self.match_token(&TokenKind::LParen) {
@@ -452,11 +739,35 @@ impl Parser {
                 if let TokenKind::Ident(f) = &self.peek().kind {
                     fields.push(f.clone());
                     self.advance();
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        let _ = self.parse_type_annotation();
+                    }
                 }
                 if !self.match_token(&TokenKind::Comma) { break; }
                 self.advance();
             }
             self.consume(&TokenKind::RParen, "Expected ')' after struct fields")?;
+        } else if self.match_token(&TokenKind::LBrace) {
+            self.advance();
+            self.skip_braced_whitespace();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if self.check(&TokenKind::RBrace) { break; }
+                if let TokenKind::Ident(f) = &self.peek().kind {
+                    fields.push(f.clone());
+                    self.advance();
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        let _ = self.parse_type_annotation();
+                    }
+                }
+                if self.match_token(&TokenKind::Comma) {
+                    self.advance();
+                }
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBrace, "Expected '}' after struct fields")?;
         } else if self.match_token(&TokenKind::Colon) {
             self.advance();
             self.skip_newlines();
@@ -470,9 +781,7 @@ impl Parser {
                         self.advance();
                         if self.match_token(&TokenKind::Colon) {
                             self.advance();
-                            if let TokenKind::Ident(_) = &self.peek().kind {
-                                self.advance();
-                            }
+                            let _ = self.parse_type_annotation();
                         }
                     }
                     self.consume_statement_terminator();
@@ -483,6 +792,10 @@ impl Parser {
                     if let TokenKind::Ident(f) = &self.peek().kind {
                         fields.push(f.clone());
                         self.advance();
+                        if self.match_token(&TokenKind::Colon) {
+                            self.advance();
+                            let _ = self.parse_type_annotation();
+                        }
                     }
                     if !self.match_token(&TokenKind::Comma) { break; }
                     self.advance();
@@ -495,6 +808,283 @@ impl Parser {
         Ok(Statement::StructDef { name, fields, span })
     }
 
+    fn parse_enum_definition(&mut self) -> Result<Statement, (String, Span)> {
+        let enum_tok = self.advance(); // consume 'enum'
+        let name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => return Err(("Expected enum name after 'enum'".to_string(), self.current_span())),
+        };
+        self.advance();
+
+        let _type_params = self.parse_optional_type_params();
+
+        let mut variants = Vec::new();
+        if self.match_token(&TokenKind::LBrace) {
+            self.advance();
+            self.skip_braced_whitespace();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if self.check(&TokenKind::RBrace) { break; }
+                variants.push(self.parse_enum_variant()?);
+                self.skip_braced_whitespace();
+                if self.match_token(&TokenKind::Comma) {
+                    self.advance();
+                }
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBrace, "Expected '}' after enum body")?;
+        } else if self.match_token(&TokenKind::Colon) {
+            self.advance();
+            self.skip_newlines();
+            if self.match_token(&TokenKind::Indent) {
+                self.advance();
+                while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+                    self.skip_newlines();
+                    if self.check(&TokenKind::Dedent) { break; }
+                    variants.push(self.parse_enum_variant()?);
+                    if self.match_token(&TokenKind::Comma) {
+                        self.advance();
+                    }
+                    self.consume_statement_terminator();
+                }
+                self.consume(&TokenKind::Dedent, "Expected dedent after enum body")?;
+            } else {
+                while !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.is_at_end() {
+                    variants.push(self.parse_enum_variant()?);
+                    if !self.match_token(&TokenKind::Comma) { break; }
+                    self.advance();
+                }
+            }
+        }
+
+        self.consume_statement_terminator();
+        Ok(Statement::EnumDef {
+            name,
+            variants,
+            span: enum_tok.span,
+        })
+    }
+
+    fn parse_enum_variant(&mut self) -> Result<EnumVariantDef, (String, Span)> {
+        let v_name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            other => {
+                if let Some(s) = other.as_ident_str() {
+                    s.to_string()
+                } else {
+                    return Err(("Expected enum variant name".to_string(), self.current_span()));
+                }
+            }
+        };
+        self.advance();
+
+        let mut fields = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            self.advance();
+            self.skip_braced_whitespace();
+            while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if let TokenKind::Ident(f) = &self.peek().kind {
+                    fields.push(f.clone());
+                    self.advance();
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        let _ = self.parse_type_annotation();
+                    }
+                } else {
+                    break;
+                }
+                self.skip_braced_whitespace();
+                if !self.match_token(&TokenKind::Comma) { break; }
+                self.advance();
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RParen, "Expected ')' after enum variant fields")?;
+        }
+
+        Ok(EnumVariantDef {
+            name: v_name,
+            fields,
+        })
+    }
+
+    fn parse_trait_definition(&mut self) -> Result<Statement, (String, Span)> {
+        let trait_tok = self.advance(); // consume 'trait'
+        let name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => return Err(("Expected trait name after 'trait'".to_string(), self.current_span())),
+        };
+        self.advance();
+        let _type_params = self.parse_optional_type_params();
+
+        let mut methods = Vec::new();
+        if self.match_token(&TokenKind::LBrace) {
+            self.advance();
+            self.skip_braced_whitespace();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if self.check(&TokenKind::RBrace) { break; }
+                if self.match_token(&TokenKind::Fn) || self.match_token(&TokenKind::Def) {
+                    self.advance();
+                    if let TokenKind::Ident(m_name) = &self.peek().kind {
+                        methods.push(m_name.clone());
+                        self.advance();
+                    }
+                    // Skip parameter list and optional return type
+                    if self.match_token(&TokenKind::LParen) {
+                        let mut depth = 0;
+                        while !self.is_at_end() {
+                            if self.check(&TokenKind::LParen) { depth += 1; }
+                            else if self.check(&TokenKind::RParen) {
+                                depth -= 1;
+                                self.advance();
+                                if depth == 0 { break; }
+                                continue;
+                            }
+                            self.advance();
+                        }
+                    }
+                    if self.match_token(&TokenKind::Arrow) {
+                        self.advance();
+                        let _ = self.parse_type_annotation();
+                    }
+                } else if self.match_token(&TokenKind::Pass) {
+                    self.advance();
+                } else {
+                    self.advance();
+                }
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBrace, "Expected '}' after trait body")?;
+        } else if self.match_token(&TokenKind::Colon) {
+            self.advance();
+            self.skip_newlines();
+            if self.match_token(&TokenKind::Indent) {
+                self.advance();
+                while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+                    self.skip_newlines();
+                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.match_token(&TokenKind::Fn) || self.match_token(&TokenKind::Def) {
+                        self.advance();
+                        if let TokenKind::Ident(m_name) = &self.peek().kind {
+                            methods.push(m_name.clone());
+                            self.advance();
+                        }
+                        while !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+                            self.advance();
+                        }
+                    } else {
+                        self.advance();
+                    }
+                    self.consume_statement_terminator();
+                }
+                self.consume(&TokenKind::Dedent, "Expected dedent after trait body")?;
+            }
+        }
+
+        self.consume_statement_terminator();
+        Ok(Statement::TraitDef {
+            name,
+            methods,
+            span: trait_tok.span,
+        })
+    }
+
+    fn parse_impl_definition(&mut self) -> Result<Statement, (String, Span)> {
+        let impl_tok = self.advance(); // consume 'impl'
+        let _type_params = self.parse_optional_type_params();
+
+        let first_name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => return Err(("Expected type or trait name after 'impl'".to_string(), self.current_span())),
+        };
+        self.advance();
+        let _ = self.parse_optional_type_params();
+
+        let (trait_name, target_type) = if self.match_token(&TokenKind::For) {
+            self.advance(); // consume 'for'
+            let target = match &self.peek().kind {
+                TokenKind::Ident(s) => s.clone(),
+                _ => return Err(("Expected target type name after 'for' in impl".to_string(), self.current_span())),
+            };
+            self.advance();
+            let _ = self.parse_optional_type_params();
+            (Some(first_name), target)
+        } else {
+            (None, first_name)
+        };
+
+        let mut methods = Vec::new();
+        if self.match_token(&TokenKind::Colon) {
+            self.advance();
+            self.skip_newlines();
+            if self.match_token(&TokenKind::Indent) {
+                self.advance();
+                while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+                    self.skip_newlines();
+                    if self.check(&TokenKind::Dedent) { break; }
+                    methods.push(self.parse_statement()?);
+                    self.skip_newlines();
+                }
+                self.consume(&TokenKind::Dedent, "Expected dedent after impl body")?;
+            }
+        } else if self.match_token(&TokenKind::LBrace) {
+            self.advance();
+            self.skip_braced_whitespace();
+            while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                self.skip_braced_whitespace();
+                if self.check(&TokenKind::RBrace) { break; }
+                methods.push(self.parse_statement()?);
+                self.skip_braced_whitespace();
+            }
+            self.consume(&TokenKind::RBrace, "Expected '}' after impl body")?;
+        }
+
+        self.consume_statement_terminator();
+        Ok(Statement::ImplDef {
+            trait_name,
+            target_type,
+            methods,
+            span: impl_tok.span,
+        })
+    }
+
+    fn parse_type_alias(&mut self) -> Result<Statement, (String, Span)> {
+        let type_tok = self.advance(); // consume 'type'
+        let name = match &self.peek().kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => return Err(("Expected type alias name after 'type'".to_string(), self.current_span())),
+        };
+        self.advance();
+        let _ = self.parse_optional_type_params();
+        self.consume(&TokenKind::Assign, "Expected '=' in type alias declaration")?;
+        let target = self.parse_type_annotation();
+        self.consume_statement_terminator();
+        Ok(Statement::TypeAlias {
+            name,
+            target,
+            span: type_tok.span,
+        })
+    }
+
+    fn parse_decorated_statement(&mut self) -> Result<Statement, (String, Span)> {
+        let start_span = self.current_span();
+        let mut decorators = Vec::new();
+        while self.match_token(&TokenKind::At) {
+            self.advance(); // consume '@'
+            let dec_expr = self.parse_expression(Precedence::None)?;
+            decorators.push(dec_expr);
+            self.skip_newlines();
+        }
+        let stmt = self.parse_statement()?;
+        let end_span = stmt.span();
+        Ok(Statement::Decorated {
+            decorators,
+            stmt: Box::new(stmt),
+            span: start_span.merge(end_span),
+        })
+    }
+
     fn parse_class_statement(&mut self) -> Result<Statement, (String, Span)> {
         let class_tok = self.advance(); // consume 'class'
         let name = match &self.peek().kind {
@@ -502,6 +1092,7 @@ impl Parser {
             _ => return Err(("Expected class name after 'class'".to_string(), self.current_span())),
         };
         self.advance();
+        let _type_params = self.parse_optional_type_params();
 
         let mut bases = Vec::new();
         if self.match_token(&TokenKind::LParen) {
@@ -548,13 +1139,13 @@ impl Parser {
             }
         } else if self.match_token(&TokenKind::LBrace) {
             self.advance(); // consume '{'
-            self.skip_newlines();
+            self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-                self.skip_newlines();
+                self.skip_braced_whitespace();
                 if self.check(&TokenKind::RBrace) { break; }
                 let stmt = self.parse_statement()?;
                 body.push(stmt);
-                self.skip_newlines();
+                self.skip_braced_whitespace();
             }
             let rbrace = self.consume(&TokenKind::RBrace, "Expected '}' after class body")?;
             end_span = rbrace.span;
@@ -659,8 +1250,8 @@ impl Parser {
     fn parse_import_statement(&mut self) -> Result<Statement, (String, Span)> {
         let import_tok = self.advance(); // consume 'import'
         let mut module = match &self.peek().kind {
-            TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected module name after 'import'".to_string(), self.current_span())),
+            TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
+            _ => return Err(("Expected module name or path after 'import'".to_string(), self.current_span())),
         };
         self.advance();
 
@@ -698,8 +1289,8 @@ impl Parser {
     fn parse_from_import_statement(&mut self) -> Result<Statement, (String, Span)> {
         let from_tok = self.advance(); // consume 'from'
         let mut module = match &self.peek().kind {
-            TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected module name after 'from'".to_string(), self.current_span())),
+            TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
+            _ => return Err(("Expected module name or path after 'from'".to_string(), self.current_span())),
         };
         self.advance();
 
@@ -1134,6 +1725,75 @@ impl Parser {
             }
 
             TokenKind::Lambda => self.parse_lambda_expression(token),
+            TokenKind::Or => {
+                // Zero-arg pipe closure: || expr or || { ... }
+                let body = if self.check(&TokenKind::LBrace)
+                    || self.check(&TokenKind::Colon)
+                    || self.check(&TokenKind::Indent)
+                {
+                    self.parse_block()?
+                } else {
+                    let expr = self.parse_expression(Precedence::None)?;
+                    let expr_span = expr.span();
+                    Block {
+                        statements: Vec::new(),
+                        result: Some(Box::new(expr)),
+                        span: expr_span,
+                    }
+                };
+                let span = token.span.merge(body.span);
+                Ok(Expr::Lambda(Vec::new(), Box::new(body), span))
+            }
+            TokenKind::Pipe => {
+                // Rust-style closure: |x, y| expr or |x, y| { ... }
+                let mut params = Vec::new();
+                while !self.check(&TokenKind::Pipe) && !self.is_at_end() {
+                    if let TokenKind::Ident(p) = &self.peek().kind {
+                        let p_name = p.clone();
+                        self.advance();
+                        let mut type_ann = None;
+                        if self.match_token(&TokenKind::Colon) {
+                            self.advance();
+                            type_ann = Some(self.parse_type_annotation());
+                        }
+                        let mut default_val = None;
+                        if self.match_token(&TokenKind::Assign) {
+                            self.advance();
+                            default_val = Some(self.parse_expression(Precedence::None)?);
+                        }
+                        params.push(Param {
+                            name: p_name,
+                            type_ann,
+                            default_val,
+                            is_vararg: false,
+                            is_kwarg: false,
+                        });
+                    } else {
+                        break;
+                    }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                    self.advance();
+                }
+                self.consume(&TokenKind::Pipe, "Expected '|' after closure parameters")?;
+                let body = if self.check(&TokenKind::LBrace)
+                    || self.check(&TokenKind::Colon)
+                    || self.check(&TokenKind::Indent)
+                {
+                    self.parse_block()?
+                } else {
+                    let expr = self.parse_expression(Precedence::None)?;
+                    let expr_span = expr.span();
+                    Block {
+                        statements: Vec::new(),
+                        result: Some(Box::new(expr)),
+                        span: expr_span,
+                    }
+                };
+                let span = token.span.merge(body.span);
+                Ok(Expr::Lambda(params, Box::new(body), span))
+            }
             TokenKind::Super => {
                 let mut span = token.span;
                 if self.match_token(&TokenKind::LParen) {
@@ -1240,11 +1900,17 @@ impl Parser {
         self.skip_newlines();
 
         let mut arms = Vec::new();
-        if self.match_token(&TokenKind::Indent) {
+        let is_braced = self.match_token(&TokenKind::LBrace);
+        if is_braced || self.match_token(&TokenKind::Indent) {
             self.advance();
-            while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
-                self.skip_newlines();
-                if self.check(&TokenKind::Dedent) { break; }
+            let close_tok = if is_braced { TokenKind::RBrace } else { TokenKind::Dedent };
+            while !self.check(&close_tok) && !self.is_at_end() {
+                if is_braced {
+                    self.skip_braced_whitespace();
+                } else {
+                    self.skip_newlines();
+                }
+                if self.check(&close_tok) { break; }
 
                 let arm_start = self.current_span();
                 // Optional Pythonic 'case' keyword:
@@ -1253,7 +1919,15 @@ impl Parser {
                 }
 
                 let pattern = self.parse_match_pattern()?;
-                
+
+                // Optional match guard: `if cond`
+                let guard = if self.match_token(&TokenKind::If) {
+                    self.advance();
+                    Some(self.parse_expression(Precedence::None)?)
+                } else {
+                    None
+                };
+
                 // Separator: '=>' (Rust/Aether) or ':' (Python case 1:)
                 if self.match_token(&TokenKind::FatArrow) {
                     self.advance();
@@ -1265,7 +1939,7 @@ impl Parser {
 
                 self.skip_newlines();
                 // Support both indented block body or single expression:
-                let body = if self.match_token(&TokenKind::Indent) {
+                let body = if self.match_token(&TokenKind::Indent) || self.match_token(&TokenKind::LBrace) {
                     let block = self.parse_block()?;
                     let span = block.span;
                     Expr::Block(block, span)
@@ -1276,12 +1950,20 @@ impl Parser {
                 let arm_span = arm_start.merge(body.span());
                 arms.push(MatchArm {
                     pattern,
+                    guard,
                     body,
                     span: arm_span,
                 });
+                if self.match_token(&TokenKind::Comma) {
+                    self.advance();
+                }
                 self.consume_statement_terminator();
             }
-            self.consume(&TokenKind::Dedent, "Expected dedent after match arms")?;
+            if is_braced {
+                self.consume(&TokenKind::RBrace, "Expected '}' after match arms")?;
+            } else {
+                self.consume(&TokenKind::Dedent, "Expected dedent after match arms")?;
+            }
         }
 
         let span = match_token.span;
@@ -1293,13 +1975,28 @@ impl Parser {
     }
 
     fn parse_match_pattern(&mut self) -> Result<MatchPattern, (String, Span)> {
+        let first = self.parse_single_match_pattern()?;
+        if self.match_token(&TokenKind::Pipe) {
+            let mut patterns = vec![first];
+            while self.match_token(&TokenKind::Pipe) {
+                self.advance();
+                patterns.push(self.parse_single_match_pattern()?);
+            }
+            Ok(MatchPattern::Or(patterns))
+        } else {
+            Ok(first)
+        }
+    }
+
+    fn parse_single_match_pattern(&mut self) -> Result<MatchPattern, (String, Span)> {
         let tok = self.advance();
         match &tok.kind {
             TokenKind::Int(i) => {
-                if self.match_token(&TokenKind::DotDot) {
+                if self.match_token(&TokenKind::DotDot) || self.match_token(&TokenKind::DotDotEqual) {
+                    let inclusive = self.match_token(&TokenKind::DotDotEqual);
                     self.advance();
                     if let TokenKind::Int(end_i) = &self.peek().kind {
-                        let end_val = *end_i;
+                        let end_val = if inclusive { *end_i } else { *end_i };
                         self.advance();
                         Ok(MatchPattern::Range(Literal::Int(*i), Literal::Int(end_val)))
                     } else {
@@ -1315,9 +2012,110 @@ impl Parser {
             TokenKind::True => Ok(MatchPattern::Literal(Literal::Bool(true))),
             TokenKind::False => Ok(MatchPattern::Literal(Literal::Bool(false))),
             TokenKind::Nil => Ok(MatchPattern::Literal(Literal::Nil)),
+            TokenKind::LParen => {
+                let mut pats = Vec::new();
+                while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                    pats.push(self.parse_match_pattern()?);
+                    if !self.match_token(&TokenKind::Comma) { break; }
+                    self.advance();
+                }
+                self.consume(&TokenKind::RParen, "Expected ')' in tuple match pattern")?;
+                Ok(MatchPattern::Tuple(pats))
+            }
+            TokenKind::LBracket => {
+                let mut elements = Vec::new();
+                let mut rest = None;
+                while !self.check(&TokenKind::RBracket) && !self.is_at_end() {
+                    if self.match_token(&TokenKind::DotDot) || self.match_token(&TokenKind::Star) {
+                        self.advance();
+                        if let TokenKind::Ident(r) = &self.peek().kind {
+                            rest = Some(r.clone());
+                            self.advance();
+                        } else {
+                            rest = Some("_".to_string());
+                        }
+                        if self.match_token(&TokenKind::Comma) { self.advance(); }
+                        break;
+                    }
+                    elements.push(self.parse_match_pattern()?);
+                    if !self.match_token(&TokenKind::Comma) { break; }
+                    self.advance();
+                }
+                self.consume(&TokenKind::RBracket, "Expected ']' in array match pattern")?;
+                Ok(MatchPattern::Array { elements, rest })
+            }
+            TokenKind::LBrace => {
+                let mut entries = Vec::new();
+                while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+                    let key = match &self.peek().kind {
+                        TokenKind::String(s) | TokenKind::Ident(s) => s.clone(),
+                        _ => return Err(("Expected key in map match pattern".to_string(), self.current_span())),
+                    };
+                    self.advance();
+                    let pat = if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        self.parse_match_pattern()?
+                    } else {
+                        MatchPattern::Ident(key.clone())
+                    };
+                    entries.push((key, pat));
+                    if !self.match_token(&TokenKind::Comma) { break; }
+                    self.advance();
+                }
+                self.consume(&TokenKind::RBrace, "Expected '}' in map match pattern")?;
+                Ok(MatchPattern::Map(entries))
+            }
             TokenKind::Ident(name) => {
                 if name == "_" {
                     Ok(MatchPattern::Wildcard)
+                } else if self.match_token(&TokenKind::DoubleColon) || self.match_token(&TokenKind::Dot) {
+                    self.advance(); // consume '::' or '.'
+                    let variant = match &self.peek().kind {
+                        TokenKind::Ident(v) => v.clone(),
+                        _ => return Err(("Expected variant name after '::'".to_string(), self.current_span())),
+                    };
+                    self.advance();
+                    let mut bindings = Vec::new();
+                    if self.match_token(&TokenKind::LParen) {
+                        self.advance();
+                        while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                            if let TokenKind::Ident(b) = &self.peek().kind {
+                                bindings.push(b.clone());
+                                self.advance();
+                            } else {
+                                bindings.push("_".to_string());
+                                self.advance();
+                            }
+                            if !self.match_token(&TokenKind::Comma) { break; }
+                            self.advance();
+                        }
+                        self.consume(&TokenKind::RParen, "Expected ')' after variant bindings")?;
+                    }
+                    Ok(MatchPattern::EnumVariant {
+                        enum_name: Some(name.clone()),
+                        variant,
+                        bindings,
+                    })
+                } else if self.match_token(&TokenKind::LParen) {
+                    self.advance();
+                    let mut bindings = Vec::new();
+                    while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                        if let TokenKind::Ident(b) = &self.peek().kind {
+                            bindings.push(b.clone());
+                            self.advance();
+                        } else {
+                            bindings.push("_".to_string());
+                            self.advance();
+                        }
+                        if !self.match_token(&TokenKind::Comma) { break; }
+                        self.advance();
+                    }
+                    self.consume(&TokenKind::RParen, "Expected ')' after variant pattern")?;
+                    Ok(MatchPattern::EnumVariant {
+                        enum_name: None,
+                        variant: name.clone(),
+                        bindings,
+                    })
                 } else {
                     Ok(MatchPattern::Ident(name.clone()))
                 }
@@ -1433,6 +2231,9 @@ impl Parser {
             }
 
             // Binary Operators
+            TokenKind::QuestionQuestion => self.parse_binary(left, BinaryOp::NullCoalesce, Precedence::NullCoalesce),
+            TokenKind::DotDot => self.parse_binary(left, BinaryOp::Range, Precedence::Range),
+            TokenKind::DotDotEqual => self.parse_binary(left, BinaryOp::RangeInclusive, Precedence::Range),
             TokenKind::Plus => self.parse_binary(left, BinaryOp::Add, Precedence::Term),
             TokenKind::Minus => self.parse_binary(left, BinaryOp::Sub, Precedence::Term),
             TokenKind::Star => self.parse_binary(left, BinaryOp::Mul, Precedence::Factor),
@@ -1487,29 +2288,159 @@ impl Parser {
                 Ok(Expr::Call(Box::new(left), args, span))
             }
 
-            // Index Access: arr[i]
+            // Index Access or Slice: arr[i] or arr[start:end:step]
             TokenKind::LBracket => {
-                let index = self.parse_expression(Precedence::None)?;
-                let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after index")?;
-                let span = left.span().merge(end_tok.span);
-                Ok(Expr::Index(Box::new(left), Box::new(index), span))
+                if self.match_token(&TokenKind::DoubleColon) {
+                    // Slice starting with '::': arr[::step] or arr[::]
+                    self.advance(); // consume '::'
+                    let step = if !self.check(&TokenKind::RBracket) {
+                        Some(Box::new(self.parse_expression(Precedence::None)?))
+                    } else {
+                        None
+                    };
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after slice")?;
+                    let span = left.span().merge(end_tok.span);
+                    return Ok(Expr::Slice {
+                        obj: Box::new(left),
+                        start: None,
+                        end: None,
+                        step,
+                        span,
+                    });
+                }
+                if self.match_token(&TokenKind::Colon) {
+                    // Slice starting with ':': arr[:end] or arr[:end:step]
+                    self.advance(); // consume ':'
+                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket) {
+                        Some(Box::new(self.parse_expression(Precedence::None)?))
+                    } else {
+                        None
+                    };
+                    let step = if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        if !self.check(&TokenKind::RBracket) {
+                            Some(Box::new(self.parse_expression(Precedence::None)?))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after slice")?;
+                    let span = left.span().merge(end_tok.span);
+                    return Ok(Expr::Slice {
+                        obj: Box::new(left),
+                        start: None,
+                        end,
+                        step,
+                        span,
+                    });
+                }
+
+                let first = self.parse_expression(Precedence::None)?;
+                if self.match_token(&TokenKind::DoubleColon) {
+                    // Slice with start and '::': arr[start::step] or arr[start::]
+                    self.advance(); // consume '::'
+                    let step = if !self.check(&TokenKind::RBracket) {
+                        Some(Box::new(self.parse_expression(Precedence::None)?))
+                    } else {
+                        None
+                    };
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after slice")?;
+                    let span = left.span().merge(end_tok.span);
+                    Ok(Expr::Slice {
+                        obj: Box::new(left),
+                        start: Some(Box::new(first)),
+                        end: None,
+                        step,
+                        span,
+                    })
+                } else if self.match_token(&TokenKind::Colon) {
+                    self.advance(); // consume ':'
+                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket) {
+                        Some(Box::new(self.parse_expression(Precedence::None)?))
+                    } else {
+                        None
+                    };
+                    let step = if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                        if !self.check(&TokenKind::RBracket) {
+                            Some(Box::new(self.parse_expression(Precedence::None)?))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after slice")?;
+                    let span = left.span().merge(end_tok.span);
+                    Ok(Expr::Slice {
+                        obj: Box::new(left),
+                        start: Some(Box::new(first)),
+                        end,
+                        step,
+                        span,
+                    })
+                } else {
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after index")?;
+                    let span = left.span().merge(end_tok.span);
+                    Ok(Expr::Index(Box::new(left), Box::new(first), span))
+                }
             }
 
-            // Member Access: obj.field
-            TokenKind::Dot => {
+            // Member Access: obj.field or Namespace Access: Enum::Variant
+            TokenKind::Dot | TokenKind::DoubleColon => {
                 let member_name = match &self.peek().kind {
                     TokenKind::Ident(s) => s.clone(),
                     other => {
                         if let Some(s) = other.as_ident_str() {
                             s.to_string()
                         } else {
-                            return Err(("Expected identifier after '.'".to_string(), self.current_span()));
+                            return Err(("Expected identifier after '.' or '::'".to_string(), self.current_span()));
                         }
                     }
                 };
                 let member_tok = self.advance();
                 let span = left.span().merge(member_tok.span);
                 Ok(Expr::Member(Box::new(left), member_name, span))
+            }
+
+            // Optional Chaining: obj?.field or obj?.[idx]
+            TokenKind::QuestionDot => {
+                if self.match_token(&TokenKind::LBracket) {
+                    self.advance(); // consume '['
+                    let idx = self.parse_expression(Precedence::None)?;
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after optional index")?;
+                    let span = left.span().merge(end_tok.span);
+                    return Ok(Expr::OptionalIndex(Box::new(left), Box::new(idx), span));
+                }
+                let member_name = match &self.peek().kind {
+                    TokenKind::Ident(s) => s.clone(),
+                    other => {
+                        if let Some(s) = other.as_ident_str() {
+                            s.to_string()
+                        } else {
+                            return Err(("Expected identifier after '?.'".to_string(), self.current_span()));
+                        }
+                    }
+                };
+                let member_tok = self.advance();
+                let span = left.span().merge(member_tok.span);
+                Ok(Expr::OptionalMember(Box::new(left), member_name, span))
+            }
+
+            // Try Operator: expr? or Optional Index: obj?[idx]
+            TokenKind::Question => {
+                if self.match_token(&TokenKind::LBracket) {
+                    self.advance(); // consume '['
+                    let idx = self.parse_expression(Precedence::None)?;
+                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after '?['")?;
+                    let span = left.span().merge(end_tok.span);
+                    Ok(Expr::OptionalIndex(Box::new(left), Box::new(idx), span))
+                } else {
+                    let span = left.span().merge(op_tok.span);
+                    Ok(Expr::Try(Box::new(left), span))
+                }
             }
 
             _ => Err((format!("Unexpected infix operator '{:?}'", op_tok.kind), op_tok.span)),
@@ -1529,14 +2460,21 @@ impl Parser {
 
         match &self.peek().kind {
             TokenKind::PipeRight => Precedence::Pipe,
+            TokenKind::QuestionQuestion => Precedence::NullCoalesce,
             TokenKind::Or => Precedence::Or,
             TokenKind::And => Precedence::And,
             TokenKind::EqualEqual | TokenKind::NotEqual => Precedence::Equality,
             TokenKind::Less | TokenKind::LessEqual | TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::In => Precedence::Comparison,
+            TokenKind::DotDot | TokenKind::DotDotEqual => Precedence::Range,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
             TokenKind::Power => Precedence::Power,
-            TokenKind::LParen | TokenKind::LBracket | TokenKind::Dot => Precedence::Call,
+            TokenKind::LParen
+            | TokenKind::LBracket
+            | TokenKind::Dot
+            | TokenKind::DoubleColon
+            | TokenKind::QuestionDot
+            | TokenKind::Question => Precedence::Call,
             _ => Precedence::None,
         }
     }

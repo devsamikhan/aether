@@ -1,0 +1,119 @@
+# ==============================================================================
+# AETHER v3.0 — Next-Generation Programming Language Showcase
+# Demonstrates:
+# 1. Algebraic Data Types (enum), Traits/Protocols (trait/impl), & Pattern Guards
+# 2. Structural Destructuring (Tuple, Array ..rest, Map) & Or-Patterns
+# 3. Ergonomic Operators: ??, ?., ?[...], ?, .., ..=, and [start:end:step]
+# 4. Mutable Lexical Closures (|| { ... }) & First-Class Generators (yield/next)
+# 5. First-Class Decorators (@memoize, @timeit, custom @decorator chains)
+# 6. Generics (<T>), Union Types (Int | String), Type Aliases, & Intent Contracts
+# ==============================================================================
+
+println("================================================================")
+println("   AETHER v3.0 — Language Evolution & Type System Showcase")
+println("================================================================")
+
+# 1. Algebraic Data Types (enum) & Pattern Matching with Guards
+enum Response<T> {
+    Success(code, payload),
+    Redirect(url),
+    Offline
+}
+
+fn handle_response(r) {
+    return match r {
+        Response::Success(code, data) if code == 200 => f"OK (200): {data}",
+        Response::Success(code, data) => f"Status {code}: {data}",
+        Response::Redirect(url) => f"Redirecting -> {url}",
+        Response::Offline => "Network Offline",
+        _ => "Unknown"
+    }
+}
+
+println("[1] ADT & Pattern Guards: " + handle_response(Response::Success(200, "Aether v3 Ready")))
+
+# 2. Traits & Impl Protocols on Structs
+trait Renderable {
+    fn render(self) -> String
+}
+
+struct Widget {
+    title: String,
+    width: Int
+}
+
+impl Renderable for Widget {
+    fn render(self) -> String {
+        return f"<Widget title='{self.title}' width={self.width} />"
+    }
+}
+
+let w = Widget("HeaderBar", 1280)
+println("[2] Trait & Impl Protocol: " + w.render())
+
+# 3. Structural Destructuring & Ergonomic Operators
+let (host, port) = ("127.0.0.1", 8080)
+let [first_item, second_item, ..remaining_items] = [10, 20, 30, 40, 50]
+let { env, debug: is_debug } = {"env": "production", "debug": false}
+
+let config = {"server": {"region": "pk-south-1"}, "ports": [80, 443]}
+let empty_cfg = nil
+let region = config?.server?.region ?? "default-region"
+let fallback = empty_cfg?.server?.region ?? "fallback-region"
+let https_port = config.ports?[1] ?? 8443
+let reversed_lang = "AETHER_V3"[::-1]
+
+println(f"[3] Destructuring & Operators: {host}:{port} | rem={len(remaining_items)} | {region} | {fallback} | port={https_port} | rev={reversed_lang}")
+
+# 4. Mutable Lexical Closures & First-Class Generators
+fn create_accumulator(initial) {
+    let total = initial
+    return |delta| {
+        total += delta
+        return total
+    }
+}
+
+let acc = create_accumulator(100)
+let a1 = acc(25)
+let a2 = acc(75)
+
+fn squares_up_to(n) {
+    for x in 1..=n {
+        yield x * x
+    }
+}
+
+let gen_items = []
+for sq in squares_up_to(5) {
+    push(gen_items, sq)
+}
+println(f"[4] Mutable Closure & Generator: acc={a1}->{a2} | squares={gen_items}")
+
+# 5. First-Class Decorators (@memoize & Custom Decorator)
+@memoize
+fn fast_fib(n) {
+    if n <= 1 {
+        return n
+    }
+    return fast_fib(n - 1) + fast_fib(n - 2)
+}
+
+println(f"[5] @memoize Decorator: fast_fib(25) = {fast_fib(25)}")
+
+# 6. Generics, Type Aliases, Union Types & Intent Contracts
+type Balance = Int
+type AccountId = Int | String
+
+intent Withdraw(amount: Balance, current: Balance) {
+    require: amount > 0
+    require: current >= amount
+    ensure: result >= 0
+    do: {
+        return current - amount
+    }
+}
+
+let new_bal = Withdraw(350, 1000)
+println(f"[6] Intent Contract Verified: Remaining Balance = {new_bal}")
+println("================================================================")

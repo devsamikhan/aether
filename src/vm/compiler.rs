@@ -29,6 +29,7 @@ pub struct BytecodeCompiler {
     loop_stack: Vec<LoopContext>,
     global_vars: std::collections::HashSet<String>,
     current_class_name: Option<String>,
+    is_generator: bool,
 }
 
 impl BytecodeCompiler {
@@ -46,6 +47,7 @@ impl BytecodeCompiler {
             loop_stack: Vec::new(),
             global_vars: std::collections::HashSet::new(),
             current_class_name: None,
+            is_generator: false,
         }
     }
 
@@ -95,6 +97,15 @@ impl BytecodeCompiler {
                     self.emit_op(OpCode::DefineGlobal, *span);
                     self.emit_u16(const_idx as u16, *span);
                 }
+            }
+            Statement::LetDestructure {
+                pattern,
+                initializer,
+                span,
+                ..
+            } => {
+                self.compile_expression(initializer)?;
+                self.compile_destructure_pattern(pattern, *span)?;
             }
             Statement::Assign {
                 target,
@@ -314,6 +325,17 @@ impl BytecodeCompiler {
                     sub_compiler.add_local(k_name.clone(), *span)?;
                 }
 
+                // Pre-scan body for parent local captures so upvalue slots come immediately after params
+                sub_compiler.prescan_captures_in_block(body);
+
+                let is_gen = Self::block_has_yield(body);
+                sub_compiler.is_generator = is_gen;
+                if is_gen {
+                    sub_compiler.emit_op(OpCode::BuildArray, *span);
+                    sub_compiler.emit_u16(0, *span);
+                    sub_compiler.add_local("__gen_acc".to_string(), *span)?;
+                }
+
                 // Default argument initialization preamble
                 for (i, p) in regular_params.iter().enumerate() {
                     if let Some(ref def_expr) = p.default_val {
@@ -340,7 +362,7 @@ impl BytecodeCompiler {
                 // Compile function body
                 let num_stmts = body.statements.len();
                 for (i, st) in body.statements.iter().enumerate() {
-                    if i == num_stmts - 1 && body.result.is_none() {
+                    if !is_gen && i == num_stmts - 1 && body.result.is_none() {
                         if let Statement::Expr(expr) = st {
                             sub_compiler.compile_expression(expr)?;
                             sub_compiler.emit_op(OpCode::Return, *span);
@@ -350,7 +372,19 @@ impl BytecodeCompiler {
                     sub_compiler.compile_statement(st)?;
                 }
 
-                if let Some(ref res) = body.result {
+                if is_gen {
+                    if let Some(ref res) = body.result {
+                        sub_compiler.compile_expression(res)?;
+                        sub_compiler.emit_op(OpCode::Pop, *span);
+                    }
+                    if let Some(gen_slot) = sub_compiler.resolve_local("__gen_acc") {
+                        sub_compiler.emit_op(OpCode::GetLocal, *span);
+                        sub_compiler.emit_u16(gen_slot as u16, *span);
+                    } else {
+                        sub_compiler.emit_op(OpCode::Nil, *span);
+                    }
+                    sub_compiler.emit_op(OpCode::Return, *span);
+                } else if let Some(ref res) = body.result {
                     sub_compiler.compile_expression(res)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
                 } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
@@ -359,6 +393,7 @@ impl BytecodeCompiler {
                 }
 
                 let captured_vars = sub_compiler.captured.clone();
+                sub_compiler.function.upvalue_count = captured_vars.len();
                 let compiled_fn = sub_compiler.function;
                 let const_idx = self.add_constant(Value::Function(Arc::new(compiled_fn)));
                 self.emit_op(OpCode::Constant, *span);
@@ -377,7 +412,7 @@ impl BytecodeCompiler {
                     self.emit_u16(captured_vars.len() as u16, *span);
                 }
 
-                if self.scope_depth > 0 {
+                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let glob_idx = self.add_constant(Value::string(name.clone()));
@@ -393,8 +428,10 @@ impl BytecodeCompiler {
                 body,
                 span,
             } => {
-                // Intent compiles into a validated contract function!
+                // Intent compiles into a validated Design-by-Contract function!
                 let mut sub_compiler = BytecodeCompiler::new(name, params.len());
+                sub_compiler.function.max_arity = params.len();
+                sub_compiler.function.param_names = params.iter().map(|p| p.name.clone()).collect();
                 sub_compiler.scope_depth = 1;
 
                 for param in params {
@@ -404,35 +441,80 @@ impl BytecodeCompiler {
                 // Emit pre-conditions (require assertions)
                 for req in require {
                     sub_compiler.compile_expression(req)?;
+                    let fail_jump = sub_compiler.emit_jump(OpCode::JumpIfFalse, req.span());
                     sub_compiler.emit_op(OpCode::Pop, req.span());
+                    let ok_jump = sub_compiler.emit_jump(OpCode::Jump, req.span());
+                    sub_compiler.patch_jump(fail_jump);
+                    sub_compiler.emit_op(OpCode::Pop, req.span());
+                    let err_msg = Value::string(format!(
+                        "ContractViolationError: require precondition failed in intent '{}'",
+                        name
+                    ));
+                    let err_idx = sub_compiler.add_constant(err_msg);
+                    sub_compiler.emit_op(OpCode::Constant, req.span());
+                    sub_compiler.emit_u16(err_idx as u16, req.span());
+                    sub_compiler.emit_op(OpCode::Raise, req.span());
+                    sub_compiler.patch_jump(ok_jump);
                 }
 
                 // Body statements
                 let num_stmts = body.statements.len();
+                let mut pushed_result = false;
                 for (i, st) in body.statements.iter().enumerate() {
                     if i == num_stmts - 1 && body.result.is_none() {
-                        if let Statement::Expr(expr) = st {
-                            sub_compiler.compile_expression(expr)?;
-                            sub_compiler.emit_op(OpCode::Return, *span);
-                            continue;
+                        match st {
+                            Statement::Expr(expr) => {
+                                sub_compiler.compile_expression(expr)?;
+                                pushed_result = true;
+                                continue;
+                            }
+                            Statement::Return { value, span: r_span } => {
+                                if let Some(val) = value {
+                                    sub_compiler.compile_expression(val)?;
+                                } else {
+                                    sub_compiler.emit_op(OpCode::Nil, *r_span);
+                                }
+                                pushed_result = true;
+                                continue;
+                            }
+                            _ => {}
                         }
                     }
                     sub_compiler.compile_statement(st)?;
                 }
 
+                if let Some(ref res) = body.result {
+                    sub_compiler.compile_expression(res)?;
+                } else if !pushed_result {
+                    sub_compiler.emit_op(OpCode::Nil, *span);
+                }
+
+                // Bind return value to `result` local so `ensure` post-conditions can inspect `result`
+                sub_compiler.add_local("result".to_string(), *span)?;
+                let res_slot = sub_compiler.locals.len() - 1;
+
                 // Emit post-conditions (ensure assertions)
                 for ens in ensure {
                     sub_compiler.compile_expression(ens)?;
+                    let fail_jump = sub_compiler.emit_jump(OpCode::JumpIfFalse, ens.span());
                     sub_compiler.emit_op(OpCode::Pop, ens.span());
+                    let ok_jump = sub_compiler.emit_jump(OpCode::Jump, ens.span());
+                    sub_compiler.patch_jump(fail_jump);
+                    sub_compiler.emit_op(OpCode::Pop, ens.span());
+                    let err_msg = Value::string(format!(
+                        "ContractViolationError: ensure postcondition failed in intent '{}'",
+                        name
+                    ));
+                    let err_idx = sub_compiler.add_constant(err_msg);
+                    sub_compiler.emit_op(OpCode::Constant, ens.span());
+                    sub_compiler.emit_u16(err_idx as u16, ens.span());
+                    sub_compiler.emit_op(OpCode::Raise, ens.span());
+                    sub_compiler.patch_jump(ok_jump);
                 }
 
-                if let Some(ref res) = body.result {
-                    sub_compiler.compile_expression(res)?;
-                    sub_compiler.emit_op(OpCode::Return, *span);
-                } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
-                    sub_compiler.emit_op(OpCode::Nil, *span);
-                    sub_compiler.emit_op(OpCode::Return, *span);
-                }
+                sub_compiler.emit_op(OpCode::GetLocal, *span);
+                sub_compiler.emit_u16(res_slot as u16, *span);
+                sub_compiler.emit_op(OpCode::Return, *span);
 
                 let compiled_fn = sub_compiler.function;
                 let const_idx = self.add_constant(Value::Function(Arc::new(compiled_fn)));
@@ -615,17 +697,45 @@ impl BytecodeCompiler {
                 // No-operation
             }
             Statement::Return { value, span } => {
+                if self.is_generator {
+                    if let Some(val) = value {
+                        self.compile_expression(val)?;
+                        self.emit_op(OpCode::Pop, *span);
+                    }
+                    if let Some(gen_slot) = self.resolve_local("__gen_acc") {
+                        self.emit_op(OpCode::GetLocal, *span);
+                        self.emit_u16(gen_slot as u16, *span);
+                    } else {
+                        self.emit_op(OpCode::Nil, *span);
+                    }
+                    self.emit_op(OpCode::Return, *span);
+                } else {
+                    if let Some(val) = value {
+                        self.compile_expression(val)?;
+                    } else {
+                        self.emit_op(OpCode::Nil, *span);
+                    }
+                    self.emit_op(OpCode::Return, *span);
+                }
+            }
+            Statement::Yield { value, span } => {
+                let gen_slot = self.resolve_local("__gen_acc").ok_or_else(|| {
+                    "Cannot use 'yield' outside of a generator function".to_string()
+                })?;
+                self.emit_op(OpCode::GetLocal, *span);
+                self.emit_u16(gen_slot as u16, *span);
                 if let Some(val) = value {
                     self.compile_expression(val)?;
                 } else {
                     self.emit_op(OpCode::Nil, *span);
                 }
-                self.emit_op(OpCode::Return, *span);
+                self.emit_op(OpCode::ArrayPush, *span);
             }
             Statement::Spawn { body, span } => {
                 let mut sub_compiler = BytecodeCompiler::new("<fiber>", 0);
                 sub_compiler.scope_depth = 1;
                 sub_compiler.parent_locals = Some(self.locals.clone());
+                sub_compiler.prescan_captures_in_block(body);
 
                 let num_stmts = body.statements.len();
                 for (i, st) in body.statements.iter().enumerate() {
@@ -670,17 +780,118 @@ impl BytecodeCompiler {
                 let struct_def = Arc::new(super::value::StructDef {
                     name: name.clone(),
                     fields: fields.clone(),
+                    methods: Arc::new(parking_lot::Mutex::new(HashMap::new())),
                 });
                 let const_idx = self.add_constant(Value::StructDef(struct_def));
                 self.emit_op(OpCode::Constant, *span);
                 self.emit_u16(const_idx as u16, *span);
 
-                if self.scope_depth > 0 {
+                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let glob_idx = self.add_constant(Value::string(name.clone()));
                     self.emit_op(OpCode::DefineGlobal, *span);
                     self.emit_u16(glob_idx as u16, *span);
+                }
+            }
+            Statement::EnumDef { name, variants, span, .. } => {
+                let mut enum_map = HashMap::new();
+                for v in variants {
+                    let variant_val = if v.fields.is_empty() {
+                        Value::EnumVariant {
+                            enum_name: name.clone(),
+                            variant: v.name.clone(),
+                            fields: Arc::new(Vec::new()),
+                        }
+                    } else {
+                        Value::EnumConstructor {
+                            enum_name: name.clone(),
+                            variant: v.name.clone(),
+                            arity: v.fields.len(),
+                        }
+                    };
+                    enum_map.insert(v.name.clone(), variant_val.clone());
+
+                    // Also expose variant constructor at global scope when top-level
+                    if self.scope_depth == 0 {
+                        let v_idx = self.add_constant(variant_val);
+                        self.emit_op(OpCode::Constant, *span);
+                        self.emit_u16(v_idx as u16, *span);
+                        let g_idx = self.add_constant(Value::string(v.name.clone()));
+                        self.emit_op(OpCode::DefineGlobal, *span);
+                        self.emit_u16(g_idx as u16, *span);
+                    }
+                }
+                let const_idx = self.add_constant(Value::map(enum_map));
+                self.emit_op(OpCode::Constant, *span);
+                self.emit_u16(const_idx as u16, *span);
+
+                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                    self.add_local(name.clone(), *span)?;
+                } else {
+                    let glob_idx = self.add_constant(Value::string(name.clone()));
+                    self.emit_op(OpCode::DefineGlobal, *span);
+                    self.emit_u16(glob_idx as u16, *span);
+                }
+            }
+            Statement::TraitDef { .. } | Statement::TypeAlias { .. } => {
+                // Statically checked in TypeChecker; no runtime bytecode needed
+            }
+            Statement::ImplDef { target_type, methods, span, .. } => {
+                for m_stmt in methods {
+                    if let Statement::FnDef {
+                        name: m_name,
+                        params,
+                        body: m_body,
+                        span: m_span,
+                        ..
+                    } = m_stmt
+                    {
+                        let compiled = self.compile_method(target_type, m_name, params, m_body, *m_span)?;
+                        let fn_idx = self.add_constant(Value::Function(Arc::new(compiled)));
+                        self.emit_op(OpCode::Constant, *m_span);
+                        self.emit_u16(fn_idx as u16, *m_span);
+
+                        let target_idx = self.add_constant(Value::string(target_type.clone()));
+                        let method_idx = self.add_constant(Value::string(m_name.clone()));
+                        self.emit_op(OpCode::ImplMethod, *span);
+                        self.emit_u16(target_idx as u16, *span);
+                        self.emit_u16(method_idx as u16, *span);
+                    }
+                }
+            }
+            Statement::Decorated { decorators, stmt, span } => {
+                self.compile_statement(stmt)?;
+                if let Statement::FnDef { name, .. } = stmt.as_ref() {
+                    for dec in decorators.iter().rev() {
+                        self.compile_expression(dec)?;
+                        if self.global_vars.contains(name) {
+                            let const_idx = self.add_constant(Value::string(name.clone()));
+                            self.emit_op(OpCode::GetGlobal, *span);
+                            self.emit_u16(const_idx as u16, *span);
+                        } else if let Some(local_idx) = self.resolve_local(name) {
+                            self.emit_op(OpCode::GetLocal, *span);
+                            self.emit_u16(local_idx as u16, *span);
+                        } else {
+                            let const_idx = self.add_constant(Value::string(name.clone()));
+                            self.emit_op(OpCode::GetGlobal, *span);
+                            self.emit_u16(const_idx as u16, *span);
+                        }
+                        self.emit_op(OpCode::Call, *span);
+                        self.emit_byte(1, *span);
+
+                        if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                            if let Some(local_idx) = self.resolve_local(name) {
+                                self.emit_op(OpCode::SetLocal, *span);
+                                self.emit_u16(local_idx as u16, *span);
+                                self.emit_op(OpCode::Pop, *span);
+                            }
+                        } else {
+                            let glob_idx = self.add_constant(Value::string(name.clone()));
+                            self.emit_op(OpCode::DefineGlobal, *span);
+                            self.emit_u16(glob_idx as u16, *span);
+                        }
+                    }
                 }
             }
             Statement::ClassDef { name, bases, body, span } => {
@@ -920,6 +1131,23 @@ impl BytecodeCompiler {
                         self.compile_expression(right)?;
                         self.patch_jump(end_jump);
                     }
+                    BinaryOp::NullCoalesce => {
+                        self.compile_expression(left)?;
+                        let keep_jump = self.emit_jump(OpCode::JumpIfNotNil, *span);
+                        self.emit_op(OpCode::Pop, *span);
+                        self.compile_expression(right)?;
+                        self.patch_jump(keep_jump);
+                    }
+                    BinaryOp::Range => {
+                        self.compile_expression(left)?;
+                        self.compile_expression(right)?;
+                        self.emit_op(OpCode::BuildRange, *span);
+                    }
+                    BinaryOp::RangeInclusive => {
+                        self.compile_expression(left)?;
+                        self.compile_expression(right)?;
+                        self.emit_op(OpCode::BuildRangeInclusive, *span);
+                    }
                     BinaryOp::In => {
                         let fn_idx = self.add_constant(Value::string("__in"));
                         self.emit_op(OpCode::GetGlobal, *span);
@@ -1078,6 +1306,40 @@ impl BytecodeCompiler {
                 self.emit_u16(const_idx as u16, *span);
                 self.emit_op(OpCode::IndexGet, *span);
             }
+            Expr::OptionalMember(obj, member, span) => {
+                self.compile_expression(obj)?;
+                let const_idx = self.add_constant(Value::string(member.clone()));
+                self.emit_op(OpCode::OptionalGetAttr, *span);
+                self.emit_u16(const_idx as u16, *span);
+            }
+            Expr::OptionalIndex(obj, idx, span) => {
+                self.compile_expression(obj)?;
+                self.compile_expression(idx)?;
+                self.emit_op(OpCode::OptionalIndexGet, *span);
+            }
+            Expr::Try(inner, span) => {
+                self.compile_expression(inner)?;
+                self.emit_op(OpCode::TryUnwrap, *span);
+            }
+            Expr::Slice { obj, start, end, step, span } => {
+                self.compile_expression(obj)?;
+                if let Some(s) = start {
+                    self.compile_expression(s)?;
+                } else {
+                    self.emit_op(OpCode::Nil, *span);
+                }
+                if let Some(e) = end {
+                    self.compile_expression(e)?;
+                } else {
+                    self.emit_op(OpCode::Nil, *span);
+                }
+                if let Some(st) = step {
+                    self.compile_expression(st)?;
+                } else {
+                    self.emit_op(OpCode::Nil, *span);
+                }
+                self.emit_op(OpCode::Slice, *span);
+            }
             Expr::If {
                 condition,
                 then_branch,
@@ -1117,79 +1379,7 @@ impl BytecodeCompiler {
                 self.patch_jump(else_jump);
             }
             Expr::Match { target, arms, span } => {
-                self.compile_expression(target)?;
-
-                let mut end_jumps = Vec::new();
-                let has_arms = !arms.is_empty();
-
-                for (i, arm) in arms.iter().enumerate() {
-                    let is_last = i == arms.len() - 1;
-
-                    match &arm.pattern {
-                        MatchPattern::Wildcard => {
-                            self.emit_op(OpCode::Pop, arm.span);
-                            self.compile_expression(&arm.body)?;
-                            break;
-                        }
-                        MatchPattern::Ident(_) => {
-                            self.emit_op(OpCode::Pop, arm.span);
-                            self.compile_expression(&arm.body)?;
-                            break;
-                        }
-                        MatchPattern::Literal(lit) => {
-                            self.emit_op(OpCode::Dup, arm.span);
-                            self.compile_literal(lit, arm.span);
-                            self.emit_op(OpCode::Equal, arm.span);
-
-                            let next_arm_jump = self.emit_jump(OpCode::JumpIfFalse, arm.span);
-                            self.emit_op(OpCode::Pop, arm.span);
-                            self.emit_op(OpCode::Pop, arm.span);
-
-                            self.compile_expression(&arm.body)?;
-                            end_jumps.push(self.emit_jump(OpCode::Jump, arm.span));
-
-                            self.patch_jump(next_arm_jump);
-                            self.emit_op(OpCode::Pop, arm.span);
-                        }
-                        MatchPattern::Range(start_lit, end_lit) => {
-                            self.emit_op(OpCode::Dup, arm.span);
-                            self.compile_literal(start_lit, arm.span);
-                            self.emit_op(OpCode::GreaterEqual, arm.span);
-
-                            let fail_start_jump = self.emit_jump(OpCode::JumpIfFalse, arm.span);
-                            self.emit_op(OpCode::Pop, arm.span);
-
-                            self.emit_op(OpCode::Dup, arm.span);
-                            self.compile_literal(end_lit, arm.span);
-                            self.emit_op(OpCode::LessEqual, arm.span);
-
-                            let fail_end_jump = self.emit_jump(OpCode::JumpIfFalse, arm.span);
-                            self.emit_op(OpCode::Pop, arm.span);
-                            self.emit_op(OpCode::Pop, arm.span);
-
-                            self.compile_expression(&arm.body)?;
-                            end_jumps.push(self.emit_jump(OpCode::Jump, arm.span));
-
-                            self.patch_jump(fail_start_jump);
-                            self.patch_jump(fail_end_jump);
-                            self.emit_op(OpCode::Pop, arm.span);
-                        }
-                    }
-
-                    if is_last {
-                        self.emit_op(OpCode::Pop, *span);
-                        self.emit_op(OpCode::Nil, *span);
-                    }
-                }
-
-                if !has_arms {
-                    self.emit_op(OpCode::Pop, *span);
-                    self.emit_op(OpCode::Nil, *span);
-                }
-
-                for jmp in end_jumps {
-                    self.patch_jump(jmp);
-                }
+                self.compile_match_expression(target, arms, *span)?;
             }
             Expr::Block(block, span) => {
                 self.begin_scope();
@@ -1254,6 +1444,8 @@ impl BytecodeCompiler {
                     sub_compiler.add_local(k_name.clone(), *span)?;
                 }
 
+                sub_compiler.prescan_captures_in_block(body);
+
                 // Default argument initialization preamble
                 for (i, p) in regular_params.iter().enumerate() {
                     if let Some(ref def_expr) = p.default_val {
@@ -1298,6 +1490,7 @@ impl BytecodeCompiler {
                 }
 
                 let captured_vars = sub_compiler.captured.clone();
+                sub_compiler.function.upvalue_count = captured_vars.len();
                 let compiled_fn = sub_compiler.function;
                 let const_idx = self.add_constant(Value::Function(Arc::new(compiled_fn)));
                 self.emit_op(OpCode::Constant, *span);
@@ -1567,6 +1760,609 @@ impl BytecodeCompiler {
             Literal::Bool(true) => self.emit_op(OpCode::True, span),
             Literal::Bool(false) => self.emit_op(OpCode::False, span),
             Literal::Nil => self.emit_op(OpCode::Nil, span),
+        }
+    }
+
+    fn bind_variable(&mut self, name: &str, span: Span) -> Result<(), String> {
+        if name == "_" {
+            self.emit_op(OpCode::Pop, span);
+            return Ok(());
+        }
+        if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+            self.add_local(name.to_string(), span)?;
+        } else {
+            let const_idx = self.add_constant(Value::string(name.to_string()));
+            self.emit_op(OpCode::DefineGlobal, span);
+            self.emit_u16(const_idx as u16, span);
+        }
+        Ok(())
+    }
+
+    fn compile_destructure_pattern(
+        &mut self,
+        pattern: &DestructurePattern,
+        span: Span,
+    ) -> Result<(), String> {
+        match pattern {
+            DestructurePattern::Tuple(names) => {
+                self.emit_op(OpCode::UnpackSequence, span);
+                self.emit_u16(names.len() as u16, span);
+                for name in names {
+                    self.bind_variable(name, span)?;
+                }
+            }
+            DestructurePattern::Array { elements, rest } => {
+                if let Some(rest_name) = rest {
+                    self.emit_op(OpCode::UnpackArrayRest, span);
+                    self.emit_u16(elements.len() as u16, span);
+                    for name in elements {
+                        self.bind_variable(name, span)?;
+                    }
+                    self.bind_variable(rest_name, span)?;
+                } else {
+                    self.emit_op(OpCode::UnpackSequence, span);
+                    self.emit_u16(elements.len() as u16, span);
+                    for name in elements {
+                        self.bind_variable(name, span)?;
+                    }
+                }
+            }
+            DestructurePattern::Map(entries) => {
+                if entries.is_empty() {
+                    self.emit_op(OpCode::Pop, span);
+                    return Ok(());
+                }
+                let is_local_scope =
+                    self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0;
+                if is_local_scope {
+                    let map_slot = self.locals.len();
+                    self.add_local("__destruct_map".to_string(), span)?;
+                    for (key, bind_name) in entries {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(map_slot as u16, span);
+                        let key_idx = self.add_constant(Value::string(key.clone()));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(key_idx as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.bind_variable(bind_name, span)?;
+                    }
+                } else {
+                    for (i, (key, bind_name)) in entries.iter().enumerate() {
+                        if i + 1 < entries.len() {
+                            self.emit_op(OpCode::Dup, span);
+                        }
+                        let key_idx = self.add_constant(Value::string(key.clone()));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(key_idx as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.bind_variable(bind_name, span)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_match_expression(
+        &mut self,
+        target: &Expr,
+        arms: &[MatchArm],
+        span: Span,
+    ) -> Result<(), String> {
+        // Compile `<match>` as a 1-argument closure/function frame so pattern bindings
+        // and guard expressions have deterministic local slots at any expression depth.
+        let mut sub_compiler = BytecodeCompiler::new("<match>", 1);
+        sub_compiler.function.max_arity = 1;
+        sub_compiler.function.param_names = vec!["__match_val".to_string()];
+        sub_compiler.scope_depth = 1;
+        sub_compiler.parent_locals = Some(self.locals.clone());
+        sub_compiler.add_local("__match_val".to_string(), span)?;
+
+        for arm in arms {
+            if let Some(ref g) = arm.guard {
+                sub_compiler.prescan_captures_in_expr(g);
+            }
+            sub_compiler.prescan_captures_in_expr(&arm.body);
+        }
+
+        for arm in arms {
+            sub_compiler.begin_scope();
+            let mut fail_jumps = Vec::new();
+            sub_compiler.compile_match_pattern_check(&arm.pattern, 1, &mut fail_jumps, arm.span)?;
+            sub_compiler.compile_match_pattern_bindings(&arm.pattern, 1, arm.span)?;
+
+            if let Some(ref guard_expr) = arm.guard {
+                sub_compiler.compile_expression(guard_expr)?;
+                let guard_fail = sub_compiler.emit_jump(OpCode::JumpIfFalse, arm.span);
+                sub_compiler.emit_op(OpCode::Pop, arm.span);
+
+                sub_compiler.compile_expression(&arm.body)?;
+                sub_compiler.emit_op(OpCode::Return, arm.span);
+
+                sub_compiler.patch_jump(guard_fail);
+                sub_compiler.emit_op(OpCode::Pop, arm.span);
+                sub_compiler.end_scope(arm.span);
+            } else {
+                sub_compiler.compile_expression(&arm.body)?;
+                sub_compiler.emit_op(OpCode::Return, arm.span);
+                // Clean up compiler scope tracking for subsequent arms
+                sub_compiler.scope_depth -= 1;
+                while let Some(last) = sub_compiler.locals.last() {
+                    if last.depth > sub_compiler.scope_depth {
+                        sub_compiler.locals.pop();
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if !fail_jumps.is_empty() {
+                let after_guard_jump = sub_compiler.emit_jump(OpCode::Jump, arm.span);
+                for fj in fail_jumps {
+                    sub_compiler.patch_jump(fj);
+                }
+                sub_compiler.emit_op(OpCode::Pop, arm.span);
+                sub_compiler.patch_jump(after_guard_jump);
+            }
+        }
+
+        sub_compiler.emit_op(OpCode::Nil, span);
+        sub_compiler.emit_op(OpCode::Return, span);
+
+        let captured_vars = sub_compiler.captured.clone();
+        sub_compiler.function.upvalue_count = captured_vars.len();
+        let compiled_fn = sub_compiler.function;
+        let const_idx = self.add_constant(Value::Function(Arc::new(compiled_fn)));
+        self.emit_op(OpCode::Constant, span);
+        self.emit_u16(const_idx as u16, span);
+
+        if !captured_vars.is_empty() {
+            for var_name in &captured_vars {
+                if let Some(slot) = self.resolve_local(var_name) {
+                    self.emit_op(OpCode::GetLocal, span);
+                    self.emit_u16(slot as u16, span);
+                } else {
+                    return Err(format!("Failed to resolve captured local '{}'", var_name));
+                }
+            }
+            self.emit_op(OpCode::BuildClosure, span);
+            self.emit_u16(captured_vars.len() as u16, span);
+        }
+
+        self.compile_expression(target)?;
+        self.emit_op(OpCode::Call, span);
+        self.emit_byte(1, span);
+        Ok(())
+    }
+
+    fn compile_match_pattern_check(
+        &mut self,
+        pattern: &MatchPattern,
+        val_slot: usize,
+        fail_jumps: &mut Vec<usize>,
+        span: Span,
+    ) -> Result<(), String> {
+        match pattern {
+            MatchPattern::Wildcard | MatchPattern::Ident(_) => {}
+            MatchPattern::Literal(lit) => {
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.compile_literal(lit, span);
+                self.emit_op(OpCode::Equal, span);
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+            }
+            MatchPattern::Range(start_lit, end_lit) => {
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.compile_literal(start_lit, span);
+                self.emit_op(OpCode::GreaterEqual, span);
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.compile_literal(end_lit, span);
+                self.emit_op(OpCode::LessEqual, span);
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+            }
+            MatchPattern::EnumVariant {
+                enum_name,
+                variant,
+                bindings,
+            } => {
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                let enum_str = enum_name.clone().unwrap_or_default();
+                let enum_idx = self.add_constant(Value::string(enum_str));
+                let var_idx = self.add_constant(Value::string(variant.clone()));
+                self.emit_op(OpCode::MatchEnumVariant, span);
+                self.emit_u16(enum_idx as u16, span);
+                self.emit_u16(var_idx as u16, span);
+                self.emit_byte(bindings.len() as u8, span);
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+            }
+            MatchPattern::Tuple(sub_pats) => {
+                // Check length == sub_pats.len()
+                let len_const = self.add_constant(Value::string("len"));
+                self.emit_op(OpCode::GetGlobal, span);
+                self.emit_u16(len_const as u16, span);
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.emit_op(OpCode::Call, span);
+                self.emit_byte(1, span);
+                let expected_idx = self.add_constant(Value::Int(sub_pats.len() as i64));
+                self.emit_op(OpCode::Constant, span);
+                self.emit_u16(expected_idx as u16, span);
+                self.emit_op(OpCode::Equal, span);
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+
+                for (idx, sp) in sub_pats.iter().enumerate() {
+                    if let MatchPattern::Literal(lit) = sp {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(val_slot as u16, span);
+                        let i_const = self.add_constant(Value::Int(idx as i64));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(i_const as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.compile_literal(lit, span);
+                        self.emit_op(OpCode::Equal, span);
+                        fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                        self.emit_op(OpCode::Pop, span);
+                    }
+                }
+            }
+            MatchPattern::Array { elements, rest } => {
+                let len_const = self.add_constant(Value::string("len"));
+                self.emit_op(OpCode::GetGlobal, span);
+                self.emit_u16(len_const as u16, span);
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.emit_op(OpCode::Call, span);
+                self.emit_byte(1, span);
+                let expected_idx = self.add_constant(Value::Int(elements.len() as i64));
+                self.emit_op(OpCode::Constant, span);
+                self.emit_u16(expected_idx as u16, span);
+                if rest.is_some() {
+                    self.emit_op(OpCode::GreaterEqual, span);
+                } else {
+                    self.emit_op(OpCode::Equal, span);
+                }
+                fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                self.emit_op(OpCode::Pop, span);
+
+                for (idx, sp) in elements.iter().enumerate() {
+                    if let MatchPattern::Literal(lit) = sp {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(val_slot as u16, span);
+                        let i_const = self.add_constant(Value::Int(idx as i64));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(i_const as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.compile_literal(lit, span);
+                        self.emit_op(OpCode::Equal, span);
+                        fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                        self.emit_op(OpCode::Pop, span);
+                    }
+                }
+            }
+            MatchPattern::Map(entries) => {
+                for (key, sp) in entries {
+                    let contains_const = self.add_constant(Value::string("contains"));
+                    self.emit_op(OpCode::GetGlobal, span);
+                    self.emit_u16(contains_const as u16, span);
+                    self.emit_op(OpCode::GetLocal, span);
+                    self.emit_u16(val_slot as u16, span);
+                    let k_idx = self.add_constant(Value::string(key.clone()));
+                    self.emit_op(OpCode::Constant, span);
+                    self.emit_u16(k_idx as u16, span);
+                    self.emit_op(OpCode::Call, span);
+                    self.emit_byte(2, span);
+                    fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                    self.emit_op(OpCode::Pop, span);
+
+                    if let MatchPattern::Literal(lit) = sp {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(val_slot as u16, span);
+                        let k_idx2 = self.add_constant(Value::string(key.clone()));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(k_idx2 as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.compile_literal(lit, span);
+                        self.emit_op(OpCode::Equal, span);
+                        fail_jumps.push(self.emit_jump(OpCode::JumpIfFalse, span));
+                        self.emit_op(OpCode::Pop, span);
+                    }
+                }
+            }
+            MatchPattern::Or(pats) => {
+                let mut success_jumps = Vec::new();
+                for (idx, sub_pat) in pats.iter().enumerate() {
+                    let is_last = idx + 1 == pats.len();
+                    let mut sub_fails = Vec::new();
+                    self.compile_match_pattern_check(sub_pat, val_slot, &mut sub_fails, span)?;
+                    if !is_last {
+                        success_jumps.push(self.emit_jump(OpCode::Jump, span));
+                        for sf in sub_fails {
+                            self.patch_jump(sf);
+                        }
+                        self.emit_op(OpCode::Pop, span);
+                    } else {
+                        fail_jumps.extend(sub_fails);
+                    }
+                }
+                for sj in success_jumps {
+                    self.patch_jump(sj);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_match_pattern_bindings(
+        &mut self,
+        pattern: &MatchPattern,
+        val_slot: usize,
+        span: Span,
+    ) -> Result<(), String> {
+        match pattern {
+            MatchPattern::Ident(name) => {
+                if name != "_" {
+                    self.emit_op(OpCode::GetLocal, span);
+                    self.emit_u16(val_slot as u16, span);
+                    self.add_local(name.clone(), span)?;
+                }
+            }
+            MatchPattern::EnumVariant { bindings, .. } => {
+                for (idx, b_name) in bindings.iter().enumerate() {
+                    if b_name != "_" {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(val_slot as u16, span);
+                        let i_const = self.add_constant(Value::Int(idx as i64));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(i_const as u16, span);
+                        self.emit_op(OpCode::IndexGet, span);
+                        self.add_local(b_name.clone(), span)?;
+                    }
+                }
+            }
+            MatchPattern::Tuple(sub_pats) => {
+                for (idx, sp) in sub_pats.iter().enumerate() {
+                    if let MatchPattern::Ident(b_name) = sp {
+                        if b_name != "_" {
+                            self.emit_op(OpCode::GetLocal, span);
+                            self.emit_u16(val_slot as u16, span);
+                            let i_const = self.add_constant(Value::Int(idx as i64));
+                            self.emit_op(OpCode::Constant, span);
+                            self.emit_u16(i_const as u16, span);
+                            self.emit_op(OpCode::IndexGet, span);
+                            self.add_local(b_name.clone(), span)?;
+                        }
+                    }
+                }
+            }
+            MatchPattern::Array { elements, rest } => {
+                for (idx, sp) in elements.iter().enumerate() {
+                    if let MatchPattern::Ident(b_name) = sp {
+                        if b_name != "_" {
+                            self.emit_op(OpCode::GetLocal, span);
+                            self.emit_u16(val_slot as u16, span);
+                            let i_const = self.add_constant(Value::Int(idx as i64));
+                            self.emit_op(OpCode::Constant, span);
+                            self.emit_u16(i_const as u16, span);
+                            self.emit_op(OpCode::IndexGet, span);
+                            self.add_local(b_name.clone(), span)?;
+                        }
+                    }
+                }
+                if let Some(rest_name) = rest {
+                    if rest_name != "_" {
+                        self.emit_op(OpCode::GetLocal, span);
+                        self.emit_u16(val_slot as u16, span);
+                        let start_idx = self.add_constant(Value::Int(elements.len() as i64));
+                        self.emit_op(OpCode::Constant, span);
+                        self.emit_u16(start_idx as u16, span);
+                        self.emit_op(OpCode::Nil, span);
+                        self.emit_op(OpCode::Nil, span);
+                        self.emit_op(OpCode::Slice, span);
+                        self.add_local(rest_name.clone(), span)?;
+                    }
+                }
+            }
+            MatchPattern::Map(entries) => {
+                for (key, sp) in entries {
+                    if let MatchPattern::Ident(b_name) = sp {
+                        if b_name != "_" {
+                            self.emit_op(OpCode::GetLocal, span);
+                            self.emit_u16(val_slot as u16, span);
+                            let k_idx = self.add_constant(Value::string(key.clone()));
+                            self.emit_op(OpCode::Constant, span);
+                            self.emit_u16(k_idx as u16, span);
+                            self.emit_op(OpCode::IndexGet, span);
+                            self.add_local(b_name.clone(), span)?;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn block_has_yield(block: &Block) -> bool {
+        block.statements.iter().any(Self::stmt_has_yield)
+    }
+
+    fn stmt_has_yield(stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Yield { .. } => true,
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                Self::block_has_yield(body)
+            }
+            Statement::TryCatch {
+                try_block,
+                handlers,
+                finally_block,
+                ..
+            } => {
+                Self::block_has_yield(try_block)
+                    || handlers.iter().any(|h| Self::block_has_yield(&h.body))
+                    || finally_block.as_ref().is_some_and(Self::block_has_yield)
+            }
+            Statement::Expr(Expr::If {
+                then_branch,
+                else_branch,
+                ..
+            }) => {
+                Self::block_has_yield(then_branch)
+                    || else_branch.as_ref().is_some_and(Self::block_has_yield)
+            }
+            Statement::Expr(Expr::Block(b, _)) => Self::block_has_yield(b),
+            _ => false,
+        }
+    }
+
+    fn prescan_captures_in_block(&mut self, block: &Block) {
+        for stmt in &block.statements {
+            self.prescan_captures_in_stmt(stmt);
+        }
+        if let Some(ref res) = block.result {
+            self.prescan_captures_in_expr(res);
+        }
+    }
+
+    fn prescan_captures_in_stmt(&mut self, stmt: &Statement) {
+        match stmt {
+            Statement::Let { initializer, .. } => {
+                if let Some(ref init) = initializer {
+                    self.prescan_captures_in_expr(init);
+                }
+            }
+            Statement::LetDestructure { initializer, .. } => {
+                self.prescan_captures_in_expr(initializer);
+            }
+            Statement::Assign { target, value, .. } => {
+                self.prescan_captures_in_expr(target);
+                self.prescan_captures_in_expr(value);
+            }
+            Statement::While { condition, body, .. } => {
+                self.prescan_captures_in_expr(condition);
+                self.prescan_captures_in_block(body);
+            }
+            Statement::For { iter, body, .. } => {
+                self.prescan_captures_in_expr(iter);
+                self.prescan_captures_in_block(body);
+            }
+            Statement::Return { value, .. } | Statement::Yield { value, .. } => {
+                if let Some(ref v) = value {
+                    self.prescan_captures_in_expr(v);
+                }
+            }
+            Statement::Raise { expr, .. } => {
+                if let Some(ref e) = expr {
+                    self.prescan_captures_in_expr(e);
+                }
+            }
+            Statement::TryCatch {
+                try_block,
+                handlers,
+                finally_block,
+                ..
+            } => {
+                self.prescan_captures_in_block(try_block);
+                for h in handlers {
+                    self.prescan_captures_in_block(&h.body);
+                }
+                if let Some(ref fb) = finally_block {
+                    self.prescan_captures_in_block(fb);
+                }
+            }
+            Statement::Expr(e) => self.prescan_captures_in_expr(e),
+            _ => {}
+        }
+    }
+
+    fn prescan_captures_in_expr(&mut self, expr: &Expr) {
+        match expr {
+            Expr::Ident(name, _) => {
+                if !self.global_vars.contains(name) {
+                    let _ = self.resolve_local(name);
+                }
+            }
+            Expr::Binary(l, _, r, _) | Expr::Pipe(l, r, _) | Expr::Index(l, r, _) | Expr::OptionalIndex(l, r, _) => {
+                self.prescan_captures_in_expr(l);
+                self.prescan_captures_in_expr(r);
+            }
+            Expr::Unary(_, inner, _)
+            | Expr::Member(inner, _, _)
+            | Expr::OptionalMember(inner, _, _)
+            | Expr::Try(inner, _)
+            | Expr::NamedArg(_, inner, _)
+            | Expr::StarArg(inner, _)
+            | Expr::DoubleStarArg(inner, _) => {
+                self.prescan_captures_in_expr(inner);
+            }
+            Expr::Slice {
+                obj,
+                start,
+                end,
+                step,
+                ..
+            } => {
+                self.prescan_captures_in_expr(obj);
+                if let Some(s) = start {
+                    self.prescan_captures_in_expr(s);
+                }
+                if let Some(e) = end {
+                    self.prescan_captures_in_expr(e);
+                }
+                if let Some(st) = step {
+                    self.prescan_captures_in_expr(st);
+                }
+            }
+            Expr::Call(callee, args, _) => {
+                self.prescan_captures_in_expr(callee);
+                for a in args {
+                    self.prescan_captures_in_expr(a);
+                }
+            }
+            Expr::Array(els, _) | Expr::Tuple(els, _) | Expr::Set(els, _) | Expr::FString(els, _) => {
+                for el in els {
+                    self.prescan_captures_in_expr(el);
+                }
+            }
+            Expr::Map(entries, _) => {
+                for (k, v) in entries {
+                    self.prescan_captures_in_expr(k);
+                    self.prescan_captures_in_expr(v);
+                }
+            }
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                self.prescan_captures_in_expr(condition);
+                self.prescan_captures_in_block(then_branch);
+                if let Some(ref eb) = else_branch {
+                    self.prescan_captures_in_block(eb);
+                }
+            }
+            Expr::Match { target, arms, .. } => {
+                self.prescan_captures_in_expr(target);
+                for arm in arms {
+                    if let Some(ref g) = arm.guard {
+                        self.prescan_captures_in_expr(g);
+                    }
+                    self.prescan_captures_in_expr(&arm.body);
+                }
+            }
+            Expr::Block(b, _) => self.prescan_captures_in_block(b),
+            _ => {}
         }
     }
 

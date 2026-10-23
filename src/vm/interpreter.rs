@@ -9,6 +9,8 @@ pub struct CallFrame {
     pub ip: usize,
     pub stack_offset: usize,
     pub constructor_instance: Option<Value>,
+    pub closure_upvalues: Option<Arc<parking_lot::Mutex<Vec<Value>>>>,
+    pub memo_target: Option<(Arc<parking_lot::Mutex<HashMap<String, Value>>>, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +25,7 @@ pub struct VM {
     stack: Vec<Value>,
     pub globals: HashMap<String, Value>,
     pub modules_cache: HashMap<String, Value>,
+    pub loading_modules: std::collections::HashSet<String>,
     pub exception_handlers: Vec<ExceptionHandler>,
 }
 
@@ -65,6 +68,7 @@ impl VM {
             stack: Vec::with_capacity(512),
             globals: HashMap::new(),
             modules_cache: HashMap::new(),
+            loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
         };
         vm.register_builtins();
@@ -95,6 +99,7 @@ impl VM {
             stack: Vec::with_capacity(512),
             globals,
             modules_cache: HashMap::new(),
+            loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
         }
     }
@@ -572,6 +577,84 @@ impl VM {
             let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
             Ok(Value::Float(duration.as_secs_f64()))
         });
+
+        // Built-in Option & Result algebraic constructors
+        self.globals.insert(
+            "Some".to_string(),
+            Value::EnumConstructor {
+                enum_name: "Option".to_string(),
+                variant: "Some".to_string(),
+                arity: 1,
+            },
+        );
+        self.globals.insert(
+            "None".to_string(),
+            Value::EnumVariant {
+                enum_name: "Option".to_string(),
+                variant: "None".to_string(),
+                fields: Arc::new(Vec::new()),
+            },
+        );
+        self.globals.insert(
+            "Ok".to_string(),
+            Value::EnumConstructor {
+                enum_name: "Result".to_string(),
+                variant: "Ok".to_string(),
+                arity: 1,
+            },
+        );
+        self.globals.insert(
+            "Err".to_string(),
+            Value::EnumConstructor {
+                enum_name: "Result".to_string(),
+                variant: "Err".to_string(),
+                arity: 1,
+            },
+        );
+
+        // Built-in generator iterator consumer: next(gen, default?)
+        self.define_native("next", |args| {
+            if args.is_empty() {
+                return Err("next(iterator, default?) expects at least 1 argument".to_string());
+            }
+            let default_val = if args.len() > 1 { args[1].clone() } else { Value::Nil };
+            match &args[0] {
+                Value::Array(arr) => {
+                    let mut items = arr.lock();
+                    if !items.is_empty() {
+                        Ok(items.remove(0))
+                    } else {
+                        Ok(default_val)
+                    }
+                }
+                other => Err(format!("next() expects a generator or array iterator, got '{}'", other.type_name())),
+            }
+        });
+
+        // Built-in Decorators: @memoize, @timeit, @retry
+        self.define_native("memoize", |args| {
+            if args.is_empty() {
+                return Err("@memoize expects a function argument".to_string());
+            }
+            Ok(Value::Memoized {
+                func: Box::new(args[0].clone()),
+                cache: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            })
+        });
+
+        self.define_native("timeit", |args| {
+            if args.is_empty() {
+                return Err("@timeit expects a function argument".to_string());
+            }
+            Ok(args[0].clone())
+        });
+
+        self.define_native("retry", |args| {
+            if args.is_empty() {
+                return Err("@retry expects a function argument".to_string());
+            }
+            Ok(args[0].clone())
+        });
     }
 
     pub fn define_native(&mut self, name: &str, func: NativeFn) {
@@ -592,6 +675,8 @@ impl VM {
             ip: 0,
             stack_offset: 0,
             constructor_instance: None,
+            closure_upvalues: None,
+            memo_target: None,
         });
 
         self.run()
@@ -968,6 +1053,15 @@ impl VM {
                             }
                         }
                     }
+                    OpCode::JumpIfNotNil => {
+                        let offset = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        if let Some(top) = self.stack.last() {
+                            if !matches!(top, Value::Nil) {
+                                frame.ip += offset;
+                            }
+                        }
+                    }
                     OpCode::Loop => {
                         let offset = frame.function.chunk.read_u16(frame.ip) as usize;
                         frame.ip += 2;
@@ -1012,6 +1106,8 @@ impl VM {
                                     ip: 0,
                                     stack_offset: callee_idx,
                                     constructor_instance: None,
+                                    closure_upvalues: None,
+                                    memo_target: None,
                                 };
                             }
                             Value::Closure { function: func, upvalues } => {
@@ -1039,7 +1135,7 @@ impl VM {
                                 if func.has_kwargs {
                                     self.stack.push(Value::map(HashMap::new()));
                                 }
-                                for uv in upvalues.iter() {
+                                for uv in upvalues.lock().iter() {
                                     self.stack.push(uv.clone());
                                 }
                                 self.frames.push(frame);
@@ -1048,6 +1144,8 @@ impl VM {
                                     ip: 0,
                                     stack_offset: callee_idx,
                                     constructor_instance: None,
+                                    closure_upvalues: Some(upvalues),
+                                    memo_target: None,
                                 };
                             }
                             Value::BoundUserMethod { receiver, function } => {
@@ -1085,6 +1183,47 @@ impl VM {
                                     ip: 0,
                                     stack_offset: callee_idx,
                                     constructor_instance: None,
+                                    closure_upvalues: None,
+                                    memo_target: None,
+                                };
+                            }
+                            Value::BoundStructMethod { receiver, function } => {
+                                self.stack.insert(callee_idx + 1, Value::StructInstance(receiver));
+                                self.stack[callee_idx] = Value::Function(function.clone());
+                                let new_arg_count = arg_count + 1;
+                                let func = function;
+                                let mut current_args = new_arg_count;
+                                if current_args < func.arity {
+                                    return Err(format!("Method '{}' expects at least {} arguments but got {}", func.name, func.arity, current_args));
+                                }
+                                if current_args > func.max_arity && !func.has_varargs {
+                                    return Err(format!("Method '{}' expects at most {} arguments but got {}", func.name, func.max_arity, current_args));
+                                }
+                                while current_args < func.max_arity {
+                                    self.stack.push(Value::DefaultSentinel);
+                                    current_args += 1;
+                                }
+                                if func.has_varargs {
+                                    if new_arg_count > func.max_arity {
+                                        let vararg_count = new_arg_count - func.max_arity;
+                                        let start = self.stack.len() - vararg_count;
+                                        let varargs: Vec<Value> = self.stack.drain(start..).collect();
+                                        self.stack.push(Value::tuple(varargs));
+                                    } else {
+                                        self.stack.push(Value::tuple(Vec::new()));
+                                    }
+                                }
+                                if func.has_kwargs {
+                                    self.stack.push(Value::map(HashMap::new()));
+                                }
+                                self.frames.push(frame);
+                                frame = CallFrame {
+                                    function: func,
+                                    ip: 0,
+                                    stack_offset: callee_idx,
+                                    constructor_instance: None,
+                                    closure_upvalues: None,
+                                    memo_target: None,
                                 };
                             }
                             Value::ClassDef(def) => {
@@ -1129,6 +1268,8 @@ impl VM {
                                         ip: 0,
                                         stack_offset: callee_idx,
                                         constructor_instance: Some(instance),
+                                        closure_upvalues: None,
+                                        memo_target: None,
                                     };
                                 } else {
                                     if arg_count > 0 {
@@ -1239,6 +1380,98 @@ impl VM {
                                 });
                                 self.stack.truncate(callee_idx);
                                 self.stack.push(instance);
+                            }
+                            Value::EnumConstructor {
+                                enum_name,
+                                variant,
+                                arity,
+                            } => {
+                                if arg_count != arity {
+                                    return Err(format!(
+                                        "Enum variant '{}::{}' expects {} arguments but got {}",
+                                        enum_name, variant, arity, arg_count
+                                    ));
+                                }
+                                let args: Vec<Value> = self.stack[callee_idx + 1..].to_vec();
+                                let inst = Value::EnumVariant {
+                                    enum_name,
+                                    variant,
+                                    fields: Arc::new(args),
+                                };
+                                self.stack.truncate(callee_idx);
+                                self.stack.push(inst);
+                            }
+                            Value::Memoized { func, cache } => {
+                                let args: Vec<Value> = self.stack[callee_idx + 1..].to_vec();
+                                let key = args
+                                    .iter()
+                                    .map(|a| format!("{:?}", a))
+                                    .collect::<Vec<_>>()
+                                    .join("|");
+                                if let Some(cached) = cache.lock().get(&key).cloned() {
+                                    self.stack.truncate(callee_idx);
+                                    self.stack.push(cached);
+                                    continue;
+                                }
+                                match func.as_ref() {
+                                    Value::Function(f) => {
+                                        let f = f.clone();
+                                        let mut current_args = arg_count;
+                                        while current_args < f.max_arity {
+                                            self.stack.push(Value::DefaultSentinel);
+                                            current_args += 1;
+                                        }
+                                        if f.has_varargs && arg_count <= f.max_arity {
+                                            self.stack.push(Value::tuple(Vec::new()));
+                                        }
+                                        if f.has_kwargs {
+                                            self.stack.push(Value::map(HashMap::new()));
+                                        }
+                                        self.frames.push(frame);
+                                        frame = CallFrame {
+                                            function: f,
+                                            ip: 0,
+                                            stack_offset: callee_idx,
+                                            constructor_instance: None,
+                                            closure_upvalues: None,
+                                            memo_target: Some((cache, key)),
+                                        };
+                                    }
+                                    Value::Closure { function: f, upvalues } => {
+                                        let f = f.clone();
+                                        let upvalues = upvalues.clone();
+                                        let mut current_args = arg_count;
+                                        while current_args < f.max_arity {
+                                            self.stack.push(Value::DefaultSentinel);
+                                            current_args += 1;
+                                        }
+                                        if f.has_varargs && arg_count <= f.max_arity {
+                                            self.stack.push(Value::tuple(Vec::new()));
+                                        }
+                                        if f.has_kwargs {
+                                            self.stack.push(Value::map(HashMap::new()));
+                                        }
+                                        for uv in upvalues.lock().iter() {
+                                            self.stack.push(uv.clone());
+                                        }
+                                        self.frames.push(frame);
+                                        frame = CallFrame {
+                                            function: f,
+                                            ip: 0,
+                                            stack_offset: callee_idx,
+                                            constructor_instance: None,
+                                            closure_upvalues: Some(upvalues),
+                                            memo_target: Some((cache, key)),
+                                        };
+                                    }
+                                    Value::Native(_, nf) => {
+                                        let res = nf(&args)?;
+                                        cache.lock().insert(key, res.clone());
+                                        self.stack.truncate(callee_idx);
+                                        self.stack.push(res);
+                                    }
+                                    other => return Err(format!("Cannot memoize non-callable '{}'", other.type_name())),
+                                }
                             }
                             other => return Err(format!("Cannot call non-callable type '{}'", other.type_name())),
                         }
@@ -1360,8 +1593,8 @@ impl VM {
                             for arg in final_args {
                                 self.stack.push(arg);
                             }
-                            if let Some(uv) = upvalues_opt {
-                                for u in uv.iter() {
+                            if let Some(ref uv) = upvalues_opt {
+                                for u in uv.lock().iter() {
                                     self.stack.push(u.clone());
                                 }
                             }
@@ -1372,6 +1605,8 @@ impl VM {
                                 ip: 0,
                                 stack_offset: callee_idx,
                                 constructor_instance: constructor_instance_opt,
+                                closure_upvalues: upvalues_opt,
+                                memo_target: None,
                             };
                         } else {
                             match callee {
@@ -1417,7 +1652,7 @@ impl VM {
                             Value::Function(func) => {
                                 self.stack.push(Value::Closure {
                                     function: func,
-                                    upvalues: Arc::new(upvalues),
+                                    upvalues: Arc::new(parking_lot::Mutex::new(upvalues)),
                                 });
                             }
                             _ => return Err("BuildClosure expected function on stack".to_string()),
@@ -1442,6 +1677,21 @@ impl VM {
                         } else {
                             self.stack.pop().unwrap_or(Value::Nil)
                         };
+                        if let Some(ref uv_cell) = frame.closure_upvalues {
+                            let param_slots = frame.function.max_arity
+                                + usize::from(frame.function.has_varargs)
+                                + usize::from(frame.function.has_kwargs);
+                            let uv_start = frame.stack_offset + 1 + param_slots;
+                            let mut uv_guard = uv_cell.lock();
+                            for i in 0..uv_guard.len() {
+                                if uv_start + i < self.stack.len() {
+                                    uv_guard[i] = self.stack[uv_start + i].clone();
+                                }
+                            }
+                        }
+                        if let Some((ref cache, ref key)) = frame.memo_target {
+                            cache.lock().insert(key.clone(), result.clone());
+                        }
                         self.stack.truncate(frame.stack_offset);
                         self.stack.push(result);
 
@@ -1489,6 +1739,28 @@ impl VM {
                         }
                         for el in elements.into_iter().rev() {
                             self.stack.push(el);
+                        }
+                    }
+                    OpCode::UnpackArrayRest => {
+                        let head_count = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let val = self.stack.pop().unwrap_or(Value::Nil);
+                        let elements: Vec<Value> = match val {
+                            Value::Tuple(tup) => tup.as_ref().clone(),
+                            Value::Array(arr) => arr.lock().clone(),
+                            other => return Err(format!("Cannot unpack non-sequence type '{}'", other.type_name())),
+                        };
+                        if elements.len() < head_count {
+                            return Err(format!(
+                                "Not enough values to unpack (expected at least {}, got {})",
+                                head_count,
+                                elements.len()
+                            ));
+                        }
+                        let rest = elements[head_count..].to_vec();
+                        self.stack.push(Value::array(rest));
+                        for el in elements[..head_count].iter().rev() {
+                            self.stack.push(el.clone());
                         }
                     }
                     OpCode::BuildMap => {
@@ -1620,9 +1892,29 @@ impl VM {
                             }
                             (Value::StructInstance(inst), key) => {
                                 let k = format!("{}", key);
-                                let fields = inst.fields.lock();
-                                let val = fields.get(&k).cloned().unwrap_or(Value::Nil);
-                                self.stack.push(val);
+                                let field_val = inst.fields.lock().get(&k).cloned();
+                                if let Some(val) = field_val {
+                                    self.stack.push(val);
+                                } else if let Some(Value::StructDef(sdef)) = self.globals.get(&inst.name) {
+                                    if let Some(m) = sdef.methods.lock().get(&k).cloned() {
+                                        self.stack.push(Value::BoundStructMethod {
+                                            receiver: inst.clone(),
+                                            function: m,
+                                        });
+                                    } else {
+                                        self.stack.push(Value::Nil);
+                                    }
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            (Value::EnumVariant { fields, .. }, Value::Int(i)) => {
+                                let idx = if i < 0 {
+                                    (fields.len() as i64 + i) as usize
+                                } else {
+                                    i as usize
+                                };
+                                self.stack.push(fields.get(idx).cloned().unwrap_or(Value::Nil));
                             }
                             (Value::ClassInstance(inst), key) => {
                                 let k = format!("{}", key);
@@ -1842,6 +2134,290 @@ impl VM {
                             _ => return Err("MapInsert expected map on stack".to_string()),
                         }
                     }
+                    OpCode::OptionalGetAttr => {
+                        let const_idx = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let attr_name = frame.function.chunk.constants[const_idx].to_string();
+                        let target = self.stack.pop().unwrap_or(Value::Nil);
+                        match target {
+                            Value::Nil => self.stack.push(Value::Nil),
+                            Value::Map(m) => {
+                                let val = m.lock().get(&attr_name).cloned().unwrap_or(Value::Nil);
+                                self.stack.push(val);
+                            }
+                            Value::StructInstance(inst) => {
+                                let val = inst.fields.lock().get(&attr_name).cloned();
+                                if let Some(v) = val {
+                                    self.stack.push(v);
+                                } else if let Some(Value::StructDef(sdef)) = self.globals.get(&inst.name) {
+                                    if let Some(m) = sdef.methods.lock().get(&attr_name).cloned() {
+                                        self.stack.push(Value::BoundStructMethod {
+                                            receiver: inst,
+                                            function: m,
+                                        });
+                                    } else {
+                                        self.stack.push(Value::Nil);
+                                    }
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            Value::ClassInstance(inst) => {
+                                let field_val = inst.fields.lock().get(&attr_name).cloned();
+                                if let Some(v) = field_val {
+                                    self.stack.push(v);
+                                } else if let Some(m) = Self::find_method(&inst.class, &attr_name, &self.globals) {
+                                    self.stack.push(Value::BoundUserMethod {
+                                        receiver: Arc::new(inst),
+                                        function: m,
+                                    });
+                                } else if let Some(v) = Self::find_class_var(&inst.class, &attr_name, &self.globals) {
+                                    self.stack.push(v);
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            _ => self.stack.push(Value::Nil),
+                        }
+                    }
+                    OpCode::OptionalIndexGet => {
+                        let idx_val = self.stack.pop().unwrap_or(Value::Nil);
+                        let target = self.stack.pop().unwrap_or(Value::Nil);
+                        match (target, idx_val) {
+                            (Value::Nil, _) => self.stack.push(Value::Nil),
+                            (Value::Array(arr), Value::Int(i)) => {
+                                let items = arr.lock();
+                                let actual_idx = if i < 0 { items.len() as i64 + i } else { i };
+                                if actual_idx >= 0 && (actual_idx as usize) < items.len() {
+                                    self.stack.push(items[actual_idx as usize].clone());
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            (Value::Tuple(tup), Value::Int(i)) => {
+                                let actual_idx = if i < 0 { tup.len() as i64 + i } else { i };
+                                if actual_idx >= 0 && (actual_idx as usize) < tup.len() {
+                                    self.stack.push(tup[actual_idx as usize].clone());
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            (Value::Map(m), key) => {
+                                let k = format!("{}", key);
+                                let val = m.lock().get(&k).cloned().unwrap_or(Value::Nil);
+                                self.stack.push(val);
+                            }
+                            (Value::StructInstance(inst), key) => {
+                                let k = format!("{}", key);
+                                let val = inst.fields.lock().get(&k).cloned().unwrap_or(Value::Nil);
+                                self.stack.push(val);
+                            }
+                            (Value::String(s), Value::Int(i)) => {
+                                let chars: Vec<char> = s.chars().collect();
+                                let actual_idx = if i < 0 { chars.len() as i64 + i } else { i };
+                                if actual_idx >= 0 && (actual_idx as usize) < chars.len() {
+                                    self.stack.push(Value::string(chars[actual_idx as usize].to_string()));
+                                } else {
+                                    self.stack.push(Value::Nil);
+                                }
+                            }
+                            _ => self.stack.push(Value::Nil),
+                        }
+                    }
+                    OpCode::TryUnwrap => {
+                        let val = self.stack.pop().unwrap_or(Value::Nil);
+                        let should_early_return = match &val {
+                            Value::Nil => Some(Value::Nil),
+                            Value::EnumVariant { variant, .. } if variant == "None" || variant == "Err" => {
+                                Some(val.clone())
+                            }
+                            _ => None,
+                        };
+                        if let Some(early_val) = should_early_return {
+                            self.stack.truncate(frame.stack_offset);
+                            self.stack.push(early_val);
+                            if self.frames.is_empty() {
+                                return Ok(self.stack.pop().unwrap_or(Value::Nil));
+                            } else {
+                                frame = self.frames.pop().unwrap();
+                            }
+                        } else {
+                            match val {
+                                Value::EnumVariant { variant, fields, .. }
+                                    if variant == "Some" || variant == "Ok" =>
+                                {
+                                    self.stack.push(fields.first().cloned().unwrap_or(Value::Nil));
+                                }
+                                other => self.stack.push(other),
+                            }
+                        }
+                    }
+                    OpCode::BuildRange => {
+                        let end_val = self.stack.pop().unwrap_or(Value::Int(0));
+                        let start_val = self.stack.pop().unwrap_or(Value::Int(0));
+                        match (start_val, end_val) {
+                            (Value::Int(s), Value::Int(e)) => {
+                                let items: Vec<Value> = (s..e).map(Value::Int).collect();
+                                self.stack.push(Value::array(items));
+                            }
+                            (a, b) => {
+                                return Err(format!(
+                                    "Range bounds must be integers, got '{}' and '{}'",
+                                    a.type_name(),
+                                    b.type_name()
+                                ));
+                            }
+                        }
+                    }
+                    OpCode::BuildRangeInclusive => {
+                        let end_val = self.stack.pop().unwrap_or(Value::Int(0));
+                        let start_val = self.stack.pop().unwrap_or(Value::Int(0));
+                        match (start_val, end_val) {
+                            (Value::Int(s), Value::Int(e)) => {
+                                let items: Vec<Value> = (s..=e).map(Value::Int).collect();
+                                self.stack.push(Value::array(items));
+                            }
+                            (a, b) => {
+                                return Err(format!(
+                                    "Range bounds must be integers, got '{}' and '{}'",
+                                    a.type_name(),
+                                    b.type_name()
+                                ));
+                            }
+                        }
+                    }
+                    OpCode::Slice => {
+                        let step_val = self.stack.pop().unwrap_or(Value::Nil);
+                        let end_val = self.stack.pop().unwrap_or(Value::Nil);
+                        let start_val = self.stack.pop().unwrap_or(Value::Nil);
+                        let target = self.stack.pop().unwrap_or(Value::Nil);
+
+                        let step = match step_val {
+                            Value::Nil => 1i64,
+                            Value::Int(s) => {
+                                if s == 0 {
+                                    return Err("Slice step cannot be zero".to_string());
+                                }
+                                s
+                            }
+                            other => return Err(format!("Slice step must be int, got '{}'", other.type_name())),
+                        };
+
+                        let slice_indices = |len: i64| -> Vec<usize> {
+                            let (mut curr, bound) = if step > 0 {
+                                let s = match &start_val {
+                                    Value::Nil => 0,
+                                    Value::Int(i) => if *i < 0 { (len + *i).max(0) } else { (*i).min(len) },
+                                    _ => 0,
+                                };
+                                let e = match &end_val {
+                                    Value::Nil => len,
+                                    Value::Int(i) => if *i < 0 { (len + *i).max(0) } else { (*i).min(len) },
+                                    _ => len,
+                                };
+                                (s, e)
+                            } else {
+                                let s = match &start_val {
+                                    Value::Nil => len - 1,
+                                    Value::Int(i) => if *i < 0 { len + *i } else { (*i).min(len - 1) },
+                                    _ => len - 1,
+                                };
+                                let e = match &end_val {
+                                    Value::Nil => -1,
+                                    Value::Int(i) => if *i < 0 { len + *i } else { *i },
+                                    _ => -1,
+                                };
+                                (s, e)
+                            };
+
+                            let mut idxs = Vec::new();
+                            if step > 0 {
+                                while curr < bound {
+                                    if curr >= 0 && curr < len {
+                                        idxs.push(curr as usize);
+                                    }
+                                    curr += step;
+                                }
+                            } else {
+                                while curr > bound {
+                                    if curr >= 0 && curr < len {
+                                        idxs.push(curr as usize);
+                                    }
+                                    curr += step;
+                                }
+                            }
+                            idxs
+                        };
+
+                        match target {
+                            Value::Array(arr) => {
+                                let items = arr.lock();
+                                let idxs = slice_indices(items.len() as i64);
+                                let sliced: Vec<Value> = idxs.into_iter().map(|i| items[i].clone()).collect();
+                                self.stack.push(Value::array(sliced));
+                            }
+                            Value::Tuple(tup) => {
+                                let idxs = slice_indices(tup.len() as i64);
+                                let sliced: Vec<Value> = idxs.into_iter().map(|i| tup[i].clone()).collect();
+                                self.stack.push(Value::tuple(sliced));
+                            }
+                            Value::String(s) => {
+                                let chars: Vec<char> = s.chars().collect();
+                                let idxs = slice_indices(chars.len() as i64);
+                                let sliced: String = idxs.into_iter().map(|i| chars[i]).collect();
+                                self.stack.push(Value::string(sliced));
+                            }
+                            other => {
+                                return Err(format!("Cannot slice type '{}'", other.type_name()));
+                            }
+                        }
+                    }
+                    OpCode::ImplMethod => {
+                        let target_idx = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let method_idx = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let target_name = frame.function.chunk.constants[target_idx].to_string();
+                        let method_name = frame.function.chunk.constants[method_idx].to_string();
+                        let fn_val = self.stack.pop().unwrap_or(Value::Nil);
+                        if let Value::Function(compiled_fn) = fn_val {
+                            if let Some(target_def) = self.globals.get(&target_name) {
+                                match target_def {
+                                    Value::StructDef(sdef) => {
+                                        sdef.methods.lock().insert(method_name, compiled_fn);
+                                    }
+                                    Value::ClassDef(cdef) => {
+                                        cdef.methods.lock().insert(method_name, compiled_fn);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    OpCode::MatchEnumVariant => {
+                        let enum_idx = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let var_idx = frame.function.chunk.read_u16(frame.ip) as usize;
+                        frame.ip += 2;
+                        let expected_arity = frame.function.chunk.code[frame.ip] as usize;
+                        frame.ip += 1;
+                        let expected_enum = frame.function.chunk.constants[enum_idx].to_string();
+                        let expected_var = frame.function.chunk.constants[var_idx].to_string();
+                        let target = self.stack.pop().unwrap_or(Value::Nil);
+                        let matched = match target {
+                            Value::EnumVariant {
+                                enum_name,
+                                variant,
+                                fields,
+                            } => {
+                                (expected_enum.is_empty() || expected_enum == enum_name)
+                                    && variant == expected_var
+                                    && fields.len() == expected_arity
+                            }
+                            _ => false,
+                        };
+                        self.stack.push(Value::Bool(matched));
+                    }
                     _ => {}
                 }
             }
@@ -1869,6 +2445,9 @@ impl VM {
     pub fn load_module(&mut self, mod_name: &str) -> Result<Value, String> {
         if let Some(cached) = self.modules_cache.get(mod_name) {
             return Ok(cached.clone());
+        }
+        if self.loading_modules.contains(mod_name) {
+            return Err(format!("ImportError: Circular import detected for module '{}'", mod_name));
         }
 
         let clean_name = mod_name.to_lowercase();
@@ -1906,17 +2485,24 @@ impl VM {
         }
 
         let mut candidates = vec![
+            std::path::PathBuf::from(mod_name),
             std::path::PathBuf::from(format!("{}.ae", mod_name)),
             std::path::PathBuf::from(format!("{}.aether", mod_name)),
             std::path::PathBuf::from(format!("libraries/{}.ae", mod_name)),
             std::path::PathBuf::from(format!("libraries/{}.aether", mod_name)),
         ];
+        if mod_name.contains('.') && !mod_name.ends_with(".ae") && !mod_name.ends_with(".aether") {
+            let slash_path = mod_name.replace('.', "/");
+            candidates.push(std::path::PathBuf::from(format!("{}.ae", slash_path)));
+            candidates.push(std::path::PathBuf::from(format!("libraries/{}.ae", slash_path)));
+        }
         if clean_name.starts_with("aether") && !clean_name.starts_with("aether_") {
             let suffix = &clean_name["aether".len()..];
             candidates.push(std::path::PathBuf::from(format!("libraries/aether_{}.ae", suffix)));
             candidates.push(std::path::PathBuf::from(format!("libraries/aether_{}.aether", suffix)));
         }
         if let Ok(cwd) = std::env::current_dir() {
+            candidates.push(cwd.join(mod_name));
             candidates.push(cwd.join(format!("{}.ae", mod_name)));
             candidates.push(cwd.join(format!("{}.aether", mod_name)));
             candidates.push(cwd.join(format!("libraries/{}.ae", mod_name)));
@@ -1924,18 +2510,43 @@ impl VM {
         }
 
         for path in candidates {
-            if path.exists() {
+            if path.is_file() {
                 if let Ok(source) = std::fs::read_to_string(&path) {
+                    self.loading_modules.insert(mod_name.to_string());
                     let mut lexer = crate::syntax::lexer::Lexer::new(&source);
-                    let tokens = lexer.tokenize().map_err(|(e, _)| format!("Import Error in {}: {}", mod_name, e))?;
+                    let tokens = match lexer.tokenize() {
+                        Ok(t) => t,
+                        Err((e, _)) => {
+                            self.loading_modules.remove(mod_name);
+                            return Err(format!("Import Error in {}: {}", mod_name, e));
+                        }
+                    };
                     let mut parser = crate::syntax::parser::Parser::new(tokens);
-                    let program = parser.parse_program().map_err(|(e, _)| format!("Import Error in {}: {}", mod_name, e))?;
+                    let raw_program = match parser.parse_program() {
+                        Ok(p) => p,
+                        Err((e, _)) => {
+                            self.loading_modules.remove(mod_name);
+                            return Err(format!("Import Error in {}: {}", mod_name, e));
+                        }
+                    };
+                    let (program, _) = crate::vm::optimizer::optimize_program(&raw_program);
                     let compiler = crate::vm::compiler::BytecodeCompiler::new("<main>", 0);
-                    let compiled_fn = compiler.compile(&program)?;
+                    let compiled_fn = match compiler.compile(&program) {
+                        Ok(f) => f,
+                        Err(e) => {
+                            self.loading_modules.remove(mod_name);
+                            return Err(e);
+                        }
+                    };
 
                     let mut sub_vm = VM::new();
                     sub_vm.modules_cache = self.modules_cache.clone();
-                    let _ = sub_vm.interpret(compiled_fn)?;
+                    sub_vm.loading_modules = self.loading_modules.clone();
+                    if let Err(e) = sub_vm.interpret(compiled_fn) {
+                        self.loading_modules.remove(mod_name);
+                        return Err(e);
+                    }
+                    self.loading_modules.remove(mod_name);
 
                     let mut module_exports = HashMap::new();
                     for (k, v) in sub_vm.globals {
@@ -2014,6 +2625,8 @@ impl VM {
             ip: 0,
             stack_offset: 0,
             constructor_instance: None,
+            closure_upvalues: None,
+            memo_target: None,
         });
         let res = sub_vm.run()?;
         for (k, v) in sub_vm.globals {

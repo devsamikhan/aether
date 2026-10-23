@@ -98,7 +98,55 @@ pub enum Statement {
         symbols: Vec<(String, Option<String>)>,
         span: Span,
     },
+    LetDestructure {
+        pattern: DestructurePattern,
+        is_mut: bool,
+        initializer: Expr,
+        span: Span,
+    },
+    EnumDef {
+        name: String,
+        variants: Vec<EnumVariantDef>,
+        span: Span,
+    },
+    TraitDef {
+        name: String,
+        methods: Vec<String>,
+        span: Span,
+    },
+    ImplDef {
+        trait_name: Option<String>,
+        target_type: String,
+        methods: Vec<Statement>,
+        span: Span,
+    },
+    TypeAlias {
+        name: String,
+        target: String,
+        span: Span,
+    },
+    Decorated {
+        decorators: Vec<Expr>,
+        stmt: Box<Statement>,
+        span: Span,
+    },
     Expr(Expr),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DestructurePattern {
+    Tuple(Vec<String>),
+    Array {
+        elements: Vec<String>,
+        rest: Option<String>,
+    },
+    Map(Vec<(String, String)>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariantDef {
+    pub name: String,
+    pub fields: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,6 +180,12 @@ impl Statement {
             Statement::Raise { span, .. } => *span,
             Statement::Import { span, .. } => *span,
             Statement::FromImport { span, .. } => *span,
+            Statement::LetDestructure { span, .. } => *span,
+            Statement::EnumDef { span, .. } => *span,
+            Statement::TraitDef { span, .. } => *span,
+            Statement::ImplDef { span, .. } => *span,
+            Statement::TypeAlias { span, .. } => *span,
+            Statement::Decorated { span, .. } => *span,
             Statement::Expr(expr) => expr.span(),
         }
     }
@@ -212,11 +266,22 @@ pub enum Expr {
         condition: Option<Box<Expr>>,
         span: Span,
     },
+    OptionalMember(Box<Expr>, String, Span),
+    OptionalIndex(Box<Expr>, Box<Expr>, Span),
+    Try(Box<Expr>, Span),
+    Slice {
+        obj: Box<Expr>,
+        start: Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
+        step: Option<Box<Expr>>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: MatchPattern,
+    pub guard: Option<Expr>,
     pub body: Expr,
     pub span: Span,
 }
@@ -227,6 +292,18 @@ pub enum MatchPattern {
     Range(Literal, Literal),
     Ident(String),
     Wildcard,
+    EnumVariant {
+        enum_name: Option<String>,
+        variant: String,
+        bindings: Vec<String>,
+    },
+    Array {
+        elements: Vec<MatchPattern>,
+        rest: Option<String>,
+    },
+    Tuple(Vec<MatchPattern>),
+    Map(Vec<(String, MatchPattern)>),
+    Or(Vec<MatchPattern>),
 }
 
 impl Expr {
@@ -255,6 +332,10 @@ impl Expr {
             Expr::Super(s) => *s,
             Expr::ListComp { span, .. } => *span,
             Expr::DictComp { span, .. } => *span,
+            Expr::OptionalMember(_, _, s) => *s,
+            Expr::OptionalIndex(_, _, s) => *s,
+            Expr::Try(_, s) => *s,
+            Expr::Slice { span, .. } => *span,
         }
     }
 }
@@ -285,6 +366,9 @@ pub enum BinaryOp {
     And,
     Or,
     In,
+    NullCoalesce,
+    Range,
+    RangeInclusive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

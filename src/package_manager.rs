@@ -356,7 +356,7 @@ impl AetherPackageManager {
         }
 
         Ok(format!(
-            "📦 Successfully packaged and published '{}' v{}\n  Archive:  {}\n  Registry: {}\n  SHA-256:  {}",
+            "📦 Successfully packaged '{}' v{} and published\n  Archive:  {}\n  Registry: {}\n  SHA-256:  {}",
             manifest.name,
             manifest.version,
             package_archive.display(),

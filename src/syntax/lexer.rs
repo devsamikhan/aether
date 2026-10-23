@@ -115,7 +115,18 @@ impl<'a> Lexer<'a> {
                 }
                 ',' => tokens.push(Token::new(TokenKind::Comma, Span::new(start_pos, self.current_pos(), start_line, start_col))),
                 ';' => tokens.push(Token::new(TokenKind::Semicolon, Span::new(start_pos, self.current_pos(), start_line, start_col))),
-                '?' => tokens.push(Token::new(TokenKind::Question, Span::new(start_pos, self.current_pos(), start_line, start_col))),
+                '@' => tokens.push(Token::new(TokenKind::At, Span::new(start_pos, self.current_pos(), start_line, start_col))),
+                '?' => {
+                    if self.peek() == '.' {
+                        self.advance();
+                        tokens.push(Token::new(TokenKind::QuestionDot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    } else if self.peek() == '?' {
+                        self.advance();
+                        tokens.push(Token::new(TokenKind::QuestionQuestion, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    } else {
+                        tokens.push(Token::new(TokenKind::Question, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    }
+                }
 
                 // Operators & Colons
                 ':' => {
@@ -129,7 +140,12 @@ impl<'a> Lexer<'a> {
                 '.' => {
                     if self.peek() == '.' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::DotDot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        if self.peek() == '=' {
+                            self.advance();
+                            tokens.push(Token::new(TokenKind::DotDotEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        } else {
+                            tokens.push(Token::new(TokenKind::DotDot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        }
                     } else {
                         tokens.push(Token::new(TokenKind::Dot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
                     }
@@ -420,20 +436,22 @@ impl<'a> Lexer<'a> {
                         "ensure" => TokenKind::Ensure,
                         "type" => TokenKind::Type,
                         "struct" => TokenKind::Struct,
+                        "enum" => TokenKind::Enum,
                         "class" => TokenKind::Class,
                         "super" => TokenKind::Super,
                         "trait" => TokenKind::Trait,
                         "impl" => TokenKind::Impl,
                         "use" => TokenKind::Use,
+                        "export" => TokenKind::Export,
                         "spawn" => TokenKind::Spawn,
                         "channel" => TokenKind::Channel,
                         "defer" => TokenKind::Defer,
                         "pass" => TokenKind::Pass,
                         "case" => TokenKind::Case,
                         "try" => TokenKind::Try,
-                        "except" => TokenKind::Except,
+                        "except" | "catch" => TokenKind::Except,
                         "finally" => TokenKind::Finally,
-                        "raise" => TokenKind::Raise,
+                        "raise" | "throw" => TokenKind::Raise,
                         "import" => TokenKind::Import,
                         "from" => TokenKind::From,
                         "as" => TokenKind::As,

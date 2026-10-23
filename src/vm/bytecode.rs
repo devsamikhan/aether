@@ -80,6 +80,18 @@ pub enum OpCode {
     // Comprehensions & Collections
     ArrayPush,
     MapInsert,
+
+    // Language v3.0 Upgrades
+    JumpIfNotNil,
+    OptionalGetAttr,
+    OptionalIndexGet,
+    TryUnwrap,
+    BuildRange,
+    BuildRangeInclusive,
+    Slice,
+    UnpackArrayRest,
+    ImplMethod,
+    MatchEnumVariant,
 }
 
 impl From<u8> for OpCode {

@@ -901,15 +901,19 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
         Ok(Value::map(res))
     }));
 
-    // AI.embed(text) / AI.embeddings(text) -> 128-D dense vector
-    let embed_native = Value::Native("AI.embed".into(), |args| {
+    // AI.embed(text) -> 128-D dense vector; AI.embeddings(text) -> 16-D vector
+    ai_module.insert("embed".to_string(), Value::Native("AI.embed".into(), |args| {
         let text = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
         let emb = crate::vm::ai_engine::generate_embedding(&text);
         let vals = emb.into_iter().map(Value::Float).collect();
         Ok(Value::array(vals))
-    });
-    ai_module.insert("embed".to_string(), embed_native.clone());
-    ai_module.insert("embeddings".to_string(), embed_native);
+    }));
+    ai_module.insert("embeddings".to_string(), Value::Native("AI.embeddings".into(), |args| {
+        let text = if !args.is_empty() { format!("{}", args[0]) } else { "".to_string() };
+        let emb = crate::vm::ai_engine::generate_embedding(&text);
+        let vals = emb.into_iter().take(16).map(Value::Float).collect();
+        Ok(Value::array(vals))
+    }));
 
     // AI.similarity(vec1, vec2) -> float (-1.0 to 1.0)
     ai_module.insert("similarity".to_string(), Value::Native("AI.similarity".into(), |args| {

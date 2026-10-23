@@ -705,7 +705,7 @@ impl CraneliftCompiler {
                     }
                     BinaryOp::And => builder.ins().band(l, r),
                     BinaryOp::Or => builder.ins().bor(l, r),
-                    BinaryOp::In => builder.ins().iconst(types::I64, 0),
+                    BinaryOp::In | BinaryOp::NullCoalesce | BinaryOp::Range | BinaryOp::RangeInclusive => builder.ins().iconst(types::I64, 0),
                 };
                 Ok(val)
             }

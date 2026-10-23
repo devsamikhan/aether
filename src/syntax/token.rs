@@ -34,11 +34,13 @@ pub enum TokenKind {
     Ensure,
     Type,
     Struct,
+    Enum,
     Class,
     Super,
     Trait,
     Impl,
     Use,
+    Export,
     Spawn,
     Channel,
     Defer,
@@ -87,13 +89,17 @@ pub enum TokenKind {
     GreaterEqual, // >=
 
     // Punctuation
-    Dot,          // .
-    DotDot,       // ..
-    Comma,        // ,
-    Colon,        // :
-    DoubleColon,  // ::
-    Semicolon,    // ;
-    Question,     // ?
+    Dot,              // .
+    DotDot,           // ..
+    DotDotEqual,      // ..=
+    Comma,            // ,
+    Colon,            // :
+    DoubleColon,      // ::
+    Semicolon,        // ;
+    Question,         // ?
+    QuestionDot,      // ?.
+    QuestionQuestion, // ??
+    At,               // @
 
     // Delimiters
     LParen,   // (
@@ -153,11 +159,13 @@ impl fmt::Display for TokenKind {
             TokenKind::Ensure => write!(f, "ensure"),
             TokenKind::Type => write!(f, "type"),
             TokenKind::Struct => write!(f, "struct"),
+            TokenKind::Enum => write!(f, "enum"),
             TokenKind::Class => write!(f, "class"),
             TokenKind::Super => write!(f, "super"),
             TokenKind::Trait => write!(f, "trait"),
             TokenKind::Impl => write!(f, "impl"),
             TokenKind::Use => write!(f, "use"),
+            TokenKind::Export => write!(f, "export"),
             TokenKind::Spawn => write!(f, "spawn"),
             TokenKind::Channel => write!(f, "channel"),
             TokenKind::Defer => write!(f, "defer"),
@@ -200,11 +208,15 @@ impl fmt::Display for TokenKind {
             TokenKind::GreaterEqual => write!(f, ">="),
             TokenKind::Dot => write!(f, "."),
             TokenKind::DotDot => write!(f, ".."),
+            TokenKind::DotDotEqual => write!(f, "..="),
             TokenKind::Comma => write!(f, ","),
             TokenKind::Colon => write!(f, ":"),
             TokenKind::DoubleColon => write!(f, "::"),
             TokenKind::Semicolon => write!(f, ";"),
             TokenKind::Question => write!(f, "?"),
+            TokenKind::QuestionDot => write!(f, "?."),
+            TokenKind::QuestionQuestion => write!(f, "??"),
+            TokenKind::At => write!(f, "@"),
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
             TokenKind::LBracket => write!(f, "["),
@@ -245,11 +257,13 @@ impl TokenKind {
             TokenKind::Ensure => Some("ensure"),
             TokenKind::Type => Some("type"),
             TokenKind::Struct => Some("struct"),
+            TokenKind::Enum => Some("enum"),
             TokenKind::Class => Some("class"),
             TokenKind::Super => Some("super"),
             TokenKind::Trait => Some("trait"),
             TokenKind::Impl => Some("impl"),
             TokenKind::Use => Some("use"),
+            TokenKind::Export => Some("export"),
             TokenKind::Spawn => Some("spawn"),
             TokenKind::Channel => Some("channel"),
             TokenKind::Defer => Some("defer"),

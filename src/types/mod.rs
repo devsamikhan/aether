@@ -27,6 +27,9 @@ pub enum Type {
     Intent(String),
     Struct(String),
     Enum(String),
+    Trait(String),
+    Alias(String, Box<Type>),
+    Union(Vec<Type>),
 
     // Function
     Function {
