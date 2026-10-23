@@ -178,17 +178,20 @@ let outcome = qreg.measure(0);
 println("Measured: " + to_string(outcome));
 ```
 
-### 5. 🧬 Native Bioinformatics & Computational Genomics (`Bio`)
+### 5. 🧬 Native Bioinformatics & CRISPR Gene Editing (`Bio`)
 ```aether
 // Parse biological sequences with genetic code translation & alignment
-let seq = Bio.Sequence("ATGGCGGCGCTAGCG");
+let seq = Bio.dna("ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGATGGCGTAGGCAAGAGTGCCTTGACGA");
 let rna = seq.transcribe();
 let protein = seq.translate();
 let gc = seq.gc_content();
-let aligned = Bio.align_global("ATGGCG", "ATGCCG");
 
 // Colorized nucleotide terminal output
 println(Bio.colorize(seq));
+
+// Synthetic biology: CRISPR-Cas9 sgRNA guide design with on-target scoring & PAM scan
+let targets = seq.crispr_targets("NGG", 20);
+println("Top sgRNA spacer: " + targets[0].spacer + " | Score: " + to_string(targets[0].on_target_score));
 ```
 
 ### 6. 💊 Cheminformatics & Deep Drug Safety Screening (`Chem`)
@@ -204,6 +207,23 @@ println("Lipinski Passed: " + to_string(drug.lipinski_rule_of_5()));
 let safety = drug.safety_profile();
 println("PAINS Alerts: " + to_string(safety.pains_alerts));
 println("hERG Risk: " + safety.herg_cardiotoxicity_risk);
+```
+
+### 7. 🔬 AlphaFold & 3D Macromolecular Structure Analysis (`Bio.Structure`)
+```aether
+// Parse PDB coordinates & AlphaFold predictions
+let protein = Bio.Structure("data/kras_g12d_pocket.pdb");
+println("Atom Count:        " + to_string(protein.atom_count()));
+println("Center of Mass:    " + to_string(protein.centroid()));
+println("Radius of Gyration:" + to_string(protein.radius_of_gyration()) + " Å");
+
+// AlphaFold pLDDT confidence summary
+let plddt = protein.plddt_summary();
+println("Mean pLDDT: " + to_string(plddt.mean) + " (" + plddt.confidence_category + ")");
+
+// Drug binding pocket identification (contacts < 4.0 Å around inhibitor)
+let contacts = protein.ligand_pocket("MRT", 4.0);
+println("Pocket Residues: " + to_string(contacts.len()));
 ```
 
 ---

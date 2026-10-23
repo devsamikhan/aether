@@ -499,6 +499,11 @@ impl VM {
             Ok(Value::string(format!("{}", args[0])))
         });
 
+        self.define_native("to_string", |args| {
+            if args.is_empty() { return Ok(Value::string("")); }
+            Ok(Value::string(format!("{}", args[0])))
+        });
+
         self.define_native("int", |args| {
             if args.is_empty() { return Ok(Value::Int(0)); }
             match &args[0] {
@@ -2709,7 +2714,8 @@ impl VM {
                                         } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
                                             || (map.contains_key("_db_id") && matches!(s.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
                                             || (map.contains_key("_agent_id") && matches!(s.as_str(), "chat" | "add_knowledge" | "history" | "clear"))
-                                            || (map.contains_key("_bio_dna") && matches!(s.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len"))
+                                            || (map.contains_key("_bio_dna") && matches!(s.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len" | "crispr_targets"))
+                                            || (map.contains_key("_bio_struct") && matches!(s.as_str(), "atom_count" | "residue_count" | "chains" | "centroid" | "radius_of_gyration" | "plddt_summary" | "rmsd" | "binding_pocket" | "ligand_pocket" | "len"))
                                             || (map.contains_key("_chem_mol") && matches!(s.as_str(), "formula" | "weight" | "molecular_weight" | "heavy_atom_count" | "hbd" | "hba" | "rotatable_bonds" | "logp" | "tpsa" | "rule_of_five" | "safety_profile" | "fingerprint" | "predict_binding_affinity" | "smiles" | "len")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
@@ -2726,7 +2732,8 @@ impl VM {
                                         } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
                                             || (map.contains_key("_db_id") && matches!(k.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
                                             || (map.contains_key("_agent_id") && matches!(k.as_str(), "chat" | "add_knowledge" | "history" | "clear"))
-                                            || (map.contains_key("_bio_dna") && matches!(k.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len"))
+                                            || (map.contains_key("_bio_dna") && matches!(k.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len" | "crispr_targets"))
+                                            || (map.contains_key("_bio_struct") && matches!(k.as_str(), "atom_count" | "residue_count" | "chains" | "centroid" | "radius_of_gyration" | "plddt_summary" | "rmsd" | "binding_pocket" | "ligand_pocket" | "len"))
                                             || (map.contains_key("_chem_mol") && matches!(k.as_str(), "formula" | "weight" | "molecular_weight" | "heavy_atom_count" | "hbd" | "hba" | "rotatable_bonds" | "logp" | "tpsa" | "rule_of_five" | "safety_profile" | "fingerprint" | "predict_binding_affinity" | "smiles" | "len")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
@@ -4202,6 +4209,18 @@ impl VM {
                             }
                         }
                         Err(format!("Unknown method '{}' on Bio.DNA handle", method))
+                    } else if m.lock().contains_key("_bio_struct") {
+                        let mut struct_args = vec![receiver.clone()];
+                        struct_args.extend_from_slice(args);
+                        let bio_mod = with_current_vm(|vm| {
+                            vm.globals.get("Bio").cloned().ok_or_else(|| "Bio module not found in globals".to_string())
+                        })?;
+                        if let Value::Map(mod_map) = bio_mod {
+                            if let Some(Value::Native(_, f)) = mod_map.lock().get(method) {
+                                return f(&struct_args);
+                            }
+                        }
+                        Err(format!("Unknown method '{}' on Bio.Structure handle", method))
                     } else if m.lock().contains_key("_chem_mol") {
                         let mut chem_args = vec![receiver.clone()];
                         chem_args.extend_from_slice(args);

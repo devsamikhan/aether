@@ -4,6 +4,7 @@ Cargo.lock
 *.exe
 *.obj
 *.pdb
+!data/*.pdb
 
 # IDE / editor files
 .vscode/

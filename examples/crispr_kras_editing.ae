@@ -1,0 +1,54 @@
+// ==============================================================================
+// AETHER Synthetic Biology: Precision CRISPR-Cas9 Target Finder for KRAS G12D
+// Identifies SpCas9 sgRNA spacers, calculates on-target efficiency, and screens PAMs
+// ==============================================================================
+
+println("================================================================================")
+println("🧬 AETHER SYNTHETIC BIOLOGY: CRISPR-Cas9 TARGET DESIGN FOR KRAS G12D")
+println("================================================================================")
+
+// Patient sequence with G12D mutation (GGT -> GAT)
+let patient_dna = Bio.dna("ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGATGGCGTAGGCAAGAGTGCCTTGACGATACAGCTAATTCAGAAT")
+println("Patient Locus (len: " + to_string(patient_dna.len) + " bp):")
+println(Bio.colorize(patient_dna))
+
+// Human Wild-Type Reference for off-target allele discrimination
+let wt_ref = "ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGGTGGCGTAGGCAAGAGTGCCTTGACGATACAGCTAATTCAGAAT"
+
+// 1. Scan for CRISPR-Cas9 targets (20nt spacer + NGG PAM)
+println("\nScanning for SpCas9 protospacer candidates (20nt + NGG PAM)...")
+let targets = patient_dna.crispr_targets("NGG", 20)
+println("Discovered " + to_string(targets.len()) + " CRISPR target site(s) across both strands:")
+
+let best_target = nil
+let best_score = -1.0
+
+for i in 0..targets.len() {
+    let t = targets[i]
+    println("\n[Candidate sgRNA #" + to_string(i + 1) + "]")
+    println("  Strand:       " + t.strand)
+    println("  Position:     " + to_string(t.position))
+    println("  Spacer (20nt): " + t.spacer)
+    println("  PAM:          " + t.pam)
+    println("  GC Content:   " + to_string(t.gc_content) + "%")
+    println("  On-Target:    " + to_string(t.on_target_score))
+    println("  Poly-T Liab:  " + to_string(t.has_poly_t_terminator))
+
+    // Calculate off-target specificity score against wild-type reference
+    let specificity = Bio.crispr_off_target_score(t.spacer, wt_ref, "NGG")
+    println("  Specificity:  " + to_string(specificity))
+
+    if t.on_target_score > best_score && !t.has_poly_t_terminator {
+        best_score = t.on_target_score
+        best_target = t
+    }
+}
+
+if best_target != nil {
+    println("\n--------------------------------------------------------------------------------")
+    println("🏆 TOP-RANKED CRISPR GUIDE RNA CANDIDATE:")
+    println("  Spacer:    5'-" + best_target.spacer + "-3'")
+    println("  PAM Site:  " + best_target.pam + " (" + best_target.strand + " strand, locus: " + to_string(best_target.position) + ")")
+    println("  Score:     " + to_string(best_target.on_target_score) + " (GC: " + to_string(best_target.gc_content) + "%)")
+    println("--------------------------------------------------------------------------------")
+}

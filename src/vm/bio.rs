@@ -11,6 +11,609 @@ fn get_dna_registry() -> &'static Mutex<HashMap<u64, Arc<PackedDna>>> {
     DNA_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+static NEXT_STRUCT_ID: AtomicU64 = AtomicU64::new(1);
+static STRUCT_REGISTRY: OnceLock<Mutex<HashMap<u64, Arc<Macromolecule>>>> = OnceLock::new();
+
+fn get_struct_registry() -> &'static Mutex<HashMap<u64, Arc<Macromolecule>>> {
+    STRUCT_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PdbAtom {
+    pub serial: usize,
+    pub name: String,
+    pub res_name: String,
+    pub chain_id: String,
+    pub res_seq: i32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub occupancy: f64,
+    pub b_factor: f64, // pLDDT in AlphaFold models
+    pub element: String,
+    pub is_hetero: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Macromolecule {
+    pub title: String,
+    pub atoms: Vec<PdbAtom>,
+}
+
+impl Macromolecule {
+    pub fn atom_count(&self) -> usize {
+        self.atoms.len()
+    }
+
+    pub fn residue_count(&self) -> usize {
+        let mut seen = std::collections::HashSet::new();
+        for a in &self.atoms {
+            if !a.is_hetero {
+                seen.insert((a.chain_id.clone(), a.res_seq));
+            }
+        }
+        seen.len()
+    }
+
+    pub fn chains(&self) -> Vec<String> {
+        let mut chains = Vec::new();
+        for a in &self.atoms {
+            if !chains.contains(&a.chain_id) {
+                chains.push(a.chain_id.clone());
+            }
+        }
+        chains
+    }
+
+    pub fn centroid(&self) -> (f64, f64, f64) {
+        if self.atoms.is_empty() {
+            return (0.0, 0.0, 0.0);
+        }
+        let mut sx = 0.0;
+        let mut sy = 0.0;
+        let mut sz = 0.0;
+        for a in &self.atoms {
+            sx += a.x;
+            sy += a.y;
+            sz += a.z;
+        }
+        let n = self.atoms.len() as f64;
+        (
+            (sx / n * 100.0).round() / 100.0,
+            (sy / n * 100.0).round() / 100.0,
+            (sz / n * 100.0).round() / 100.0,
+        )
+    }
+
+    pub fn radius_of_gyration(&self) -> f64 {
+        if self.atoms.is_empty() {
+            return 0.0;
+        }
+        let (cx, cy, cz) = self.centroid();
+        let sum_sq: f64 = self
+            .atoms
+            .iter()
+            .map(|a| (a.x - cx).powi(2) + (a.y - cy).powi(2) + (a.z - cz).powi(2))
+            .sum();
+        ((sum_sq / self.atoms.len() as f64).sqrt() * 100.0).round() / 100.0
+    }
+
+    pub fn plddt_summary(&self) -> HashMap<String, Value> {
+        let ca_atoms: Vec<&PdbAtom> = self.atoms.iter().filter(|a| a.name == "CA").collect();
+        let target_atoms = if !ca_atoms.is_empty() {
+            ca_atoms
+        } else {
+            self.atoms.iter().collect()
+        };
+
+        if target_atoms.is_empty() {
+            let mut map = HashMap::new();
+            map.insert("mean".to_string(), Value::Float(0.0));
+            map.insert("min".to_string(), Value::Float(0.0));
+            map.insert("max".to_string(), Value::Float(0.0));
+            map.insert("confident_percent".to_string(), Value::Float(0.0));
+            map.insert("confidence_category".to_string(), Value::string("Unknown"));
+            return map;
+        }
+
+        let mut min_val = f64::MAX;
+        let mut max_val = f64::MIN;
+        let mut sum_val = 0.0;
+        let mut confident_count = 0usize;
+
+        for a in &target_atoms {
+            if a.b_factor < min_val {
+                min_val = a.b_factor;
+            }
+            if a.b_factor > max_val {
+                max_val = a.b_factor;
+            }
+            sum_val += a.b_factor;
+            if a.b_factor >= 70.0 {
+                confident_count += 1;
+            }
+        }
+
+        let n = target_atoms.len() as f64;
+        let mean = sum_val / n;
+        let conf_pct = (confident_count as f64 / n) * 100.0;
+        let category = if mean >= 90.0 {
+            "Very High (AlphaFold Reliable)"
+        } else if mean >= 70.0 {
+            "Confident (AlphaFold Well-modeled)"
+        } else if mean >= 50.0 {
+            "Low Confidence"
+        } else {
+            "Very Low / Disordered"
+        };
+
+        let mut map = HashMap::new();
+        map.insert("mean".to_string(), Value::Float((mean * 10.0).round() / 10.0));
+        map.insert("min".to_string(), Value::Float((min_val * 10.0).round() / 10.0));
+        map.insert("max".to_string(), Value::Float((max_val * 10.0).round() / 10.0));
+        map.insert(
+            "confident_percent".to_string(),
+            Value::Float((conf_pct * 10.0).round() / 10.0),
+        );
+        map.insert("confidence_category".to_string(), Value::string(category));
+        map
+    }
+
+    pub fn rmsd(&self, other: &Macromolecule) -> Result<f64, String> {
+        let ca1: Vec<&PdbAtom> = self.atoms.iter().filter(|a| a.name == "CA").collect();
+        let ca2: Vec<&PdbAtom> = other.atoms.iter().filter(|a| a.name == "CA").collect();
+        let n = ca1.len().min(ca2.len());
+        if n == 0 {
+            return Err("BioError: No matching CA atoms found for RMSD calculation".to_string());
+        }
+        let mut sum_sq = 0.0;
+        for i in 0..n {
+            sum_sq += (ca1[i].x - ca2[i].x).powi(2)
+                + (ca1[i].y - ca2[i].y).powi(2)
+                + (ca1[i].z - ca2[i].z).powi(2);
+        }
+        Ok(((sum_sq / n as f64).sqrt() * 1000.0).round() / 1000.0)
+    }
+
+    pub fn binding_pocket(&self, cx: f64, cy: f64, cz: f64, radius: f64) -> Vec<Value> {
+        let mut res_map: HashMap<(String, i32), (String, f64)> = HashMap::new();
+        for a in &self.atoms {
+            if !a.is_hetero {
+                let dist = ((a.x - cx).powi(2) + (a.y - cy).powi(2) + (a.z - cz).powi(2)).sqrt();
+                if dist <= radius {
+                    let key = (a.chain_id.clone(), a.res_seq);
+                    let entry = res_map.entry(key).or_insert((a.res_name.clone(), dist));
+                    if dist < entry.1 {
+                        entry.1 = dist;
+                    }
+                }
+            }
+        }
+        let mut results = Vec::new();
+        for ((chain, res_seq), (res_name, min_dist)) in res_map {
+            let mut r = HashMap::new();
+            r.insert("chain".to_string(), Value::string(chain));
+            r.insert("res_seq".to_string(), Value::Int(res_seq as i64));
+            r.insert("res_name".to_string(), Value::string(res_name));
+            r.insert("distance".to_string(), Value::Float((min_dist * 100.0).round() / 100.0));
+            results.push(Value::map(r));
+        }
+        results.sort_by(|a, b| {
+            let d_a = match a {
+                Value::Map(m) => match m.lock().get("distance") {
+                    Some(Value::Float(f)) => *f,
+                    _ => 0.0,
+                },
+                _ => 0.0,
+            };
+            let d_b = match b {
+                Value::Map(m) => match m.lock().get("distance") {
+                    Some(Value::Float(f)) => *f,
+                    _ => 0.0,
+                },
+                _ => 0.0,
+            };
+            d_a.partial_cmp(&d_b).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results
+    }
+
+    pub fn ligand_pocket(&self, ligand_name: &str, radius: f64) -> Vec<Value> {
+        let ligand_atoms: Vec<&PdbAtom> = self
+            .atoms
+            .iter()
+            .filter(|a| a.is_hetero && a.res_name.eq_ignore_ascii_case(ligand_name))
+            .collect();
+        let ref_atoms: Vec<&PdbAtom> = if !ligand_atoms.is_empty() {
+            ligand_atoms
+        } else {
+            self.atoms.iter().filter(|a| a.is_hetero).collect()
+        };
+        if ref_atoms.is_empty() {
+            return Vec::new();
+        }
+        let mut res_map: HashMap<(String, i32), (String, f64)> = HashMap::new();
+        for a in &self.atoms {
+            if !a.is_hetero {
+                let mut min_dist = f64::MAX;
+                for la in &ref_atoms {
+                    let d = ((a.x - la.x).powi(2) + (a.y - la.y).powi(2) + (a.z - la.z).powi(2)).sqrt();
+                    if d < min_dist {
+                        min_dist = d;
+                    }
+                }
+                if min_dist <= radius {
+                    let key = (a.chain_id.clone(), a.res_seq);
+                    let entry = res_map.entry(key).or_insert((a.res_name.clone(), min_dist));
+                    if min_dist < entry.1 {
+                        entry.1 = min_dist;
+                    }
+                }
+            }
+        }
+        let mut results = Vec::new();
+        for ((chain, res_seq), (res_name, min_dist)) in res_map {
+            let mut r = HashMap::new();
+            r.insert("chain".to_string(), Value::string(chain));
+            r.insert("res_seq".to_string(), Value::Int(res_seq as i64));
+            r.insert("res_name".to_string(), Value::string(res_name));
+            r.insert("distance".to_string(), Value::Float((min_dist * 100.0).round() / 100.0));
+            results.push(Value::map(r));
+        }
+        results.sort_by(|a, b| {
+            let d_a = match a {
+                Value::Map(m) => match m.lock().get("distance") {
+                    Some(Value::Float(f)) => *f,
+                    _ => 0.0,
+                },
+                _ => 0.0,
+            };
+            let d_b = match b {
+                Value::Map(m) => match m.lock().get("distance") {
+                    Some(Value::Float(f)) => *f,
+                    _ => 0.0,
+                },
+                _ => 0.0,
+            };
+            d_a.partial_cmp(&d_b).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results
+    }
+}
+
+pub fn parse_pdb(content_or_path: &str) -> Result<Macromolecule, String> {
+    let text = if (content_or_path.ends_with(".pdb") || content_or_path.ends_with(".cif"))
+        && std::path::Path::new(content_or_path).exists()
+    {
+        std::fs::read_to_string(content_or_path)
+            .map_err(|e| format!("BioError: Failed to read PDB file '{}': {}", content_or_path, e))?
+    } else {
+        content_or_path.to_string()
+    };
+
+    let mut atoms = Vec::new();
+    let mut title = "Macromolecule".to_string();
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("TITLE") {
+            title = trimmed.trim_start_matches("TITLE").trim().to_string();
+        } else if trimmed.starts_with("ATOM") || trimmed.starts_with("HETATM") {
+            let is_hetero = trimmed.starts_with("HETATM");
+            if line.len() >= 54 {
+                let serial = line.get(6..11).unwrap_or("0").trim().parse::<usize>().unwrap_or(0);
+                let name = line.get(12..16).unwrap_or("").trim().to_string();
+                let res_name = line.get(17..20).unwrap_or("").trim().to_string();
+                let chain_id = line.get(21..22).unwrap_or("A").trim().to_string();
+                let res_seq = line.get(22..26).unwrap_or("0").trim().parse::<i32>().unwrap_or(0);
+                let x = line.get(30..38).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
+                let y = line.get(38..46).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
+                let z = line.get(46..54).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
+                let occupancy = if line.len() >= 60 {
+                    line.get(54..60).unwrap_or("1.0").trim().parse::<f64>().unwrap_or(1.0)
+                } else {
+                    1.0
+                };
+                let b_factor = if line.len() >= 66 {
+                    line.get(60..66).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+                let element = if line.len() >= 78 {
+                    line.get(76..78).unwrap_or("").trim().to_string()
+                } else if !name.is_empty() {
+                    name.chars().next().unwrap_or('C').to_string()
+                } else {
+                    "C".to_string()
+                };
+
+                atoms.push(PdbAtom {
+                    serial,
+                    name,
+                    res_name,
+                    chain_id: if chain_id.is_empty() { "A".to_string() } else { chain_id },
+                    res_seq,
+                    x,
+                    y,
+                    z,
+                    occupancy,
+                    b_factor,
+                    element,
+                    is_hetero,
+                });
+            } else {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 8 {
+                    let serial = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    let name = parts.get(2).unwrap_or(&"CA").to_string();
+                    let res_name = parts.get(3).unwrap_or(&"ALA").to_string();
+                    let (chain_id, res_seq, x_idx) = if parts.len() >= 10 && parts[4].len() == 1 && parts[4].chars().all(|c| c.is_alphabetic()) {
+                        (parts[4].to_string(), parts[5].parse::<i32>().unwrap_or(0), 6)
+                    } else {
+                        ("A".to_string(), parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0), 5)
+                    };
+                    let x = parts.get(x_idx).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    let y = parts.get(x_idx + 1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    let z = parts.get(x_idx + 2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    let b_factor = parts.get(x_idx + 4).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+
+                    atoms.push(PdbAtom {
+                        serial,
+                        name: name.clone(),
+                        res_name,
+                        chain_id,
+                        res_seq,
+                        x,
+                        y,
+                        z,
+                        occupancy: 1.0,
+                        b_factor,
+                        element: name.chars().next().unwrap_or('C').to_string(),
+                        is_hetero,
+                    });
+                }
+            }
+        }
+    }
+
+    if atoms.is_empty() {
+        return Err("BioError: No ATOM or HETATM records found in PDB input".to_string());
+    }
+
+    Ok(Macromolecule { title, atoms })
+}
+
+pub fn wrap_structure_handle(macromol: Macromolecule) -> Value {
+    let id = NEXT_STRUCT_ID.fetch_add(1, Ordering::SeqCst);
+    let title = macromol.title.clone();
+    let struct_arc = Arc::new(macromol);
+    get_struct_registry().lock().insert(id, struct_arc);
+
+    let mut map = HashMap::new();
+    map.insert("_bio_struct".to_string(), Value::Int(id as i64));
+    map.insert("_type".to_string(), Value::string("Bio.Structure"));
+    map.insert("title".to_string(), Value::string(title));
+    Value::map(map)
+}
+
+pub fn extract_structure(val: &Value) -> Result<Arc<Macromolecule>, String> {
+    match val {
+        Value::Map(m) => {
+            let map = m.lock();
+            if let Some(Value::Int(id)) = map.get("_bio_struct") {
+                let reg = get_struct_registry().lock();
+                reg.get(&(*id as u64))
+                    .cloned()
+                    .ok_or_else(|| format!("BioError: Structure handle #{} not found or deallocated", id))
+            } else {
+                Err("BioError: Expected a Bio.Structure object".into())
+            }
+        }
+        Value::String(s) => {
+            let macromol = parse_pdb(s)?;
+            Ok(Arc::new(macromol))
+        }
+        other => Err(format!(
+            "BioError: Expected Bio.Structure object or PDB string, got {}",
+            other.type_name()
+        )),
+    }
+}
+
+// CRISPR Algorithms
+pub fn iupac_match(pat_char: char, seq_char: char) -> bool {
+    let p = pat_char.to_ascii_uppercase();
+    let s = seq_char.to_ascii_uppercase();
+    match p {
+        'A' => s == 'A',
+        'C' => s == 'C',
+        'G' => s == 'G',
+        'T' | 'U' => s == 'T' || s == 'U',
+        'N' => s == 'A' || s == 'C' || s == 'G' || s == 'T' || s == 'U',
+        'R' => s == 'A' || s == 'G',
+        'Y' => s == 'C' || s == 'T' || s == 'U',
+        'S' => s == 'G' || s == 'C',
+        'W' => s == 'A' || s == 'T' || s == 'U',
+        'K' => s == 'G' || s == 'T' || s == 'U',
+        'M' => s == 'A' || s == 'C',
+        'B' => s == 'C' || s == 'G' || s == 'T' || s == 'U',
+        'D' => s == 'A' || s == 'G' || s == 'T' || s == 'U',
+        'H' => s == 'A' || s == 'C' || s == 'T' || s == 'U',
+        'V' => s == 'A' || s == 'C' || s == 'G',
+        _ => false,
+    }
+}
+
+pub fn calculate_gc_content(s: &str) -> f64 {
+    if s.is_empty() { return 0.0; }
+    let gc = s.chars().filter(|c| *c == 'G' || *c == 'C').count();
+    (gc as f64 / s.len() as f64) * 100.0
+}
+
+pub fn calculate_on_target_score(spacer: &str) -> (f64, bool) {
+    let mut score = 0.50f64;
+    let has_poly_t = spacer.contains("TTTT");
+    if has_poly_t {
+        score -= 0.35;
+    }
+    let gc = calculate_gc_content(spacer);
+    if (40.0..=60.0).contains(&gc) {
+        score += 0.25;
+    } else if (30.0..=75.0).contains(&gc) {
+        score += 0.10;
+    } else {
+        score -= 0.20;
+    }
+
+    let chars: Vec<char> = spacer.chars().collect();
+    if chars.len() >= 20 {
+        if chars[19] == 'G' {
+            score += 0.15;
+        } else if chars[19] == 'T' {
+            score -= 0.10;
+        }
+        if chars[15] == 'C' || chars[15] == 'G' {
+            score += 0.05;
+        }
+    }
+
+    let clamped = score.clamp(0.05, 0.99);
+    ((clamped * 100.0).round() / 100.0, has_poly_t)
+}
+
+pub fn find_crispr_targets(dna: &str, pam_pattern: &str, target_len: usize) -> Vec<HashMap<String, Value>> {
+    let clean = dna.trim().to_ascii_uppercase().replace('U', "T");
+    let pam = pam_pattern.trim().to_ascii_uppercase().replace('U', "T");
+    let pam_len = pam.len();
+    let chars: Vec<char> = clean.chars().collect();
+    let mut results = Vec::new();
+
+    // 1. Forward strand: 5' - Spacer - PAM - 3'
+    if chars.len() >= target_len + pam_len {
+        for i in target_len..=(chars.len() - pam_len) {
+            let mut matches_pam = true;
+            for (p_idx, p_ch) in pam.chars().enumerate() {
+                if !iupac_match(p_ch, chars[i + p_idx]) {
+                    matches_pam = false;
+                    break;
+                }
+            }
+            if matches_pam {
+                let spacer: String = chars[i - target_len..i].iter().collect();
+                let pam_matched: String = chars[i..i + pam_len].iter().collect();
+                let gc = calculate_gc_content(&spacer);
+                let (score, has_poly_t) = calculate_on_target_score(&spacer);
+
+                let mut target = HashMap::new();
+                target.insert("spacer".to_string(), Value::string(spacer));
+                target.insert("pam".to_string(), Value::string(pam_matched));
+                target.insert("strand".to_string(), Value::string("+"));
+                target.insert("position".to_string(), Value::Int((i - target_len) as i64));
+                target.insert("gc_content".to_string(), Value::Float(gc));
+                target.insert("on_target_score".to_string(), Value::Float(score));
+                target.insert("has_poly_t_terminator".to_string(), Value::Bool(has_poly_t));
+                results.push(target);
+            }
+        }
+    }
+
+    // 2. Reverse strand: reverse complement
+    let rev_comp: String = clean
+        .chars()
+        .rev()
+        .map(|c| match c {
+            'A' => 'T',
+            'T' => 'A',
+            'C' => 'G',
+            'G' => 'C',
+            other => other,
+        })
+        .collect();
+    let rev_chars: Vec<char> = rev_comp.chars().collect();
+
+    if rev_chars.len() >= target_len + pam_len {
+        for i in target_len..=(rev_chars.len() - pam_len) {
+            let mut matches_pam = true;
+            for (p_idx, p_ch) in pam.chars().enumerate() {
+                if !iupac_match(p_ch, rev_chars[i + p_idx]) {
+                    matches_pam = false;
+                    break;
+                }
+            }
+            if matches_pam {
+                let spacer: String = rev_chars[i - target_len..i].iter().collect();
+                let pam_matched: String = rev_chars[i..i + pam_len].iter().collect();
+                let gc = calculate_gc_content(&spacer);
+                let (score, has_poly_t) = calculate_on_target_score(&spacer);
+                let orig_pos = chars.len() - (i + pam_len);
+
+                let mut target = HashMap::new();
+                target.insert("spacer".to_string(), Value::string(spacer));
+                target.insert("pam".to_string(), Value::string(pam_matched));
+                target.insert("strand".to_string(), Value::string("-"));
+                target.insert("position".to_string(), Value::Int(orig_pos as i64));
+                target.insert("gc_content".to_string(), Value::Float(gc));
+                target.insert("on_target_score".to_string(), Value::Float(score));
+                target.insert("has_poly_t_terminator".to_string(), Value::Bool(has_poly_t));
+                results.push(target);
+            }
+        }
+    }
+
+    results
+}
+
+pub fn calculate_off_target_score(spacer: &str, genome: &str, pam_pattern: &str) -> f64 {
+    let clean_genome = genome.to_ascii_uppercase().replace('U', "T");
+    let sp = spacer.to_ascii_uppercase().replace('U', "T");
+    let pam = pam_pattern.to_ascii_uppercase().replace('U', "T");
+    let sp_len = sp.len();
+    let pam_len = pam.len();
+    let g_chars: Vec<char> = clean_genome.chars().collect();
+    let sp_chars: Vec<char> = sp.chars().collect();
+
+    if g_chars.len() < sp_len + pam_len {
+        return 1.0;
+    }
+
+    let mut total_penalty = 0.0f64;
+
+    for i in sp_len..=(g_chars.len() - pam_len) {
+        let mut matches_pam = true;
+        for (p_idx, p_ch) in pam.chars().enumerate() {
+            if !iupac_match(p_ch, g_chars[i + p_idx]) {
+                matches_pam = false;
+                break;
+            }
+        }
+        if !matches_pam {
+            continue;
+        }
+
+        let cand_spacer = &g_chars[i - sp_len..i];
+        let mut mismatches = 0;
+        let mut mismatch_penalty = 1.0f64;
+
+        for pos in 0..sp_len {
+            if cand_spacer[pos] != sp_chars[pos] {
+                mismatches += 1;
+                if pos >= 12 {
+                    mismatch_penalty *= 0.15;
+                } else {
+                    mismatch_penalty *= 0.75;
+                }
+            }
+        }
+
+        if mismatches > 0 && mismatches <= 4 {
+            total_penalty += mismatch_penalty;
+        }
+    }
+
+    let specificity = 1.0 / (1.0 + total_penalty);
+    ((specificity * 100.0).round() / 100.0).clamp(0.01, 1.0)
+}
+
 /// 2-Bit Packed DNA sequence representation.
 /// A = 0b00, C = 0b01, G = 0b10, T/U = 0b11.
 /// Each byte holds 4 nucleotides: bits 6..7, 4..5, 2..3, 0..1.
@@ -723,6 +1326,275 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
                 score, identity, al1, connectors, al2
             );
             Ok(Value::string(view))
+        }),
+    );
+
+    // Bio.Structure(path_or_text)
+    bio.insert(
+        "Structure".to_string(),
+        Value::Native("Bio.Structure".into(), |args| {
+            if args.is_empty() {
+                return Err("Bio.Structure(path_or_text) requires 1 argument".into());
+            }
+            let s = format!("{}", args[0]);
+            let macromol = parse_pdb(&s)?;
+            Ok(wrap_structure_handle(macromol))
+        }),
+    );
+
+    // Bio.parse_pdb(path_or_text)
+    bio.insert(
+        "parse_pdb".to_string(),
+        Value::Native("Bio.parse_pdb".into(), |args| {
+            if args.is_empty() {
+                return Err("Bio.parse_pdb(path_or_text) requires 1 argument".into());
+            }
+            let s = format!("{}", args[0]);
+            let macromol = parse_pdb(&s)?;
+            Ok(wrap_structure_handle(macromol))
+        }),
+    );
+
+    // Bio.atom_count(struct)
+    bio.insert(
+        "atom_count".to_string(),
+        Value::Native("Bio.atom_count".into(), |args| {
+            if args.is_empty() {
+                return Err("atom_count requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            Ok(Value::Int(s.atom_count() as i64))
+        }),
+    );
+
+    // Bio.residue_count(struct)
+    bio.insert(
+        "residue_count".to_string(),
+        Value::Native("Bio.residue_count".into(), |args| {
+            if args.is_empty() {
+                return Err("residue_count requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            Ok(Value::Int(s.residue_count() as i64))
+        }),
+    );
+
+    // Bio.chains(struct)
+    bio.insert(
+        "chains".to_string(),
+        Value::Native("Bio.chains".into(), |args| {
+            if args.is_empty() {
+                return Err("chains requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            let chains = s.chains();
+            Ok(Value::array(chains.into_iter().map(Value::string).collect()))
+        }),
+    );
+
+    // Bio.centroid(struct)
+    bio.insert(
+        "centroid".to_string(),
+        Value::Native("Bio.centroid".into(), |args| {
+            if args.is_empty() {
+                return Err("centroid requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            let (x, y, z) = s.centroid();
+            Ok(Value::array(vec![
+                Value::Float(x),
+                Value::Float(y),
+                Value::Float(z),
+            ]))
+        }),
+    );
+
+    // Bio.radius_of_gyration(struct)
+    bio.insert(
+        "radius_of_gyration".to_string(),
+        Value::Native("Bio.radius_of_gyration".into(), |args| {
+            if args.is_empty() {
+                return Err("radius_of_gyration requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            Ok(Value::Float(s.radius_of_gyration()))
+        }),
+    );
+
+    // Bio.plddt_summary(struct)
+    bio.insert(
+        "plddt_summary".to_string(),
+        Value::Native("Bio.plddt_summary".into(), |args| {
+            if args.is_empty() {
+                return Err("plddt_summary requires a Structure".into());
+            }
+            let s = extract_structure(&args[0])?;
+            Ok(Value::map(s.plddt_summary()))
+        }),
+    );
+
+    // Bio.rmsd(struct1, struct2)
+    bio.insert(
+        "rmsd".to_string(),
+        Value::Native("Bio.rmsd".into(), |args| {
+            if args.len() < 2 {
+                return Err("rmsd(struct1, struct2) requires 2 Structures".into());
+            }
+            let s1 = extract_structure(&args[0])?;
+            let s2 = extract_structure(&args[1])?;
+            let val = s1.rmsd(&s2)?;
+            Ok(Value::Float(val))
+        }),
+    );
+
+    // Bio.binding_pocket(struct, cx, cy, cz, radius)
+    bio.insert(
+        "binding_pocket".to_string(),
+        Value::Native("Bio.binding_pocket".into(), |args| {
+            if args.len() < 5 {
+                return Err("binding_pocket(struct, cx, cy, cz, radius) requires 5 arguments".into());
+            }
+            let s = extract_structure(&args[0])?;
+            let cx = match &args[1] {
+                Value::Float(f) => *f,
+                Value::Int(i) => *i as f64,
+                _ => 0.0,
+            };
+            let cy = match &args[2] {
+                Value::Float(f) => *f,
+                Value::Int(i) => *i as f64,
+                _ => 0.0,
+            };
+            let cz = match &args[3] {
+                Value::Float(f) => *f,
+                Value::Int(i) => *i as f64,
+                _ => 0.0,
+            };
+            let r = match &args[4] {
+                Value::Float(f) => *f,
+                Value::Int(i) => *i as f64,
+                _ => 5.0,
+            };
+            let pocket = s.binding_pocket(cx, cy, cz, r);
+            Ok(Value::array(pocket))
+        }),
+    );
+
+    // Bio.ligand_pocket(struct, ligand_name, radius)
+    bio.insert(
+        "ligand_pocket".to_string(),
+        Value::Native("Bio.ligand_pocket".into(), |args| {
+            if args.len() < 2 {
+                return Err(
+                    "ligand_pocket(struct, ligand_name, [radius=5.0]) requires at least 2 arguments".into(),
+                );
+            }
+            let s = extract_structure(&args[0])?;
+            let ligand_name = format!("{}", args[1]);
+            let r = if args.len() > 2 {
+                match &args[2] {
+                    Value::Float(f) => *f,
+                    Value::Int(i) => *i as f64,
+                    _ => 5.0,
+                }
+            } else {
+                5.0
+            };
+            let pocket = s.ligand_pocket(&ligand_name, r);
+            Ok(Value::array(pocket))
+        }),
+    );
+
+    // Bio.crispr_find_targets(dna, [pam="NGG", target_len=20])
+    bio.insert(
+        "crispr_find_targets".to_string(),
+        Value::Native("Bio.crispr_find_targets".into(), |args| {
+            if args.is_empty() {
+                return Err(
+                    "Bio.crispr_find_targets(dna, [pam, target_len]) requires at least 1 argument".into(),
+                );
+            }
+            let dna_seq = match &args[0] {
+                Value::Map(m) if m.lock().contains_key("_bio_dna") => {
+                    let d = extract_dna(&args[0])?;
+                    d.to_string()
+                }
+                other => format!("{}", other),
+            };
+            let pam = if args.len() > 1 {
+                format!("{}", args[1])
+            } else {
+                "NGG".to_string()
+            };
+            let target_len = if args.len() > 2 {
+                match &args[2] {
+                    Value::Int(i) => *i as usize,
+                    _ => 20,
+                }
+            } else {
+                20
+            };
+            let targets = find_crispr_targets(&dna_seq, &pam, target_len);
+            Ok(Value::array(targets.into_iter().map(Value::map).collect()))
+        }),
+    );
+
+    // Bio.crispr_targets(dna, [pam="NGG", target_len=20])
+    bio.insert(
+        "crispr_targets".to_string(),
+        Value::Native("Bio.crispr_targets".into(), |args| {
+            if args.is_empty() {
+                return Err("crispr_targets(dna, [pam, target_len]) requires at least 1 argument".into());
+            }
+            let dna_seq = match &args[0] {
+                Value::Map(m) if m.lock().contains_key("_bio_dna") => {
+                    let d = extract_dna(&args[0])?;
+                    d.to_string()
+                }
+                other => format!("{}", other),
+            };
+            let pam = if args.len() > 1 {
+                format!("{}", args[1])
+            } else {
+                "NGG".to_string()
+            };
+            let target_len = if args.len() > 2 {
+                match &args[2] {
+                    Value::Int(i) => *i as usize,
+                    _ => 20,
+                }
+            } else {
+                20
+            };
+            let targets = find_crispr_targets(&dna_seq, &pam, target_len);
+            Ok(Value::array(targets.into_iter().map(Value::map).collect()))
+        }),
+    );
+
+    // Bio.crispr_off_target_score(spacer, genomic_dna, [pam="NGG"])
+    bio.insert(
+        "crispr_off_target_score".to_string(),
+        Value::Native("Bio.crispr_off_target_score".into(), |args| {
+            if args.len() < 2 {
+                return Err(
+                    "Bio.crispr_off_target_score(spacer, genomic_dna, [pam]) requires 2 arguments".into(),
+                );
+            }
+            let spacer = format!("{}", args[0]);
+            let genome = match &args[1] {
+                Value::Map(m) if m.lock().contains_key("_bio_dna") => {
+                    let d = extract_dna(&args[1])?;
+                    d.to_string()
+                }
+                other => format!("{}", other),
+            };
+            let pam = if args.len() > 2 {
+                format!("{}", args[2])
+            } else {
+                "NGG".to_string()
+            };
+            let score = calculate_off_target_score(&spacer, &genome, &pam);
+            Ok(Value::Float(score))
         }),
     );
 
