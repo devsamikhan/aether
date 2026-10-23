@@ -203,3 +203,213 @@ let suggestion = Diagnostics.suggest("prnt", ["print", "println", "len"])
         ])
     );
 }
+
+#[test]
+fn test_multiline_fluent_chaining_and_pipelines() {
+    let source = r#"
+fn add_five(n) {
+    return n + 5
+}
+
+fn double_it(n) {
+    return n * 2
+}
+
+let chain_res = [1, 2, 3, 4, 5, 6]
+    .map(|x| x * 10)
+    .filter(|x| x >= 30)
+    .sum()
+
+let pipe_res = 10
+    |> add_five()
+    |> double_it()
+
+let maybe_val = nil
+    ?? 42
+
+(chain_res, pipe_res, maybe_val)
+"#;
+
+    let result = aether::vm::run_source(source).expect("Failed to run multi-line fluent chaining test");
+    assert_eq!(
+        result,
+        Value::tuple(vec![
+            Value::Int(180), // 30 + 40 + 50 + 60
+            Value::Int(30),  // (10 + 5) * 2
+            Value::Int(42),
+        ])
+    );
+}
+
+#[test]
+fn test_language_level_unit_tests_and_property_fuzzing() {
+    let source = r#"
+test "arithmetic assertions" {
+    assert_eq(10 + 20, 30)
+    assert_ne(10, 20)
+}
+
+test "exception assertions" {
+    assert_throws(|| {
+        raise "CustomFailure: invalid state"
+    }, "CustomFailure")
+}
+
+let fuzz_ok = Fuzz.check(|x, y| {
+    return (x + y) == (y + x)
+}, 50)
+
+let summary = Test.summary()
+(summary["total"], summary["passed"], summary["failed"], fuzz_ok)
+"#;
+
+    let result = aether::vm::run_source(source).expect("Failed to run language-level test & fuzzing");
+    assert_eq!(
+        result,
+        Value::tuple(vec![
+            Value::Int(2),
+            Value::Int(2),
+            Value::Int(0),
+            Value::Bool(true),
+        ])
+    );
+
+    // Also verify Fuzz.check catches falsified properties with a counterexample
+    let bad_fuzz = r#"
+Fuzz.check(|x| x < 50, 50)
+"#;
+    let err = aether::vm::run_source(bad_fuzz).expect_err("Expected FuzzFailure");
+    assert!(err.contains("FuzzFailure"), "Expected FuzzFailure, got: {}", err);
+}
+
+#[test]
+fn test_custom_iterators_and_struct_operator_overloading() {
+    let source = r#"
+struct Vec2 {
+    x,
+    y
+}
+
+impl Vec2 {
+    fn __add__(self, other) {
+        return Vec2(self.x + other.x, self.y + other.y)
+    }
+    fn __sub__(self, other) {
+        return Vec2(self.x - other.x, self.y - other.y)
+    }
+    fn __mul__(self, scalar) {
+        return Vec2(self.x * scalar, self.y * scalar)
+    }
+    fn __neg__(self) {
+        return Vec2(-self.x, -self.y)
+    }
+    fn __eq__(self, other) {
+        return self.x == other.x and self.y == other.y
+    }
+    fn __lt__(self, other) {
+        return (self.x + self.y) < (other.x + other.y)
+    }
+    fn __getitem__(self, idx) {
+        if idx == 0 { return self.x }
+        return self.y
+    }
+    fn __len__(self) {
+        return 2
+    }
+    fn __str__(self) {
+        return f"({self.x}, {self.y})"
+    }
+}
+
+let v1 = Vec2(3, 4)
+let v2 = Vec2(1, 2)
+let v3 = (v1 + v2 - Vec2(0, 1)) * 2
+let neg_v2 = -v2
+
+struct RangeCounter {
+    curr,
+    stop
+}
+
+impl RangeCounter {
+    fn __next__(self) {
+        if self.curr >= self.stop {
+            return nil
+        }
+        let val = self.curr
+        self.curr = self.curr + 1
+        return val
+    }
+}
+
+let mut loop_sum = 0
+for n in RangeCounter(1, 5) {
+    loop_sum = loop_sum + n
+}
+
+let comp_items = [x * 10 for x in RangeCounter(1, 4)]
+let mapped_items = RangeCounter(1, 4).map(|x| x + 100)
+
+(
+    v3 == Vec2(8, 10),
+    neg_v2 == Vec2(-1, -2),
+    v2 < v1,
+    v3[0],
+    len(v3),
+    str(v1),
+    loop_sum,
+    comp_items.join(","),
+    mapped_items.join(",")
+)
+"#;
+
+    let result = aether::vm::run_source(source).expect("Failed to run struct operator overloading & custom iterator test");
+    assert_eq!(
+        result,
+        Value::tuple(vec![
+            Value::Bool(true),
+            Value::Bool(true),
+            Value::Bool(true),
+            Value::Int(8),
+            Value::Int(2),
+            Value::string("(3, 4)"),
+            Value::Int(10), // 1 + 2 + 3 + 4
+            Value::string("10,20,30"),
+            Value::string("101,102,103"),
+        ])
+    );
+}
+
+#[test]
+fn test_bytecode_disassembler_and_stats() {
+    let source = r#"
+fn fib_step(a, b) {
+    return a + b
+}
+
+let dis = Bytecode.disassemble(fib_step)
+let st = Bytecode.stats(fib_step)
+
+(
+    dis.contains("Function: fib_step"),
+    dis.contains("Add"),
+    dis.contains("Return"),
+    st["name"],
+    st["arity"],
+    st["code_bytes"] > 0
+)
+"#;
+
+    let result = aether::vm::run_source(source).expect("Failed to run Bytecode disassembler test");
+    assert_eq!(
+        result,
+        Value::tuple(vec![
+            Value::Bool(true),
+            Value::Bool(true),
+            Value::Bool(true),
+            Value::string("fib_step"),
+            Value::Int(2),
+            Value::Bool(true),
+        ])
+    );
+}

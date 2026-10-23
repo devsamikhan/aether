@@ -20,6 +20,14 @@ pub struct ExceptionHandler {
     pub handler_ip: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct TestRecord {
+    pub name: String,
+    pub passed: bool,
+    pub duration_us: u128,
+    pub error: Option<String>,
+}
+
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
@@ -28,6 +36,8 @@ pub struct VM {
     pub loading_modules: std::collections::HashSet<String>,
     pub exception_handlers: Vec<ExceptionHandler>,
     pub security_policy: super::security::SecurityPolicy,
+    pub test_results: Vec<TestRecord>,
+    pub test_runner_mode: bool,
 }
 
 thread_local! {
@@ -72,6 +82,8 @@ impl VM {
             loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
             security_policy: super::security::SecurityPolicy::default(),
+            test_results: Vec::new(),
+            test_runner_mode: false,
         };
         vm.register_builtins();
         super::stdlib::register_stdlib(&mut vm.globals);
@@ -93,6 +105,8 @@ impl VM {
         super::graph::register_graph_module(&mut vm.globals);
         super::hotreload::register_hotreload_module(&mut vm.globals);
         super::regex_engine::register_regex_module(&mut vm.globals);
+        super::bio::register_bio_module(&mut vm.globals);
+        super::chem::register_chem_module(&mut vm.globals);
         vm
     }
 
@@ -105,6 +119,8 @@ impl VM {
             loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
             security_policy: super::security::SecurityPolicy::default(),
+            test_results: Vec::new(),
+            test_runner_mode: false,
         }
     }
 
@@ -240,6 +256,9 @@ impl VM {
                 Value::String(s) => {
                     let chars = s.chars().map(|c| Value::string(c.to_string())).collect();
                     Ok(Value::array(chars))
+                }
+                Value::ClassInstance(_) | Value::StructInstance(_) => {
+                    with_current_vm(|vm| vm.materialize_custom_iterator(args[0].clone()))
                 }
                 other => Ok(Value::array(vec![other.clone()])),
             }
@@ -517,6 +536,103 @@ impl VM {
             Ok(Value::Bool(true))
         });
 
+        self.define_native("assert_eq", |args| {
+            if args.len() < 2 {
+                return Err("assert_eq(left, right, [msg]) expects at least 2 arguments".to_string());
+            }
+            let eq = match (&args[0], &args[1]) {
+                (Value::ClassInstance(inst), other) => {
+                    let m_opt = with_current_vm(|vm| Ok(Self::find_method(&inst.class, "__eq__", &vm.globals)))?;
+                    if let Some(m) = m_opt {
+                        with_current_vm(|vm| vm.call_function(m, vec![args[0].clone(), other.clone()]))?.is_truthy()
+                    } else {
+                        args[0] == args[1]
+                    }
+                }
+                (Value::StructInstance(inst), other) => {
+                    let m_opt = with_current_vm(|vm| Ok(Self::find_struct_method(&inst.name, "__eq__", &vm.globals)))?;
+                    if let Some(m) = m_opt {
+                        with_current_vm(|vm| vm.call_function(m, vec![args[0].clone(), other.clone()]))?.is_truthy()
+                    } else {
+                        args[0] == args[1]
+                    }
+                }
+                _ => args[0] == args[1],
+            };
+            if !eq {
+                let extra = if args.len() > 2 {
+                    format!(" ({})", args[2])
+                } else {
+                    String::new()
+                };
+                return Err(format!(
+                    "AssertionError: assert_eq failed: left `{}` != right `{}`{}",
+                    args[0], args[1], extra
+                ));
+            }
+            Ok(Value::Bool(true))
+        });
+
+        self.define_native("assert_ne", |args| {
+            if args.len() < 2 {
+                return Err("assert_ne(left, right, [msg]) expects at least 2 arguments".to_string());
+            }
+            if args[0] == args[1] {
+                let extra = if args.len() > 2 {
+                    format!(" ({})", args[2])
+                } else {
+                    String::new()
+                };
+                return Err(format!(
+                    "AssertionError: assert_ne failed: left `{}` == right `{}`{}",
+                    args[0], args[1], extra
+                ));
+            }
+            Ok(Value::Bool(true))
+        });
+
+        self.define_native("assert_throws", |args| {
+            if args.is_empty() {
+                return Err("assert_throws(fn, [expected_substring]) expects a callable".to_string());
+            }
+            let callable = args[0].clone();
+            let expected_sub = if args.len() > 1 {
+                Some(format!("{}", args[1]))
+            } else {
+                None
+            };
+            let res = with_current_vm(|vm| vm.call_value(callable, Vec::new()));
+            match res {
+                Ok(v) => Err(format!(
+                    "AssertionError: Expected function to throw an error, but it returned `{}`",
+                    v
+                )),
+                Err(err_msg) => {
+                    if let Some(sub) = expected_sub {
+                        if !err_msg.contains(&sub) {
+                            return Err(format!(
+                                "AssertionError: Expected thrown error '{}' to contain '{}'",
+                                err_msg, sub
+                            ));
+                        }
+                    }
+                    Ok(Value::Bool(true))
+                }
+            }
+        });
+
+        self.define_native("__to_iterable", |args| {
+            if args.is_empty() {
+                return Ok(Value::array(Vec::new()));
+            }
+            match &args[0] {
+                Value::ClassInstance(_) | Value::StructInstance(_) => {
+                    with_current_vm(|vm| vm.materialize_custom_iterator(args[0].clone()))
+                }
+                other => Ok(other.clone()),
+            }
+        });
+
         self.define_native("channel", |_| {
             Ok(Value::Channel(ChannelHandle::new()))
         });
@@ -785,7 +901,202 @@ impl VM {
             let mut vm = VM::new();
             vm.interpret(func)
         }));
+        bc_mod.insert("disassemble".to_string(), Value::Native("Bytecode.disassemble".into(), |args| {
+            if args.is_empty() {
+                return Err("Bytecode.disassemble(fn_or_source) expects 1 argument".into());
+            }
+            match &args[0] {
+                Value::Function(f)
+                | Value::Closure { function: f, .. }
+                | Value::BoundUserMethod { function: f, .. }
+                | Value::BoundStructMethod { function: f, .. } => {
+                    Ok(Value::string(super::bytecode::disassemble_function(f)))
+                }
+                Value::String(src) => {
+                    let dis = super::bytecode::disassemble_source(src)?;
+                    Ok(Value::string(dis))
+                }
+                other => Err(format!(
+                    "Bytecode.disassemble() expects function or source string, got '{}'",
+                    other.type_name()
+                )),
+            }
+        }));
+        bc_mod.insert("stats".to_string(), Value::Native("Bytecode.stats".into(), |args| {
+            if args.is_empty() {
+                return Err("Bytecode.stats(fn_or_source) expects 1 argument".into());
+            }
+            let func: Arc<CompiledFunction> = match &args[0] {
+                Value::Function(f)
+                | Value::Closure { function: f, .. }
+                | Value::BoundUserMethod { function: f, .. }
+                | Value::BoundStructMethod { function: f, .. } => f.clone(),
+                Value::String(src) => {
+                    let raw_program = crate::syntax::parse(src)
+                        .map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
+                    let (program, _) = super::optimizer::optimize_program(&raw_program);
+                    let compiler = super::compiler::BytecodeCompiler::new("<main>", 0);
+                    Arc::new(compiler.compile(&program)?)
+                }
+                other => {
+                    return Err(format!(
+                        "Bytecode.stats() expects function or source string, got '{}'",
+                        other.type_name()
+                    ))
+                }
+            };
+            let mut m = HashMap::new();
+            m.insert("name".to_string(), Value::string(func.name.clone()));
+            m.insert("arity".to_string(), Value::Int(func.arity as i64));
+            m.insert("code_bytes".to_string(), Value::Int(func.chunk.code.len() as i64));
+            m.insert(
+                "constants_count".to_string(),
+                Value::Int(func.chunk.constants.len() as i64),
+            );
+            Ok(Value::map(m))
+        }));
         self.globals.insert("Bytecode".to_string(), Value::map(bc_mod));
+
+        // First-Class Test & Property Fuzzing Modules
+        let mut test_mod = HashMap::new();
+        test_mod.insert(
+            "register".to_string(),
+            Value::Native("Test.register".into(), |args| {
+                if args.len() < 2 {
+                    return Err("Test.register(name, fn) expects 2 arguments".into());
+                }
+                let name = format!("{}", args[0]);
+                let callable = args[1].clone();
+                with_current_vm(|vm| {
+                    let start = std::time::Instant::now();
+                    let res = vm.call_value(callable, Vec::new());
+                    let duration_us = start.elapsed().as_micros();
+                    match res {
+                        Ok(_) => {
+                            vm.test_results.push(TestRecord {
+                                name,
+                                passed: true,
+                                duration_us,
+                                error: None,
+                            });
+                            Ok(Value::Bool(true))
+                        }
+                        Err(err) => {
+                            vm.test_results.push(TestRecord {
+                                name: name.clone(),
+                                passed: false,
+                                duration_us,
+                                error: Some(err.clone()),
+                            });
+                            if vm.test_runner_mode {
+                                Ok(Value::Bool(false))
+                            } else {
+                                Err(format!("Test '{}' failed: {}", name, err))
+                            }
+                        }
+                    }
+                })
+            }),
+        );
+        test_mod.insert(
+            "summary".to_string(),
+            Value::Native("Test.summary".into(), |_| {
+                with_current_vm(|vm| {
+                    let total = vm.test_results.len() as i64;
+                    let passed = vm.test_results.iter().filter(|r| r.passed).count() as i64;
+                    let failed = total - passed;
+                    let mut m = HashMap::new();
+                    m.insert("total".to_string(), Value::Int(total));
+                    m.insert("passed".to_string(), Value::Int(passed));
+                    m.insert("failed".to_string(), Value::Int(failed));
+                    let records: Vec<Value> = vm
+                        .test_results
+                        .iter()
+                        .map(|r| {
+                            let mut rm = HashMap::new();
+                            rm.insert("name".to_string(), Value::string(r.name.clone()));
+                            rm.insert("passed".to_string(), Value::Bool(r.passed));
+                            rm.insert("duration_us".to_string(), Value::Int(r.duration_us as i64));
+                            rm.insert(
+                                "error".to_string(),
+                                r.error
+                                    .as_ref()
+                                    .map(|e| Value::string(e.clone()))
+                                    .unwrap_or(Value::Nil),
+                            );
+                            Value::map(rm)
+                        })
+                        .collect();
+                    m.insert("results".to_string(), Value::array(records));
+                    Ok(Value::map(m))
+                })
+            }),
+        );
+        self.globals.insert("Test".to_string(), Value::map(test_mod));
+
+        let mut fuzz_mod = HashMap::new();
+        fuzz_mod.insert(
+            "check".to_string(),
+            Value::Native("Fuzz.check".into(), |args| {
+                if args.is_empty() {
+                    return Err("Fuzz.check(property_fn, [iterations=100], [seed]) expects a callable".into());
+                }
+                let callable = args[0].clone();
+                let iterations = match args.get(1) {
+                    Some(Value::Int(n)) => (*n).clamp(1, 10_000) as usize,
+                    _ => 100usize,
+                };
+                let mut state: u64 = match args.get(2) {
+                    Some(Value::Int(s)) if *s != 0 => *s as u64,
+                    _ => 0xA37E_5F19_8842_C0DE,
+                };
+                let arity = match &callable {
+                    Value::Function(f) | Value::Closure { function: f, .. } => f.arity.max(1),
+                    _ => 1,
+                };
+                let boundary_vals: [i64; 7] = [0, 1, -1, 2, -2, 100, -100];
+                with_current_vm(|vm| {
+                    for iter_idx in 0..iterations {
+                        let mut gen_args = Vec::with_capacity(arity);
+                        for param_idx in 0..arity {
+                            let val = if iter_idx < boundary_vals.len() {
+                                boundary_vals[(iter_idx + param_idx) % boundary_vals.len()]
+                            } else {
+                                state ^= state << 13;
+                                state ^= state >> 7;
+                                state ^= state << 17;
+                                ((state as i64) % 2001) - 1000
+                            };
+                            gen_args.push(Value::Int(val));
+                        }
+                        match vm.call_value(callable.clone(), gen_args.clone()) {
+                            Ok(Value::Bool(false)) => {
+                                let formatted: Vec<String> =
+                                    gen_args.iter().map(|v| format!("{}", v)).collect();
+                                return Err(format!(
+                                    "FuzzFailure: Property returned false at iteration {} with counterexample ({})",
+                                    iter_idx + 1,
+                                    formatted.join(", ")
+                                ));
+                            }
+                            Err(err) => {
+                                let formatted: Vec<String> =
+                                    gen_args.iter().map(|v| format!("{}", v)).collect();
+                                return Err(format!(
+                                    "FuzzFailure: Property threw error at iteration {} with counterexample ({}): {}",
+                                    iter_idx + 1,
+                                    formatted.join(", "),
+                                    err
+                                ));
+                            }
+                            Ok(_) => {}
+                        }
+                    }
+                    Ok(Value::Bool(true))
+                })
+            }),
+        );
+        self.globals.insert("Fuzz".to_string(), Value::map(fuzz_mod));
 
         // Context Manager Hooks (__with_enter, __with_exit)
         self.define_native("__with_enter", |args| {
@@ -1132,6 +1443,14 @@ impl VM {
                                     return Err(format!("'{}' object does not support + operator", inst.class.name));
                                 }
                             }
+                            (Value::StructInstance(inst), other) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__add__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support + operator", inst.name));
+                                }
+                            }
                             (Value::Int(x), Value::Int(y)) => self.stack.push(Value::Int(x + y)),
                             (Value::Float(x), Value::Float(y)) => self.stack.push(Value::Float(x + y)),
                             (Value::Int(x), Value::Float(y)) => self.stack.push(Value::Float(x as f64 + y)),
@@ -1170,6 +1489,14 @@ impl VM {
                                     return Err(format!("'{}' object does not support - operator", inst.class.name));
                                 }
                             }
+                            (Value::StructInstance(inst), other) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__sub__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support - operator", inst.name));
+                                }
+                            }
                             (Value::Int(x), Value::Int(y)) => self.stack.push(Value::Int(x - y)),
                             (Value::Float(x), Value::Float(y)) => self.stack.push(Value::Float(x - y)),
                             (Value::Int(x), Value::Float(y)) => self.stack.push(Value::Float(x as f64 - y)),
@@ -1187,6 +1514,14 @@ impl VM {
                                     self.stack.push(res);
                                 } else {
                                     return Err(format!("'{}' object does not support * operator", inst.class.name));
+                                }
+                            }
+                            (Value::StructInstance(inst), other) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__mul__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support * operator", inst.name));
                                 }
                             }
                             (Value::Int(x), Value::Int(y)) => self.stack.push(Value::Int(x * y)),
@@ -1236,6 +1571,16 @@ impl VM {
                                     return Err(format!("'{}' object does not support / operator", inst.class.name));
                                 }
                             }
+                            (Value::StructInstance(inst), other) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__div__", &self.globals)
+                                    .or_else(|| Self::find_struct_method(&inst.name, "__truediv__", &self.globals))
+                                {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support / operator", inst.name));
+                                }
+                            }
                             (Value::Int(x), Value::Int(y)) => {
                                 if y == 0 {
                                     self.handle_exception(&mut frame, Value::string("ZeroDivisionError: division by zero"))?;
@@ -1253,6 +1598,22 @@ impl VM {
                         let b = self.stack.pop().unwrap();
                         let a = self.stack.pop().unwrap();
                         match (a, b) {
+                            (Value::ClassInstance(inst), other) => {
+                                if let Some(m) = Self::find_method(&inst.class, "__mod__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::ClassInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' object does not support % operator", inst.class.name));
+                                }
+                            }
+                            (Value::StructInstance(inst), other) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__mod__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst), other])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support % operator", inst.name));
+                                }
+                            }
                             (Value::Int(x), Value::Int(y)) => {
                                 if y == 0 { return Err("Modulo by zero".to_string()); }
                                 self.stack.push(Value::Int(x % y));
@@ -1283,6 +1644,22 @@ impl VM {
                         match val {
                             Value::Int(i) => self.stack.push(Value::Int(-i)),
                             Value::Float(f) => self.stack.push(Value::Float(-f)),
+                            Value::ClassInstance(inst) => {
+                                if let Some(m) = Self::find_method(&inst.class, "__neg__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::ClassInstance(inst)])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' object does not support unary -", inst.class.name));
+                                }
+                            }
+                            Value::StructInstance(inst) => {
+                                if let Some(m) = Self::find_struct_method(&inst.name, "__neg__", &self.globals) {
+                                    let res = self.call_function(m, vec![Value::StructInstance(inst)])?;
+                                    self.stack.push(res);
+                                } else {
+                                    return Err(format!("'{}' struct does not support unary -", inst.name));
+                                }
+                            }
                             _ => return Err("Operand must be a number to negate".to_string()),
                         }
                     }
@@ -1299,6 +1676,12 @@ impl VM {
                                 self.stack.push(res);
                                 continue;
                             }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(eq_fn) = Self::find_struct_method(&inst.name, "__eq__", &self.globals) {
+                                let res = self.call_function(eq_fn, vec![a.clone(), b])?;
+                                self.stack.push(res);
+                                continue;
+                            }
                         }
                         self.stack.push(Value::Bool(a == b));
                     }
@@ -1311,6 +1694,12 @@ impl VM {
                                 self.stack.push(Value::Bool(!res.is_truthy()));
                                 continue;
                             }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(eq_fn) = Self::find_struct_method(&inst.name, "__eq__", &self.globals) {
+                                let res = self.call_function(eq_fn, vec![a.clone(), b])?;
+                                self.stack.push(Value::Bool(!res.is_truthy()));
+                                continue;
+                            }
                         }
                         self.stack.push(Value::Bool(a != b));
                     }
@@ -1319,6 +1708,12 @@ impl VM {
                         let a = self.stack.pop().unwrap();
                         if let Value::ClassInstance(ref inst) = a {
                             if let Some(m) = Self::find_method(&inst.class, "__lt__", &self.globals) {
+                                let res = self.call_function(m, vec![a.clone(), b])?;
+                                self.stack.push(res);
+                                continue;
+                            }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(m) = Self::find_struct_method(&inst.name, "__lt__", &self.globals) {
                                 let res = self.call_function(m, vec![a.clone(), b])?;
                                 self.stack.push(res);
                                 continue;
@@ -1342,6 +1737,12 @@ impl VM {
                                 self.stack.push(res);
                                 continue;
                             }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(m) = Self::find_struct_method(&inst.name, "__le__", &self.globals) {
+                                let res = self.call_function(m, vec![a.clone(), b])?;
+                                self.stack.push(res);
+                                continue;
+                            }
                         }
                         match (a, b) {
                             (Value::Int(x), Value::Int(y)) => self.stack.push(Value::Bool(x <= y)),
@@ -1361,6 +1762,12 @@ impl VM {
                                 self.stack.push(res);
                                 continue;
                             }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(m) = Self::find_struct_method(&inst.name, "__gt__", &self.globals) {
+                                let res = self.call_function(m, vec![a.clone(), b])?;
+                                self.stack.push(res);
+                                continue;
+                            }
                         }
                         match (a, b) {
                             (Value::Int(x), Value::Int(y)) => self.stack.push(Value::Bool(x > y)),
@@ -1376,6 +1783,12 @@ impl VM {
                         let a = self.stack.pop().unwrap();
                         if let Value::ClassInstance(ref inst) = a {
                             if let Some(m) = Self::find_method(&inst.class, "__ge__", &self.globals) {
+                                let res = self.call_function(m, vec![a.clone(), b])?;
+                                self.stack.push(res);
+                                continue;
+                            }
+                        } else if let Value::StructInstance(ref inst) = a {
+                            if let Some(m) = Self::find_struct_method(&inst.name, "__ge__", &self.globals) {
                                 let res = self.call_function(m, vec![a.clone(), b])?;
                                 self.stack.push(res);
                                 continue;
@@ -1705,11 +2118,27 @@ impl VM {
                                             self.stack.push(res);
                                             continue;
                                         }
+                                    } else if let Value::StructInstance(inst) = &args[0] {
+                                        if let Some(m) = Self::find_struct_method(&inst.name, "__len__", &self.globals) {
+                                            let inst_val = args[0].clone();
+                                            let res = self.call_function(m, vec![inst_val])?;
+                                            self.stack.truncate(callee_idx);
+                                            self.stack.push(res);
+                                            continue;
+                                        }
                                     }
                                 }
                                 if name == "str" && !args.is_empty() {
                                     if let Value::ClassInstance(inst) = &args[0] {
                                         if let Some(m) = Self::find_method(&inst.class, "__str__", &self.globals).or_else(|| Self::find_method(&inst.class, "__repr__", &self.globals)) {
+                                            let inst_val = args[0].clone();
+                                            let res = self.call_function(m, vec![inst_val])?;
+                                            self.stack.truncate(callee_idx);
+                                            self.stack.push(res);
+                                            continue;
+                                        }
+                                    } else if let Value::StructInstance(inst) = &args[0] {
+                                        if let Some(m) = Self::find_struct_method(&inst.name, "__str__", &self.globals).or_else(|| Self::find_struct_method(&inst.name, "__repr__", &self.globals)) {
                                             let inst_val = args[0].clone();
                                             let res = self.call_function(m, vec![inst_val])?;
                                             self.stack.truncate(callee_idx);
@@ -2279,7 +2708,9 @@ impl VM {
                                             self.stack.push(val.clone());
                                         } else if matches!(s.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
                                             || (map.contains_key("_db_id") && matches!(s.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
-                                            || (map.contains_key("_agent_id") && matches!(s.as_str(), "chat" | "add_knowledge" | "history" | "clear")) {
+                                            || (map.contains_key("_agent_id") && matches!(s.as_str(), "chat" | "add_knowledge" | "history" | "clear"))
+                                            || (map.contains_key("_bio_dna") && matches!(s.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len"))
+                                            || (map.contains_key("_chem_mol") && matches!(s.as_str(), "formula" | "weight" | "molecular_weight" | "heavy_atom_count" | "hbd" | "hba" | "rotatable_bonds" | "logp" | "tpsa" | "rule_of_five" | "safety_profile" | "fingerprint" | "predict_binding_affinity" | "smiles" | "len")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: (**s).clone(),
@@ -2294,7 +2725,9 @@ impl VM {
                                             self.stack.push(val.clone());
                                         } else if matches!(k.as_str(), "keys" | "values" | "items" | "entries" | "get" | "contains" | "has" | "remove" | "pop" | "clear" | "update" | "len")
                                             || (map.contains_key("_db_id") && matches!(k.as_str(), "execute" | "query" | "insert" | "find" | "find_one" | "update" | "delete" | "count" | "tables" | "close" | "compact"))
-                                            || (map.contains_key("_agent_id") && matches!(k.as_str(), "chat" | "add_knowledge" | "history" | "clear")) {
+                                            || (map.contains_key("_agent_id") && matches!(k.as_str(), "chat" | "add_knowledge" | "history" | "clear"))
+                                            || (map.contains_key("_bio_dna") && matches!(k.as_str(), "gc_content" | "reverse_complement" | "transcribe" | "translate" | "kmers" | "count_kmers" | "hamming_distance" | "find_orfs" | "to_string" | "str" | "len"))
+                                            || (map.contains_key("_chem_mol") && matches!(k.as_str(), "formula" | "weight" | "molecular_weight" | "heavy_atom_count" | "hbd" | "hba" | "rotatable_bonds" | "logp" | "tpsa" | "rule_of_five" | "safety_profile" | "fingerprint" | "predict_binding_affinity" | "smiles" | "len")) {
                                             self.stack.push(Value::BoundMethod {
                                                 receiver: Arc::new(Value::Map(m.clone())),
                                                 method: k,
@@ -2310,15 +2743,28 @@ impl VM {
                                 let field_val = inst.fields.lock().get(&k).cloned();
                                 if let Some(val) = field_val {
                                     self.stack.push(val);
-                                } else if let Some(Value::StructDef(sdef)) = self.globals.get(&inst.name) {
-                                    if let Some(m) = sdef.methods.lock().get(&k).cloned() {
-                                        self.stack.push(Value::BoundStructMethod {
-                                            receiver: inst.clone(),
-                                            function: m,
-                                        });
-                                    } else {
-                                        self.stack.push(Value::Nil);
-                                    }
+                                } else if let Some(m) = Self::find_struct_method(&inst.name, &k, &self.globals) {
+                                    self.stack.push(Value::BoundStructMethod {
+                                        receiver: inst.clone(),
+                                        function: m,
+                                    });
+                                } else if matches!(
+                                    k.as_str(),
+                                    "map" | "filter" | "reduce" | "fold" | "find" | "any" | "all"
+                                        | "each" | "for_each" | "enumerate" | "zip" | "take"
+                                        | "skip" | "drop" | "flatten" | "unique" | "distinct"
+                                        | "join" | "sum" | "first" | "last"
+                                ) && (Self::find_struct_method(&inst.name, "__next__", &self.globals).is_some()
+                                    || Self::find_struct_method(&inst.name, "__iter__", &self.globals).is_some())
+                                {
+                                    let mat = self.materialize_custom_iterator(Value::StructInstance(inst))?;
+                                    self.stack.push(Value::BoundMethod {
+                                        receiver: Arc::new(mat),
+                                        method: k,
+                                    });
+                                } else if let Some(getitem) = Self::find_struct_method(&inst.name, "__getitem__", &self.globals) {
+                                    let res = self.call_function(getitem, vec![Value::StructInstance(inst), key])?;
+                                    self.stack.push(res);
                                 } else {
                                     self.stack.push(Value::Nil);
                                 }
@@ -2343,6 +2789,20 @@ impl VM {
                                     });
                                 } else if let Some(v) = Self::find_class_var(&inst.class, &k, &self.globals) {
                                     self.stack.push(v);
+                                } else if matches!(
+                                    k.as_str(),
+                                    "map" | "filter" | "reduce" | "fold" | "find" | "any" | "all"
+                                        | "each" | "for_each" | "enumerate" | "zip" | "take"
+                                        | "skip" | "drop" | "flatten" | "unique" | "distinct"
+                                        | "join" | "sum" | "first" | "last"
+                                ) && (Self::find_method(&inst.class, "__next__", &self.globals).is_some()
+                                    || Self::find_method(&inst.class, "__iter__", &self.globals).is_some())
+                                {
+                                    let mat = self.materialize_custom_iterator(Value::ClassInstance(inst))?;
+                                    self.stack.push(Value::BoundMethod {
+                                        receiver: Arc::new(mat),
+                                        method: k,
+                                    });
                                 } else if let Some(getitem) = Self::find_method(&inst.class, "__getitem__", &self.globals) {
                                     let res = self.call_function(getitem, vec![Value::ClassInstance(inst.clone()), key])?;
                                     self.stack.push(res);
@@ -2411,9 +2871,14 @@ impl VM {
                                 self.stack.push(val);
                             }
                             (Value::StructInstance(inst), key) => {
-                                let k = format!("{}", key);
-                                inst.fields.lock().insert(k, val.clone());
-                                self.stack.push(val);
+                                if let Some(setitem) = Self::find_struct_method(&inst.name, "__setitem__", &self.globals) {
+                                    let _ = self.call_function(setitem, vec![Value::StructInstance(inst.clone()), key, val.clone()])?;
+                                    self.stack.push(val);
+                                } else {
+                                    let k = format!("{}", key);
+                                    inst.fields.lock().insert(k, val.clone());
+                                    self.stack.push(val);
+                                }
                             }
                             (Value::ClassInstance(inst), key) => {
                                 if let Some(setitem) = Self::find_method(&inst.class, "__setitem__", &self.globals) {
@@ -2892,6 +3357,8 @@ impl VM {
             "hotreload" | "live" | "aetherlive" => self.globals.get("HotReload").or_else(|| self.globals.get("__native_hotreload")).cloned(),
             "ai" | "aether_ai" | "aetherai" | "agent" | "agents" => self.globals.get("AI").cloned(),
             "regex" | "re" => self.globals.get("Regex").cloned(),
+            "bio" | "dna" | "genomics" => self.globals.get("Bio").cloned(),
+            "chem" | "chemistry" | "drug" | "pharma" => self.globals.get("Chem").cloned(),
             "task" | "async" => self.globals.get("Task").cloned(),
             "formatter" | "fmt" => self.globals.get("Formatter").cloned(),
             "linter" | "lint" => self.globals.get("Linter").cloned(),
@@ -2995,6 +3462,72 @@ impl VM {
             return Some(f.clone());
         }
         Self::find_method_in_bases(class, name, globals)
+    }
+
+    pub fn find_struct_method(struct_name: &str, name: &str, globals: &HashMap<String, Value>) -> Option<Arc<CompiledFunction>> {
+        if let Some(Value::StructDef(sdef)) = globals.get(struct_name) {
+            sdef.methods.lock().get(name).cloned()
+        } else {
+            None
+        }
+    }
+
+    pub fn materialize_custom_iterator(&mut self, val: Value) -> Result<Value, String> {
+        let mut current = match &val {
+            Value::ClassInstance(inst) => {
+                if let Some(iter_fn) = Self::find_method(&inst.class, "__iter__", &self.globals) {
+                    let res = self.call_function(iter_fn, vec![val.clone()])?;
+                    if matches!(res, Value::Array(_) | Value::Tuple(_)) {
+                        return Ok(res);
+                    }
+                    res
+                } else {
+                    val
+                }
+            }
+            Value::StructInstance(inst) => {
+                if let Some(iter_fn) = Self::find_struct_method(&inst.name, "__iter__", &self.globals) {
+                    let res = self.call_function(iter_fn, vec![val.clone()])?;
+                    if matches!(res, Value::Array(_) | Value::Tuple(_)) {
+                        return Ok(res);
+                    }
+                    res
+                } else {
+                    val
+                }
+            }
+            _ => return Ok(val),
+        };
+
+        let next_fn_opt = match &current {
+            Value::ClassInstance(inst) => Self::find_method(&inst.class, "__next__", &self.globals)
+                .or_else(|| Self::find_method(&inst.class, "next", &self.globals)),
+            Value::StructInstance(inst) => Self::find_struct_method(&inst.name, "__next__", &self.globals)
+                .or_else(|| Self::find_struct_method(&inst.name, "next", &self.globals)),
+            _ => None,
+        };
+
+        if let Some(next_fn) = next_fn_opt {
+            let mut out = Vec::new();
+            for _ in 0..100_000 {
+                let item = self.call_function(next_fn.clone(), vec![current.clone()])?;
+                match item {
+                    Value::Nil => break,
+                    Value::EnumVariant { ref variant, .. } if variant == "None" => break,
+                    Value::EnumVariant {
+                        ref variant,
+                        ref fields,
+                        ..
+                    } if variant == "Some" => {
+                        out.push(fields.first().cloned().unwrap_or(Value::Nil));
+                    }
+                    other => out.push(other),
+                }
+            }
+            Ok(Value::array(out))
+        } else {
+            Ok(std::mem::replace(&mut current, Value::Nil))
+        }
     }
 
     pub fn find_method_in_bases(class: &super::value::ClassDef, name: &str, globals: &HashMap<String, Value>) -> Option<Arc<CompiledFunction>> {
@@ -3657,6 +4190,30 @@ impl VM {
                             }
                             _ => Err(format!("Unknown method '{}' on AI Agent", method)),
                         }
+                    } else if m.lock().contains_key("_bio_dna") {
+                        let mut bio_args = vec![receiver.clone()];
+                        bio_args.extend_from_slice(args);
+                        let bio_mod = with_current_vm(|vm| {
+                            vm.globals.get("Bio").cloned().ok_or_else(|| "Bio module not found in globals".to_string())
+                        })?;
+                        if let Value::Map(mod_map) = bio_mod {
+                            if let Some(Value::Native(_, f)) = mod_map.lock().get(method) {
+                                return f(&bio_args);
+                            }
+                        }
+                        Err(format!("Unknown method '{}' on Bio.DNA handle", method))
+                    } else if m.lock().contains_key("_chem_mol") {
+                        let mut chem_args = vec![receiver.clone()];
+                        chem_args.extend_from_slice(args);
+                        let chem_mod = with_current_vm(|vm| {
+                            vm.globals.get("Chem").cloned().ok_or_else(|| "Chem module not found in globals".to_string())
+                        })?;
+                        if let Value::Map(mod_map) = chem_mod {
+                            if let Some(Value::Native(_, f)) = mod_map.lock().get(method) {
+                                return f(&chem_args);
+                            }
+                        }
+                        Err(format!("Unknown method '{}' on Chem.Molecule handle", method))
                     } else {
                         Err(format!("Unknown method '{}' on dict", method))
                     }

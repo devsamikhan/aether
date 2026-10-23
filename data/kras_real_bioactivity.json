@@ -1,0 +1,74 @@
+[
+  {
+    "name": "MRTX1133",
+    "chembl_or_cid": "CID:156124857",
+    "smiles": "C#CC1=C(C=CC2=CC(=CC(=C21)C3=NC=C4C(=C3F)N=C(N=C4N5CC6CCC(C5)N6)OCC78CCCN7CC(C8)F)O)F",
+    "target_specificity": "KRAS G12D Selective Non-Covalent",
+    "experimental_ic50_nm": 5.0,
+    "experimental_activity": "High Potency"
+  },
+  {
+    "name": "BI-2852",
+    "chembl_or_cid": "CID:138756246",
+    "smiles": "CN1C=C(N=C1)CN2C=CC3=C2C=C(C=C3)CNCC4=C(C5=CC=CC=C5N4)C6C7=C(C=CC(=C7)O)C(=O)N6",
+    "target_specificity": "Pan-KRAS Switch-I/II Pocket Binder",
+    "experimental_ic50_nm": 770.0,
+    "experimental_activity": "Moderate Potency"
+  },
+  {
+    "name": "Sotorasib (AMG 510)",
+    "chembl_or_cid": "CID:137278711",
+    "smiles": "CC1CN(CCN1C2=NC(=O)N(C3=NC(=C(C=C32)F)C4=C(C=CC=C4F)O)C5=C(C=CN=C5C(C)C)C)C(=O)C=C",
+    "target_specificity": "KRAS G12C Covalent Inhibitor (Inactive on G12D)",
+    "experimental_ic50_nm": 12000.0,
+    "experimental_activity": "Inactive / Resistance"
+  },
+  {
+    "name": "Adagrasib (MRTX849)",
+    "chembl_or_cid": "CID:139595267",
+    "smiles": "C=CC(=O)N1CCN(CC1)C2=NC=C(C3=C2N=C(C=C3)C4=CC5=C(C=CC(=C5Cl)F)N4)F",
+    "target_specificity": "KRAS G12C Covalent Inhibitor (Inactive on G12D)",
+    "experimental_ic50_nm": 15000.0,
+    "experimental_activity": "Inactive / Resistance"
+  },
+  {
+    "name": "ARS-1620",
+    "chembl_or_cid": "CID:122173007",
+    "smiles": "C=CC(=O)N1CCN(CC1)C2=NC=C(C3=C2N=C(C=C3)C4=C(C=CC=C4Cl)F)Cl",
+    "target_specificity": "KRAS G12C Tool Compound (Inactive on G12D)",
+    "experimental_ic50_nm": 22000.0,
+    "experimental_activity": "Inactive / Resistance"
+  },
+  {
+    "name": "DCAI Fragment",
+    "chembl_or_cid": "CHEMBL2396992",
+    "smiles": "CC1=C(C=C(C=C1)Cl)NC(=O)C2=CC=CC=C2Cl",
+    "target_specificity": "KRAS Crystallographic Fragment",
+    "experimental_ic50_nm": 155000.0,
+    "experimental_activity": "Weak Fragment"
+  },
+  {
+    "name": "Gemcitabine",
+    "chembl_or_cid": "CHEMBL888",
+    "smiles": "C1=CN(C(=O)N=C1N)C2C(C(C(O2)CO)O)(F)F",
+    "target_specificity": "Standard Pancreatic Chemo (Non-targeted)",
+    "experimental_ic50_nm": 50000.0,
+    "experimental_activity": "Non-Targeted Cytotoxic"
+  },
+  {
+    "name": "Aspirin",
+    "chembl_or_cid": "CHEMBL25",
+    "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
+    "target_specificity": "Negative Control (COX)",
+    "experimental_ic50_nm": 100000.0,
+    "experimental_activity": "Negative Control"
+  },
+  {
+    "name": "Caffeine",
+    "chembl_or_cid": "CHEMBL113",
+    "smiles": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
+    "target_specificity": "Negative Control (Adenosine)",
+    "experimental_ic50_nm": 100000.0,
+    "experimental_activity": "Negative Control"
+  }
+]

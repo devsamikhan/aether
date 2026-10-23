@@ -178,6 +178,51 @@ let outcome = qreg.measure(0);
 println("Measured: " + to_string(outcome));
 ```
 
+### 5. 🧬 Native Bioinformatics & Computational Genomics (`Bio`)
+```aether
+// Parse biological sequences with genetic code translation & alignment
+let seq = Bio.Sequence("ATGGCGGCGCTAGCG");
+let rna = seq.transcribe();
+let protein = seq.translate();
+let gc = seq.gc_content();
+let aligned = Bio.align_global("ATGGCG", "ATGCCG");
+
+// Colorized nucleotide terminal output
+println(Bio.colorize(seq));
+```
+
+### 6. 💊 Cheminformatics & Deep Drug Safety Screening (`Chem`)
+```aether
+// Parse SMILES string into molecular topology with Lipinski & QSAR metrics
+let drug = Chem.smiles("CC1=CC=C(C=C1)NC(=O)C2=CC=C(CN3CCN(C)CC3)C=C2");
+println("Formula: " + drug.formula());
+println("Molecular Weight: " + to_string(drug.weight()));
+println("LogP: " + to_string(drug.logp()));
+println("Lipinski Passed: " + to_string(drug.lipinski_rule_of_5()));
+
+// Deep toxicity & reactive liability screening (PAINS, Ames, hERG, Hepatotoxicity)
+let safety = drug.safety_profile();
+println("PAINS Alerts: " + to_string(safety.pains_alerts));
+println("hERG Risk: " + safety.herg_cardiotoxicity_risk);
+```
+
+---
+
+## 🔬 Scientific Discovery & Reporting CLI
+
+AETHER includes built-in execution and automated scientific reporting:
+
+```bash
+# Execute discovery and precision oncology pipelines
+aether run examples/kras_g12d_real_discovery.ae
+
+# Generate interactive dark-mode HTML scientific discovery reports
+aether report examples/kras_g12d_real_discovery.ae --html discovery_report.html
+
+# Run native language test suites
+aether test
+```
+
 ---
 
 ## 📚 Documentation & Ecosystem Links

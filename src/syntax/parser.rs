@@ -106,8 +106,43 @@ impl Parser {
             TokenKind::Raise => self.parse_raise_statement(),
             TokenKind::Import => self.parse_import_statement(),
             TokenKind::From => self.parse_from_import_statement(),
+            TokenKind::Ident(s)
+                if s == "test"
+                    && matches!(
+                        self.peek_next().map(|t| &t.kind),
+                        Some(TokenKind::String(_)) | Some(TokenKind::Ident(_))
+                    ) =>
+            {
+                self.parse_test_statement()
+            }
             _ => self.parse_expr_or_assign_statement(),
         }
+    }
+
+    fn parse_test_statement(&mut self) -> Result<Statement, (String, Span)> {
+        let test_tok = self.advance(); // consume 'test'
+        let test_name = match &self.peek().kind {
+            TokenKind::String(s) => s.clone(),
+            TokenKind::Ident(s) => s.clone(),
+            _ => {
+                return Err((
+                    "Expected test name string or identifier after 'test'".to_string(),
+                    self.current_span(),
+                ))
+            }
+        };
+        let name_tok = self.advance();
+        let body = self.parse_block()?;
+        let span = test_tok.span.merge(body.span);
+        let test_mod = Expr::Ident("Test".to_string(), test_tok.span);
+        let register_member = Expr::Member(Box::new(test_mod), "register".to_string(), test_tok.span);
+        let name_lit = Expr::Literal(Literal::String(test_name), name_tok.span);
+        let lambda = Expr::Lambda(Vec::new(), Box::new(body), span);
+        Ok(Statement::Expr(Expr::Call(
+            Box::new(register_member),
+            vec![name_lit, lambda],
+            span,
+        )))
     }
 
     fn parse_let_statement(&mut self) -> Result<Statement, (String, Span)> {

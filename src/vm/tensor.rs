@@ -333,7 +333,7 @@ fn wrap_tensor_handle(data: TensorData) -> Value {
     Value::map(map)
 }
 
-fn get_tensor_data(val: &Value) -> Result<TensorData, String> {
+pub fn get_tensor_data(val: &Value) -> Result<TensorData, String> {
     match val {
         Value::Map(m) => {
             let map = m.lock();

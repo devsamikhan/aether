@@ -33,6 +33,7 @@ desktop.ini
 logs/
 
 # Runtime Database
-data/
+data/*.db
+data/*.wal
 *.db
 *.wal

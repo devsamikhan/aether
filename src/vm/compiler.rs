@@ -588,8 +588,13 @@ impl BytecodeCompiler {
                 body,
                 span,
             } => {
-                // 1. Evaluate iterator expression (e.g. range or array)
+                // 1. Evaluate iterator expression (and normalize custom __iter__/__next__ objects)
+                let to_iter_const = self.add_constant(Value::string("__to_iterable"));
+                self.emit_op(OpCode::GetGlobal, *span);
+                self.emit_u16(to_iter_const as u16, *span);
                 self.compile_expression(iter)?;
+                self.emit_op(OpCode::Call, *span);
+                self.emit_byte(1, *span);
 
                 // 2. Begin scope and create internal locals
                 self.begin_scope();

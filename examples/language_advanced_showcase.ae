@@ -67,3 +67,64 @@ print("\n=== 6. Built-in Code Formatter, Linter & Fuzzy Diagnostics ===")
 let sample_code = "fn demo(a){\nlet unused_var = 42\nreturn a+1\n}\n"
 print("Linter warnings:", Linter.lint(sample_code))
 print("Fuzzy suggestion for 'prnt':", Diagnostics.suggest("prnt", ["print", "println", "len"]))
+
+print("\n=== 7. Multi-Line Fluent Chaining & Pipeline Continuation ===")
+let fluent_sum = [1, 2, 3, 4, 5, 6]
+    .map(|x| x * 10)
+    .filter(|x| x >= 30)
+    .sum()
+print("Multi-line fluent chain sum:", fluent_sum)
+
+print("\n=== 8. Custom Iterators (__next__) & Struct Operator Overloading ===")
+struct Vec2 {
+    x,
+    y
+}
+
+impl Vec2 {
+    fn __add__(self, other) {
+        return Vec2(self.x + other.x, self.y + other.y)
+    }
+    fn __mul__(self, scalar) {
+        return Vec2(self.x * scalar, self.y * scalar)
+    }
+    fn __eq__(self, other) {
+        return self.x == other.x and self.y == other.y
+    }
+    fn __str__(self) {
+        return f"Vec2({self.x}, {self.y})"
+    }
+}
+
+let p = (Vec2(2, 3) + Vec2(4, 5)) * 2
+print("Struct operator result:", str(p), "equals Vec2(12, 16):", p == Vec2(12, 16))
+
+struct Countdown {
+    n
+}
+
+impl Countdown {
+    fn __next__(self) {
+        if self.n <= 0 {
+            return nil
+        }
+        let v = self.n
+        self.n = self.n - 1
+        return v
+    }
+}
+
+let countdown_items = Countdown(5).map(|x| x * 100)
+print("Custom struct iterator .map():", countdown_items)
+
+print("\n=== 9. Language-Level Unit Tests & Property Fuzzing ===")
+test "vector algebra invariant" {
+    assert_eq(Vec2(1, 2) + Vec2(3, 4), Vec2(4, 6))
+}
+
+let prop_ok = Fuzz.check(|a, b| (a + b) == (b + a), 50)
+print("Fuzz.check commutativity:", prop_ok, "Test summary:", Test.summary())
+
+print("\n=== 10. Bytecode Disassembler & Introspection ===")
+print("Bytecode stats for compute_metric:", Bytecode.stats(compute_metric))
+

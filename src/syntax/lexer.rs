@@ -527,6 +527,29 @@ impl<'a> Lexer<'a> {
             return;
         }
 
+        // Fluent continuation lines: if the line starts with `.` (not `..`), `?.`, `??`, or `|>`,
+        // treat it as an expression continuation rather than a new statement or indentation change.
+        let first_ch = self.chars[idx].1;
+        let second_ch = if idx + 1 < self.chars.len() {
+            Some(self.chars[idx + 1].1)
+        } else {
+            None
+        };
+        let is_fluent_continuation = (first_ch == '.' && second_ch != Some('.'))
+            || (first_ch == '?' && (second_ch == Some('.') || second_ch == Some('?')))
+            || (first_ch == '|' && second_ch == Some('>'));
+
+        if is_fluent_continuation {
+            if tokens.last().map(|t| &t.kind) == Some(&TokenKind::Newline) {
+                tokens.pop();
+            }
+            while self.cursor < idx {
+                self.advance();
+            }
+            self.at_line_start = false;
+            return;
+        }
+
         let current_indent = *self.indent_stack.last().unwrap_or(&0);
         let pos = self.current_pos();
 

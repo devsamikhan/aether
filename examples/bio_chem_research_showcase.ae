@@ -1,0 +1,150 @@
+# ==============================================================================
+# AETHER Scientific Computing Showcase:
+# Computational Biology, Genomics & AI Drug Discovery (Medicine Prediction)
+# ==============================================================================
+
+print("==================================================================")
+print("  AETHER NATIVE GENOMICS & COMPUTATIONAL DRUG DISCOVERY ENGINE    ")
+print("==================================================================")
+
+# ------------------------------------------------------------------------------
+# 1. 2-Bit Compressed DNA & Sequence Processing
+# ------------------------------------------------------------------------------
+print("\n--- 1. Native 2-Bit DNA Compression & Genetics ---")
+
+let raw_dna = "ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG"
+let dna = Bio.dna(raw_dna)
+
+print("Original DNA Sequence:", dna.to_string())
+print("Sequence Length (bp):", dna.len)
+print("Packed Memory (bytes):", dna.raw_bytes)
+print("Memory Compression Ratio:", dna.compression_ratio, "x (75% RAM savings)")
+print("GC-Content (%):", dna.gc_content())
+
+let rev_comp = dna.reverse_complement()
+print("Reverse Complement:", rev_comp.to_string())
+
+let mrna = dna.transcribe()
+print("Transcribed mRNA:", mrna)
+
+let protein = dna.translate(0)
+print("Translated Amino Acid Chain (Frame 0):", protein)
+
+# ------------------------------------------------------------------------------
+# 2. Gene Discovery: Open Reading Frames (ORFs) & K-Mer Profiling
+# ------------------------------------------------------------------------------
+print("\n--- 2. Gene Discovery: ORFs & K-Mer Profiling ---")
+
+let orfs = dna.find_orfs(2)
+print("Detected Open Reading Frames (ORFs):", orfs.len())
+for orf in orfs {
+    print("  -> Found ORF at [", orf.start, ":", orf.end, "] | Codons:", orf.codons, "| Protein:", orf.protein)
+}
+
+let kmer_counts = dna.count_kmers(3)
+print("Top 3-mers sample: ATG ->", kmer_counts["ATG"], "| GCC ->", kmer_counts["GCC"])
+
+# ------------------------------------------------------------------------------
+# 3. Global Sequence Alignment & SNP Mutation Detection
+# ------------------------------------------------------------------------------
+print("\n--- 3. Sequence Alignment (Needleman-Wunsch) & SNP Detection ---")
+
+let wild_type = Bio.dna("ATGGTGCATCTGACTCCT")
+let mutant_variant = Bio.dna("ATGGTGCACCTGACTCCT")
+
+let snp_mutations = wild_type.hamming_distance(mutant_variant)
+print("Detected Point Mutations (SNPs):", snp_mutations)
+
+let alignment = Bio.align(wild_type.to_string(), mutant_variant.to_string(), 2, -1, -2)
+print("Alignment Score:", alignment.score)
+print("Aligned Ref:  ", alignment.aligned1)
+print("Aligned Query:", alignment.aligned2)
+print("Sequence Identity (%):", alignment.identity_percent)
+
+# ------------------------------------------------------------------------------
+# 4. Computational Chemistry: SMILES Molecular Parsing & Physicochemical Rules
+# ------------------------------------------------------------------------------
+print("\n--- 4. Computational Chemistry & Drug Candidates ---")
+
+let aspirin = Chem.from_smiles("CC(=O)OC1=CC=CC=C1C(=O)O")
+let ibuprofen = Chem.from_smiles("CC(C)CC1=CC=C(C=C1)C(C)C(=O)O")
+let paracetamol = Chem.from_smiles("CC(=O)NC1=CC=C(O)C=C1")
+let caffeine = Chem.from_smiles("CN1C=NC2=C1C(=O)N(C(=O)N2C)C")
+
+let candidates = [
+    ("Aspirin", aspirin),
+    ("Ibuprofen", ibuprofen),
+    ("Paracetamol", paracetamol),
+    ("Caffeine", caffeine)
+]
+
+for item in candidates {
+    let name = item[0]
+    let mol = item[1]
+    let r5 = mol.rule_of_five()
+    print("Drug Candidate:", name)
+    print("  Formula:", mol.formula(), "| MW:", mol.weight(), "Da | Heavy Atoms:", mol.heavy_atoms)
+    print("  LogP (Lipophilicity):", mol.logp(), "| TPSA:", mol.tpsa(), "Å²")
+    print("  H-Bond Donors:", mol.hbd(), "| Acceptors:", mol.hba(), "| Rotatable Bonds:", mol.rotatable_bonds())
+    print("  Lipinski Rule of 5 Oral Bioavailability:", r5.is_drug_like, "(Violations:", r5.violations, ")")
+}
+
+# ------------------------------------------------------------------------------
+# 5. Extended Connectivity Fingerprints (ECFP) & Chemical Similarity
+# ------------------------------------------------------------------------------
+print("\n--- 5. Molecular Fingerprinting & Tanimoto Structural Similarity ---")
+
+let fp_asp = aspirin.fingerprint(512)
+let fp_ibu = ibuprofen.fingerprint(512)
+let fp_par = paracetamol.fingerprint(512)
+let fp_caf = caffeine.fingerprint(512)
+
+let sim_asp_par = Chem.tanimoto_similarity(fp_asp, fp_par)
+let sim_asp_ibu = Chem.tanimoto_similarity(fp_asp, fp_ibu)
+let sim_asp_caf = Chem.tanimoto_similarity(fp_asp, fp_caf)
+
+print("Aspirin vs Paracetamol Structural Similarity:", sim_asp_par)
+print("Aspirin vs Ibuprofen Structural Similarity:", sim_asp_ibu)
+print("Aspirin vs Caffeine Structural Similarity:   ", sim_asp_caf)
+
+# ------------------------------------------------------------------------------
+# 6. AI Virtual Screening & Receptor Target Binding Affinity Prediction
+# ------------------------------------------------------------------------------
+print("\n--- 6. AI Medicine Prediction: Receptor Target Binding Affinity ---")
+
+# Target Receptor Pocket Features (e.g. COX-2 enzyme active site model)
+let mut cox2_weights = []
+for i in 0..512 {
+    if i % 12 == 0 {
+        cox2_weights.push(0.42)
+    } else if i % 7 == 0 {
+        cox2_weights.push(0.18)
+    } else {
+        cox2_weights.push(0.02)
+    }
+}
+
+for item in candidates {
+    let name = item[0]
+    let mol = item[1]
+    let affinity = Chem.predict_binding_affinity(mol, cox2_weights, 4.8)
+    print("Molecule:", name)
+    print("  Predicted pIC50:", affinity.pic50)
+    print("  Estimated Dissociation Constant (Kd):", affinity.kd_nm, "nM")
+    print("  Binding Classification:", affinity.binding_class)
+}
+
+# ------------------------------------------------------------------------------
+# 7. Native Language Unit Test
+# ------------------------------------------------------------------------------
+test "scientific verification" {
+    let asp = Chem.from_smiles("CC(=O)OC1=CC=CC=C1C(=O)O")
+    let asp_r5 = asp.rule_of_five()
+    assert_eq(asp_r5.is_drug_like, true)
+    assert_eq(asp.formula(), "C9H8O4")
+
+    let test_dna = Bio.dna("ATGGCCATTTAA")
+    assert_eq(test_dna.translate(0), "MAI*")
+}
+
+print("\nAll scientific simulations and analyses completed successfully!")
