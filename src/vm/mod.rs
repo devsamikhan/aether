@@ -27,6 +27,7 @@ pub mod optimizer;
 pub mod security;
 pub mod interner;
 pub mod bytecode_cache;
+pub mod regex_engine;
 
 pub use bytecode::{Chunk, OpCode};
 pub use compiler::BytecodeCompiler;

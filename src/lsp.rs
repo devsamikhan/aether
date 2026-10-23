@@ -36,10 +36,30 @@ impl AetherLanguageServer {
     pub fn analyze(&self, source: &str) -> Vec<LspDiagnostic> {
         let mut diagnostics = Vec::new();
 
-        // 1. Syntax Parsing Pass
+        // 1. Syntax Parsing Pass + Semantic Type & Security Checks
         match crate::syntax::parse(source) {
-            Ok(_) => {
-                // Syntax valid - can perform semantic and contract checks
+            Ok(program) => {
+                // Static Type & Trait Completeness Check
+                let mut checker = crate::types::checker::TypeChecker::new();
+                if let Err(type_errs) = checker.check_program(&program) {
+                    for msg in type_errs {
+                        diagnostics.push(LspDiagnostic {
+                            line: 0,
+                            col: 0,
+                            message: format!("Type error: {}", msg),
+                            severity: 2, // Warning
+                        });
+                    }
+                }
+                // Static Security Taint & Vulnerability Check
+                for finding in crate::vm::security::scan_program_security(&program) {
+                    diagnostics.push(LspDiagnostic {
+                        line: finding.line.saturating_sub(1),
+                        col: 0,
+                        message: format!("[{}] {}: {}", finding.severity, finding.category, finding.message),
+                        severity: 2,
+                    });
+                }
             }
             Err((err_msg, span)) => {
                 diagnostics.push(LspDiagnostic {

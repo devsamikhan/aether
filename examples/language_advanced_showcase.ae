@@ -1,0 +1,69 @@
+// ==============================================================================
+// AETHER Language Showcase: Functional Pipelines, Comptime, Async/Await & Task,
+// Context Managers & LIFO Defer, Native Regex, Diagnostics, Formatter & Linter
+// ==============================================================================
+
+print("=== 1. Functional Collection Pipeline Methods ===")
+let raw_scores = [45, 92, 78, 92, 60, 88, 100, 45]
+let top_bonus_total = raw_scores.unique().sort().filter(|s| s >= 80).map(|s| s + 5).reduce(0, |acc, s| acc + s)
+print("Top bonus total:", top_bonus_total)
+
+print("\n=== 2. Compile-Time Execution (comptime) & Macros ===")
+macro cube(n) {
+    n * n * n
+}
+let FIB_TABLE = comptime {
+    let mut seq = [0, 1]
+    for i in 2..=8 {
+        seq.push(seq[i - 1] + seq[i - 2])
+    }
+    seq
+}
+print("Precomputed FIB_TABLE at compile time:", FIB_TABLE)
+print("macro cube(4):", cube(4))
+
+print("\n=== 3. Async / Await & Structured Task Concurrency ===")
+async fn compute_metric(n) {
+    return n * n + 10
+}
+let t1 = Task.spawn(compute_metric, 6)
+let t2 = Task.spawn(compute_metric, 9)
+let results = Task.all([t1, t2])
+print("Task.all results:", results)
+
+print("\n=== 4. Deterministic Resource Management (with ... as ... & LIFO defer) ===")
+let events = []
+class Session {
+    fn __init__(self, id) {
+        self.id = id
+    }
+    fn __enter__(self) {
+        events.push("open:" + self.id)
+        return self
+    }
+    fn __exit__(self) {
+        events.push("close:" + self.id)
+    }
+}
+
+fn process_request() {
+    defer events.push("cleanup:outer")
+    defer events.push("cleanup:inner")
+    with Session("sess-01") as s {
+        events.push("query:" + s.id)
+    }
+    return "done"
+}
+let _ = process_request()
+print("Lifecycle trace:", events.join(" -> "))
+
+print("\n=== 5. Native Zero-Dependency Regex Engine ===")
+let log_line = "2026-10-23 [ERROR] User #4091 failed login from 10.0.0.12"
+print("Regex is_match:", Regex.is_match("^2026-[0-9]{2}-[0-9]{2}", log_line))
+print("Regex find:", Regex.find("#[0-9]+", log_line))
+print("Regex replace_all:", Regex.replace_all("[0-9]+", log_line, "X"))
+
+print("\n=== 6. Built-in Code Formatter, Linter & Fuzzy Diagnostics ===")
+let sample_code = "fn demo(a){\nlet unused_var = 42\nreturn a+1\n}\n"
+print("Linter warnings:", Linter.lint(sample_code))
+print("Fuzzy suggestion for 'prnt':", Diagnostics.suggest("prnt", ["print", "println", "len"]))

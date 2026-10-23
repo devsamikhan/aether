@@ -30,6 +30,7 @@ pub struct BytecodeCompiler {
     global_vars: std::collections::HashSet<String>,
     current_class_name: Option<String>,
     is_generator: bool,
+    deferred_exprs: Vec<Expr>,
 }
 
 impl BytecodeCompiler {
@@ -48,7 +49,17 @@ impl BytecodeCompiler {
             global_vars: std::collections::HashSet::new(),
             current_class_name: None,
             is_generator: false,
+            deferred_exprs: Vec::new(),
         }
+    }
+
+    fn emit_deferred_cleanups(&mut self, span: Span) -> Result<(), String> {
+        let deferred = self.deferred_exprs.clone();
+        for def_expr in deferred.iter().rev() {
+            self.compile_expression(def_expr)?;
+            self.emit_op(OpCode::Pop, span);
+        }
+        Ok(())
     }
 
     pub fn compile(mut self, program: &Program) -> Result<CompiledFunction, String> {
@@ -57,6 +68,7 @@ impl BytecodeCompiler {
             if i == total - 1 {
                 if let Statement::Expr(expr) = stmt {
                     self.compile_expression(expr)?;
+                    self.emit_deferred_cleanups(expr.span())?;
                     self.emit_op(OpCode::Return, expr.span());
                     return Ok(self.function);
                 }
@@ -65,6 +77,7 @@ impl BytecodeCompiler {
         }
 
         // Return nil at the end of the script/function
+        self.emit_deferred_cleanups(program.span)?;
         self.emit_op(OpCode::Nil, program.span);
         self.emit_op(OpCode::Return, program.span);
 
@@ -365,6 +378,7 @@ impl BytecodeCompiler {
                     if !is_gen && i == num_stmts - 1 && body.result.is_none() {
                         if let Statement::Expr(expr) = st {
                             sub_compiler.compile_expression(expr)?;
+                            sub_compiler.emit_deferred_cleanups(*span)?;
                             sub_compiler.emit_op(OpCode::Return, *span);
                             continue;
                         }
@@ -377,6 +391,7 @@ impl BytecodeCompiler {
                         sub_compiler.compile_expression(res)?;
                         sub_compiler.emit_op(OpCode::Pop, *span);
                     }
+                    sub_compiler.emit_deferred_cleanups(*span)?;
                     if let Some(gen_slot) = sub_compiler.resolve_local("__gen_acc") {
                         sub_compiler.emit_op(OpCode::GetLocal, *span);
                         sub_compiler.emit_u16(gen_slot as u16, *span);
@@ -386,8 +401,10 @@ impl BytecodeCompiler {
                     sub_compiler.emit_op(OpCode::Return, *span);
                 } else if let Some(ref res) = body.result {
                     sub_compiler.compile_expression(res)?;
+                    sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
                 } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+                    sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Nil, *span);
                     sub_compiler.emit_op(OpCode::Return, *span);
                 }
@@ -702,6 +719,7 @@ impl BytecodeCompiler {
                         self.compile_expression(val)?;
                         self.emit_op(OpCode::Pop, *span);
                     }
+                    self.emit_deferred_cleanups(*span)?;
                     if let Some(gen_slot) = self.resolve_local("__gen_acc") {
                         self.emit_op(OpCode::GetLocal, *span);
                         self.emit_u16(gen_slot as u16, *span);
@@ -715,8 +733,50 @@ impl BytecodeCompiler {
                     } else {
                         self.emit_op(OpCode::Nil, *span);
                     }
+                    self.emit_deferred_cleanups(*span)?;
                     self.emit_op(OpCode::Return, *span);
                 }
+            }
+            Statement::Defer { expr, .. } => {
+                self.deferred_exprs.push(expr.clone());
+            }
+            Statement::With {
+                resource,
+                alias,
+                body,
+                span,
+            } => {
+                let res_var = alias
+                    .clone()
+                    .unwrap_or_else(|| format!("__with_res_{}", self.locals.len()));
+                let enter_call = Expr::Call(
+                    Box::new(Expr::Ident("__with_enter".to_string(), *span)),
+                    vec![resource.clone()],
+                    *span,
+                );
+                let let_stmt = Statement::Let {
+                    name: res_var.clone(),
+                    is_mut: true,
+                    type_annotation: None,
+                    initializer: Some(enter_call),
+                    span: *span,
+                };
+                self.compile_statement(&let_stmt)?;
+
+                let exit_call = Expr::Call(
+                    Box::new(Expr::Ident("__with_exit".to_string(), *span)),
+                    vec![Expr::Ident(res_var, *span)],
+                    *span,
+                );
+                self.deferred_exprs.push(exit_call.clone());
+
+                for st in &body.statements {
+                    self.compile_statement(st)?;
+                }
+
+                let _ = self.deferred_exprs.pop();
+                self.compile_expression(&exit_call)?;
+                self.emit_op(OpCode::Pop, *span);
             }
             Statement::Yield { value, span } => {
                 let gen_slot = self.resolve_local("__gen_acc").ok_or_else(|| {
@@ -1072,7 +1132,6 @@ impl BytecodeCompiler {
                 self.compile_expression(expr)?;
                 self.emit_op(OpCode::Pop, expr.span());
             }
-            _ => {}
         }
         Ok(())
     }
@@ -1321,6 +1380,35 @@ impl BytecodeCompiler {
                 self.compile_expression(inner)?;
                 self.emit_op(OpCode::TryUnwrap, *span);
             }
+            Expr::Await(inner, span) => {
+                let await_call = Expr::Call(
+                    Box::new(Expr::Ident("__await".to_string(), *span)),
+                    vec![(**inner).clone()],
+                    *span,
+                );
+                self.compile_expression(&await_call)?;
+            }
+            Expr::Comptime(block, span) => {
+                let mut stmts = block.statements.clone();
+                if let Some(ref res) = block.result {
+                    stmts.push(Statement::Expr((**res).clone()));
+                }
+                let prog = Program {
+                    statements: stmts,
+                    span: *span,
+                };
+                let ct_compiler = BytecodeCompiler::new("<main>", 0);
+                let ct_fn = ct_compiler
+                    .compile(&prog)
+                    .map_err(|e| format!("Comptime compilation error: {}", e))?;
+                let mut ct_vm = super::interpreter::VM::new();
+                let val = ct_vm
+                    .interpret(ct_fn)
+                    .map_err(|e| format!("Comptime execution error: {}", e))?;
+                let idx = self.add_constant(val);
+                self.emit_op(OpCode::Constant, *span);
+                self.emit_u16(idx as u16, *span);
+            }
             Expr::Slice { obj, start, end, step, span } => {
                 self.compile_expression(obj)?;
                 if let Some(s) = start {
@@ -1474,6 +1562,7 @@ impl BytecodeCompiler {
                     if i == num_stmts - 1 && body.result.is_none() {
                         if let Statement::Expr(expr) = st {
                             sub_compiler.compile_expression(expr)?;
+                            sub_compiler.emit_deferred_cleanups(*span)?;
                             sub_compiler.emit_op(OpCode::Return, *span);
                             continue;
                         }
@@ -1483,8 +1572,10 @@ impl BytecodeCompiler {
 
                 if let Some(ref res) = body.result {
                     sub_compiler.compile_expression(res)?;
+                    sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
                 } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+                    sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Nil, *span);
                     sub_compiler.emit_op(OpCode::Return, *span);
                 }
@@ -1722,6 +1813,7 @@ impl BytecodeCompiler {
             if i == num_stmts - 1 && body.result.is_none() {
                 if let Statement::Expr(expr) = st {
                     sub_compiler.compile_expression(expr)?;
+                    sub_compiler.emit_deferred_cleanups(span)?;
                     sub_compiler.emit_op(OpCode::Return, span);
                     continue;
                 }
@@ -1731,8 +1823,10 @@ impl BytecodeCompiler {
 
         if let Some(ref res) = body.result {
             sub_compiler.compile_expression(res)?;
+            sub_compiler.emit_deferred_cleanups(span)?;
             sub_compiler.emit_op(OpCode::Return, span);
         } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+            sub_compiler.emit_deferred_cleanups(span)?;
             sub_compiler.emit_op(OpCode::Nil, span);
             sub_compiler.emit_op(OpCode::Return, span);
         }
@@ -2280,6 +2374,11 @@ impl BytecodeCompiler {
                     self.prescan_captures_in_block(fb);
                 }
             }
+            Statement::Defer { expr, .. } => self.prescan_captures_in_expr(expr),
+            Statement::With { resource, body, .. } => {
+                self.prescan_captures_in_expr(resource);
+                self.prescan_captures_in_block(body);
+            }
             Statement::Expr(e) => self.prescan_captures_in_expr(e),
             _ => {}
         }
@@ -2300,6 +2399,7 @@ impl BytecodeCompiler {
             | Expr::Member(inner, _, _)
             | Expr::OptionalMember(inner, _, _)
             | Expr::Try(inner, _)
+            | Expr::Await(inner, _)
             | Expr::NamedArg(_, inner, _)
             | Expr::StarArg(inner, _)
             | Expr::DoubleStarArg(inner, _) => {

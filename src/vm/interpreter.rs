@@ -92,6 +92,7 @@ impl VM {
         super::proof::register_proof_module(&mut vm.globals);
         super::graph::register_graph_module(&mut vm.globals);
         super::hotreload::register_hotreload_module(&mut vm.globals);
+        super::regex_engine::register_regex_module(&mut vm.globals);
         vm
     }
 
@@ -785,6 +786,252 @@ impl VM {
             vm.interpret(func)
         }));
         self.globals.insert("Bytecode".to_string(), Value::map(bc_mod));
+
+        // Context Manager Hooks (__with_enter, __with_exit)
+        self.define_native("__with_enter", |args| {
+            if args.is_empty() {
+                return Ok(Value::Nil);
+            }
+            let res = args[0].clone();
+            match &res {
+                Value::ClassInstance(inst) => {
+                    let method_opt = with_current_vm(|vm| {
+                        Ok(Self::find_method(&inst.class, "__enter__", &vm.globals))
+                    })?;
+                    if let Some(m) = method_opt {
+                        with_current_vm(|vm| vm.call_function(m, vec![res.clone()]))
+                    } else {
+                        Ok(res)
+                    }
+                }
+                Value::Map(m) => {
+                    let enter_fn = {
+                        let guard = m.lock();
+                        guard
+                            .get("__enter__")
+                            .or_else(|| guard.get("enter"))
+                            .cloned()
+                    };
+                    if let Some(callable) = enter_fn {
+                        with_current_vm(|vm| vm.call_value(callable, vec![res.clone()]))
+                    } else {
+                        Ok(res)
+                    }
+                }
+                _ => Ok(res),
+            }
+        });
+
+        self.define_native("__with_exit", |args| {
+            if args.is_empty() {
+                return Ok(Value::Nil);
+            }
+            let res = args[0].clone();
+            match &res {
+                Value::ClassInstance(inst) => {
+                    let method_opt = with_current_vm(|vm| {
+                        Ok(Self::find_method(&inst.class, "__exit__", &vm.globals)
+                            .or_else(|| Self::find_method(&inst.class, "close", &vm.globals)))
+                    })?;
+                    if let Some(m) = method_opt {
+                        let _ = with_current_vm(|vm| vm.call_function(m, vec![res.clone()]))?;
+                    }
+                    Ok(Value::Nil)
+                }
+                Value::Map(m) => {
+                    let exit_fn = {
+                        let guard = m.lock();
+                        guard
+                            .get("__exit__")
+                            .or_else(|| guard.get("exit"))
+                            .or_else(|| guard.get("close"))
+                            .cloned()
+                    };
+                    if let Some(callable) = exit_fn {
+                        let _ = with_current_vm(|vm| vm.call_value(callable, vec![res.clone()]))?;
+                    }
+                    Ok(Value::Nil)
+                }
+                _ => Ok(Value::Nil),
+            }
+        });
+
+        // Async / Await & Structured Task Concurrency
+        self.define_native("__await", |args| {
+            if args.is_empty() {
+                return Ok(Value::Nil);
+            }
+            Self::resolve_future_value(args[0].clone())
+        });
+
+        let mut task_mod = HashMap::new();
+        task_mod.insert(
+            "spawn".to_string(),
+            Value::Native("Task.spawn".into(), |args| {
+                if args.is_empty() {
+                    return Err("Task.spawn(fn, [args...]) expects a callable".into());
+                }
+                let callable = args[0].clone();
+                let call_args = args[1..].to_vec();
+                let ch = ChannelHandle::new();
+                let ch_clone = ch.clone();
+                let globals_clone = with_current_vm(|vm| Ok(vm.globals.clone()))?;
+
+                crate::vm::fiber::global_scheduler().spawn(move || {
+                    let mut fiber_vm = VM::with_globals(globals_clone);
+                    let _guard = VmScopeGuard::enter(&mut fiber_vm);
+                    let res = fiber_vm.call_value(callable, call_args).unwrap_or(Value::Nil);
+                    let _ = ch_clone.sender.lock().send(res);
+                });
+
+                let mut fut = HashMap::new();
+                fut.insert("__future_ch".to_string(), Value::Channel(ch));
+                fut.insert("__future_resolved".to_string(), Value::Bool(false));
+                Ok(Value::map(fut))
+            }),
+        );
+        task_mod.insert(
+            "resolve".to_string(),
+            Value::Native("Task.resolve".into(), |args| {
+                let val = args.first().cloned().unwrap_or(Value::Nil);
+                let mut fut = HashMap::new();
+                fut.insert("__future_resolved".to_string(), Value::Bool(true));
+                fut.insert("__future_val".to_string(), val);
+                Ok(Value::map(fut))
+            }),
+        );
+        task_mod.insert(
+            "all".to_string(),
+            Value::Native("Task.all".into(), |args| {
+                if args.is_empty() {
+                    return Ok(Value::array(Vec::new()));
+                }
+                let items: Vec<Value> = match &args[0] {
+                    Value::Array(a) => a.lock().clone(),
+                    Value::Tuple(t) => (**t).clone(),
+                    other => vec![other.clone()],
+                };
+                let mut results = Vec::with_capacity(items.len());
+                for item in items {
+                    results.push(Self::resolve_future_value(item)?);
+                }
+                Ok(Value::array(results))
+            }),
+        );
+        task_mod.insert(
+            "race".to_string(),
+            Value::Native("Task.race".into(), |args| {
+                if args.is_empty() {
+                    return Ok(Value::Nil);
+                }
+                let items: Vec<Value> = match &args[0] {
+                    Value::Array(a) => a.lock().clone(),
+                    Value::Tuple(t) => (**t).clone(),
+                    other => vec![other.clone()],
+                };
+                if let Some(first) = items.into_iter().next() {
+                    Self::resolve_future_value(first)
+                } else {
+                    Ok(Value::Nil)
+                }
+            }),
+        );
+        self.globals.insert("Task".to_string(), Value::map(task_mod));
+
+        // Built-in Formatter, Linter & Diagnostics Modules
+        let mut fmt_mod = HashMap::new();
+        fmt_mod.insert(
+            "format".to_string(),
+            Value::Native("Formatter.format".into(), |args| {
+                if args.is_empty() {
+                    return Err("Formatter.format(source) expects source string".into());
+                }
+                let src = format!("{}", args[0]);
+                let formatted = crate::syntax::diagnostics::format_source(&src);
+                Ok(Value::string(formatted))
+            }),
+        );
+        self.globals.insert("Formatter".to_string(), Value::map(fmt_mod));
+
+        let mut lint_mod = HashMap::new();
+        lint_mod.insert(
+            "lint".to_string(),
+            Value::Native("Linter.lint".into(), |args| {
+                if args.is_empty() {
+                    return Err("Linter.lint(source) expects source string".into());
+                }
+                let src = format!("{}", args[0]);
+                let warnings = crate::syntax::diagnostics::lint_source(&src)?;
+                let mut out = Vec::with_capacity(warnings.len());
+                for w in warnings {
+                    let mut m = HashMap::new();
+                    m.insert("code".to_string(), Value::string(w.code));
+                    m.insert("message".to_string(), Value::string(w.message));
+                    m.insert("line".to_string(), Value::Int(w.line as i64));
+                    out.push(Value::map(m));
+                }
+                Ok(Value::array(out))
+            }),
+        );
+        self.globals.insert("Linter".to_string(), Value::map(lint_mod));
+
+        let mut diag_mod = HashMap::new();
+        diag_mod.insert(
+            "suggest".to_string(),
+            Value::Native("Diagnostics.suggest".into(), |args| {
+                if args.len() < 2 {
+                    return Err("Diagnostics.suggest(target, candidates) expects 2 arguments".into());
+                }
+                let target = format!("{}", args[0]);
+                let cands: Vec<String> = match &args[1] {
+                    Value::Array(a) => a.lock().iter().map(|v| format!("{}", v)).collect(),
+                    Value::Tuple(t) => t.iter().map(|v| format!("{}", v)).collect(),
+                    _ => Vec::new(),
+                };
+                match crate::syntax::diagnostics::suggest_closest_symbol(
+                    &target,
+                    cands.iter().map(|s| s.as_str()),
+                ) {
+                    Some(best) => Ok(Value::string(best)),
+                    None => Ok(Value::Nil),
+                }
+            }),
+        );
+        diag_mod.insert(
+            "snippet".to_string(),
+            Value::Native("Diagnostics.snippet".into(), |args| {
+                if args.len() < 4 {
+                    return Err(
+                        "Diagnostics.snippet(source, line, col, message, [hint]) expects at least 4 arguments"
+                            .into(),
+                    );
+                }
+                let src = format!("{}", args[0]);
+                let line = match args[1] {
+                    Value::Int(i) => i.max(1) as usize,
+                    _ => 1,
+                };
+                let col = match args[2] {
+                    Value::Int(i) => i.max(1) as usize,
+                    _ => 1,
+                };
+                let msg = format!("{}", args[3]);
+                let hint = if args.len() > 4 && !matches!(args[4], Value::Nil) {
+                    Some(format!("{}", args[4]))
+                } else {
+                    None
+                };
+                let rendered = crate::syntax::diagnostics::render_diagnostic_snippet(
+                    &src,
+                    line,
+                    col,
+                    &msg,
+                    hint.as_deref(),
+                );
+                Ok(Value::string(rendered))
+            }),
+        );
+        self.globals.insert("Diagnostics".to_string(), Value::map(diag_mod));
     }
 
     pub fn define_native(&mut self, name: &str, func: NativeFn) {
@@ -1158,7 +1405,19 @@ impl VM {
                             if let Some(val) = self.globals.get(&**name) {
                                 self.stack.push(val.clone());
                             } else {
-                                return Err(format!("Undefined variable '{}'", name));
+                                let msg = if let Some(suggestion) =
+                                    crate::syntax::diagnostics::suggest_closest_symbol(
+                                        name,
+                                        self.globals.keys().map(|k| k.as_str()),
+                                    ) {
+                                    format!(
+                                        "Undefined variable '{}' — Did you mean '{}'?",
+                                        name, suggestion
+                                    )
+                                } else {
+                                    format!("Undefined variable '{}'", name)
+                                };
+                                return Err(msg);
                             }
                         }
                     }
@@ -2632,6 +2891,11 @@ impl VM {
             "graph" | "aethergraph" | "knowledge" => self.globals.get("Graph").cloned(),
             "hotreload" | "live" | "aetherlive" => self.globals.get("HotReload").or_else(|| self.globals.get("__native_hotreload")).cloned(),
             "ai" | "aether_ai" | "aetherai" | "agent" | "agents" => self.globals.get("AI").cloned(),
+            "regex" | "re" => self.globals.get("Regex").cloned(),
+            "task" | "async" => self.globals.get("Task").cloned(),
+            "formatter" | "fmt" => self.globals.get("Formatter").cloned(),
+            "linter" | "lint" => self.globals.get("Linter").cloned(),
+            "diagnostics" => self.globals.get("Diagnostics").cloned(),
             _ => None,
         };
 
@@ -2758,6 +3022,324 @@ impl VM {
         None
     }
 
+    pub fn resolve_future_value(val: Value) -> Result<Value, String> {
+        match val {
+            Value::Channel(ch) => {
+                let rx = ch.receiver.lock();
+                rx.recv().map_err(|e| e.to_string())
+            }
+            Value::Map(m) => {
+                let already = {
+                    let guard = m.lock();
+                    if matches!(guard.get("__future_resolved"), Some(Value::Bool(true))) {
+                        Some(guard.get("__future_val").cloned().unwrap_or(Value::Nil))
+                    } else {
+                        None
+                    }
+                };
+                if let Some(resolved) = already {
+                    return Ok(resolved);
+                }
+                let ch_opt = m.lock().get("__future_ch").cloned();
+                if let Some(Value::Channel(ch)) = ch_opt {
+                    let received = {
+                        let rx = ch.receiver.lock();
+                        rx.recv().map_err(|e| e.to_string())?
+                    };
+                    let mut guard = m.lock();
+                    guard.insert("__future_resolved".to_string(), Value::Bool(true));
+                    guard.insert("__future_val".to_string(), received.clone());
+                    Ok(received)
+                } else {
+                    Ok(Value::Map(m))
+                }
+            }
+            Value::Function(f) if f.arity == 0 => {
+                with_current_vm(|vm| vm.call_function(f, Vec::new()))
+            }
+            other => Ok(other),
+        }
+    }
+
+    pub fn call_value(&mut self, callable: Value, mut args: Vec<Value>) -> Result<Value, String> {
+        match callable {
+            Value::Function(func) => self.call_function(func, args),
+            Value::Closure { function, upvalues } => {
+                let mut sub_vm = Self::with_globals(self.globals.clone());
+                sub_vm.modules_cache = self.modules_cache.clone();
+                sub_vm.stack.push(Value::Function(function.clone()));
+                let mut current_args = args.len();
+                while current_args < function.max_arity {
+                    args.push(Value::DefaultSentinel);
+                    current_args += 1;
+                }
+                if function.has_varargs && args.len() <= function.max_arity {
+                    args.push(Value::tuple(Vec::new()));
+                }
+                if function.has_kwargs {
+                    args.push(Value::map(HashMap::new()));
+                }
+                for arg in args {
+                    sub_vm.stack.push(arg);
+                }
+                for uv in upvalues.lock().iter() {
+                    sub_vm.stack.push(uv.clone());
+                }
+                sub_vm.frames.push(CallFrame {
+                    function,
+                    ip: 0,
+                    stack_offset: 0,
+                    constructor_instance: None,
+                    closure_upvalues: Some(upvalues),
+                    memo_target: None,
+                });
+                let res = sub_vm.run()?;
+                for (k, v) in sub_vm.globals {
+                    self.globals.insert(k, v);
+                }
+                Ok(res)
+            }
+            Value::Native(_, f) => f(&args),
+            Value::BoundMethod { receiver, method } => {
+                Self::invoke_bound_method(&receiver, &method, &args)
+            }
+            Value::BoundUserMethod { receiver, function } => {
+                let mut full_args = vec![Value::ClassInstance((*receiver).clone())];
+                full_args.extend(args);
+                self.call_function(function, full_args)
+            }
+            Value::BoundStructMethod { receiver, function } => {
+                let mut full_args = vec![Value::StructInstance(receiver)];
+                full_args.extend(args);
+                self.call_function(function, full_args)
+            }
+            other => Err(format!("Cannot call non-callable type '{}'", other.type_name())),
+        }
+    }
+
+    fn compare_values_for_sort(a: &Value, b: &Value) -> std::cmp::Ordering {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => x.cmp(y),
+            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Int(x), Value::Float(y)) => (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Float(x), Value::Int(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::String(x), Value::String(y)) => x.cmp(y),
+            _ => format!("{}", a).cmp(&format!("{}", b)),
+        }
+    }
+
+    fn invoke_functional_seq_method(items: Vec<Value>, method: &str, args: &[Value]) -> Option<Result<Value, String>> {
+        match method {
+            "map" => {
+                if args.is_empty() {
+                    return Some(Err("map(fn) expects 1 callable argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    let mut out = Vec::with_capacity(items.len());
+                    for item in items {
+                        out.push(vm.call_value(f.clone(), vec![item])?);
+                    }
+                    Ok(Value::array(out))
+                });
+                Some(res)
+            }
+            "filter" => {
+                if args.is_empty() {
+                    return Some(Err("filter(fn) expects 1 predicate argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    let mut out = Vec::new();
+                    for item in items {
+                        if vm.call_value(f.clone(), vec![item.clone()])?.is_truthy() {
+                            out.push(item);
+                        }
+                    }
+                    Ok(Value::array(out))
+                });
+                Some(res)
+            }
+            "reduce" | "fold" => {
+                if args.is_empty() {
+                    return Some(Err("reduce(init, fn) or reduce(fn) expects 1 or 2 arguments".to_string()));
+                }
+                let res = with_current_vm(|vm| {
+                    if args.len() == 1 {
+                        let f = args[0].clone();
+                        let mut iter = items.into_iter();
+                        let mut acc = iter.next().unwrap_or(Value::Nil);
+                        for item in iter {
+                            acc = vm.call_value(f.clone(), vec![acc, item])?;
+                        }
+                        Ok(acc)
+                    } else {
+                        let mut acc = args[0].clone();
+                        let f = args[1].clone();
+                        for item in items {
+                            acc = vm.call_value(f.clone(), vec![acc, item])?;
+                        }
+                        Ok(acc)
+                    }
+                });
+                Some(res)
+            }
+            "find" => {
+                if args.is_empty() {
+                    return Some(Err("find(fn) expects 1 predicate argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    for item in items {
+                        if vm.call_value(f.clone(), vec![item.clone()])?.is_truthy() {
+                            return Ok(item);
+                        }
+                    }
+                    Ok(Value::Nil)
+                });
+                Some(res)
+            }
+            "any" => {
+                if args.is_empty() {
+                    return Some(Err("any(fn) expects 1 predicate argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    for item in items {
+                        if vm.call_value(f.clone(), vec![item])?.is_truthy() {
+                            return Ok(Value::Bool(true));
+                        }
+                    }
+                    Ok(Value::Bool(false))
+                });
+                Some(res)
+            }
+            "all" => {
+                if args.is_empty() {
+                    return Some(Err("all(fn) expects 1 predicate argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    for item in items {
+                        if !vm.call_value(f.clone(), vec![item])?.is_truthy() {
+                            return Ok(Value::Bool(false));
+                        }
+                    }
+                    Ok(Value::Bool(true))
+                });
+                Some(res)
+            }
+            "each" | "for_each" => {
+                if args.is_empty() {
+                    return Some(Err("each(fn) expects 1 callable argument".to_string()));
+                }
+                let f = args[0].clone();
+                let res = with_current_vm(|vm| {
+                    for item in items {
+                        let _ = vm.call_value(f.clone(), vec![item])?;
+                    }
+                    Ok(Value::Nil)
+                });
+                Some(res)
+            }
+            "enumerate" => {
+                let out: Vec<Value> = items
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, v)| Value::tuple(vec![Value::Int(i as i64), v]))
+                    .collect();
+                Some(Ok(Value::array(out)))
+            }
+            "zip" => {
+                if args.is_empty() {
+                    return Some(Err("zip(other) expects 1 iterable argument".to_string()));
+                }
+                let other_items: Vec<Value> = match &args[0] {
+                    Value::Array(a) => a.lock().clone(),
+                    Value::Tuple(t) => (**t).clone(),
+                    _ => return Some(Err("zip() argument must be a list or tuple".to_string())),
+                };
+                let out: Vec<Value> = items
+                    .into_iter()
+                    .zip(other_items)
+                    .map(|(a, b)| Value::tuple(vec![a, b]))
+                    .collect();
+                Some(Ok(Value::array(out)))
+            }
+            "take" => {
+                let n = match args.first() {
+                    Some(Value::Int(i)) => (*i).max(0) as usize,
+                    _ => return Some(Err("take(n) expects an integer argument".to_string())),
+                };
+                Some(Ok(Value::array(items.into_iter().take(n).collect())))
+            }
+            "skip" | "drop" => {
+                let n = match args.first() {
+                    Some(Value::Int(i)) => (*i).max(0) as usize,
+                    _ => return Some(Err("skip(n) expects an integer argument".to_string())),
+                };
+                Some(Ok(Value::array(items.into_iter().skip(n).collect())))
+            }
+            "flatten" => {
+                let mut out = Vec::new();
+                for item in items {
+                    match item {
+                        Value::Array(a) => out.extend(a.lock().iter().cloned()),
+                        Value::Tuple(t) => out.extend(t.iter().cloned()),
+                        other => out.push(other),
+                    }
+                }
+                Some(Ok(Value::array(out)))
+            }
+            "unique" | "distinct" => {
+                let mut out = Vec::new();
+                for item in items {
+                    if !out.contains(&item) {
+                        out.push(item);
+                    }
+                }
+                Some(Ok(Value::array(out)))
+            }
+            "join" => {
+                let sep = args.first().map(|v| format!("{}", v)).unwrap_or_default();
+                let parts: Vec<String> = items.into_iter().map(|v| format!("{}", v)).collect();
+                Some(Ok(Value::string(parts.join(&sep))))
+            }
+            "sum" => {
+                let mut int_sum: i64 = 0;
+                let mut float_sum: f64 = 0.0;
+                let mut is_float = false;
+                for item in items {
+                    match item {
+                        Value::Int(i) => {
+                            if is_float {
+                                float_sum += i as f64;
+                            } else {
+                                int_sum += i;
+                            }
+                        }
+                        Value::Float(f) => {
+                            if !is_float {
+                                is_float = true;
+                                float_sum = int_sum as f64;
+                            }
+                            float_sum += f;
+                        }
+                        _ => {}
+                    }
+                }
+                if is_float {
+                    Some(Ok(Value::Float(float_sum)))
+                } else {
+                    Some(Ok(Value::Int(int_sum)))
+                }
+            }
+            "first" => Some(Ok(items.into_iter().next().unwrap_or(Value::Nil))),
+            "last" => Some(Ok(items.into_iter().last().unwrap_or(Value::Nil))),
+            _ => None,
+        }
+    }
+
     pub fn call_function(&mut self, func: Arc<CompiledFunction>, mut args: Vec<Value>) -> Result<Value, String> {
         let mut sub_vm = Self::with_globals(self.globals.clone());
         sub_vm.modules_cache = self.modules_cache.clone();
@@ -2841,7 +3423,11 @@ impl VM {
                 }
                 "reverse" => {
                     arr.lock().reverse();
-                    Ok(Value::Nil)
+                    Ok(Value::Array(arr.clone()))
+                }
+                "sort" => {
+                    arr.lock().sort_by(Self::compare_values_for_sort);
+                    Ok(Value::Array(arr.clone()))
                 }
                 "extend" => {
                     if args.is_empty() { return Err("extend(iterable) expects 1 argument".to_string()); }
@@ -2858,7 +3444,14 @@ impl VM {
                     Ok(Value::Bool(arr.lock().contains(&args[0])))
                 }
                 "len" => Ok(Value::Int(arr.lock().len() as i64)),
-                _ => Err(format!("Unknown method '{}' on list", method)),
+                _ => {
+                    let snapshot = arr.lock().clone();
+                    if let Some(res) = Self::invoke_functional_seq_method(snapshot, method, args) {
+                        res
+                    } else {
+                        Err(format!("Unknown method '{}' on list", method))
+                    }
+                }
             },
             Value::Tuple(tup) => match method {
                 "len" => Ok(Value::Int(tup.len() as i64)),
@@ -2879,7 +3472,19 @@ impl VM {
                     let count = tup.iter().filter(|x| *x == &args[0]).count();
                     Ok(Value::Int(count as i64))
                 }
-                _ => Err(format!("Unknown method '{}' on tuple", method)),
+                "sort" => {
+                    let mut cloned = (**tup).clone();
+                    cloned.sort_by(Self::compare_values_for_sort);
+                    Ok(Value::array(cloned))
+                }
+                _ => {
+                    let snapshot = (**tup).clone();
+                    if let Some(res) = Self::invoke_functional_seq_method(snapshot, method, args) {
+                        res
+                    } else {
+                        Err(format!("Unknown method '{}' on tuple", method))
+                    }
+                }
             },
             Value::Set(s) => match method {
                 "add" => {

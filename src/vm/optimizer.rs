@@ -1,5 +1,5 @@
 // ==============================================================================
-// AETHER 3.0 Multi-Pass Compiler Optimizer (AST Constant Folding, Dead-Code
+// AETHER Multi-Pass Compiler Optimizer (AST Constant Folding, Dead-Code
 // Elimination & Bytecode Peephole Optimization)
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
@@ -241,6 +241,17 @@ fn optimize_statement(stmt: &Statement, stats: &mut OptimizationStats) -> Statem
             expr: expr.as_ref().map(|e| optimize_expr(e, stats)),
             span: *span,
         },
+        Statement::With {
+            resource,
+            alias,
+            body,
+            span,
+        } => Statement::With {
+            resource: optimize_expr(resource, stats),
+            alias: alias.clone(),
+            body: optimize_block(body, stats),
+            span: *span,
+        },
         Statement::Expr(expr) => Statement::Expr(optimize_expr(expr, stats)),
         other => other.clone(),
     }
@@ -395,6 +406,8 @@ pub fn optimize_expr(expr: &Expr, stats: &mut OptimizationStats) -> Expr {
             *span,
         ),
         Expr::Try(inner, span) => Expr::Try(Box::new(optimize_expr(inner, stats)), *span),
+        Expr::Await(inner, span) => Expr::Await(Box::new(optimize_expr(inner, stats)), *span),
+        Expr::Comptime(block, span) => Expr::Comptime(optimize_block(block, stats), *span),
         Expr::Slice {
             obj,
             start,

@@ -59,7 +59,12 @@ impl Parser {
 
         match &token.kind {
             TokenKind::Let => self.parse_let_statement(),
-            TokenKind::Fn | TokenKind::Def => self.parse_fn_definition(),
+            TokenKind::Fn | TokenKind::Def | TokenKind::Macro => self.parse_fn_definition(),
+            TokenKind::Async => {
+                self.advance(); // consume 'async'
+                self.parse_statement()
+            }
+            TokenKind::With => self.parse_with_statement(),
             TokenKind::Global => self.parse_global_statement(),
             TokenKind::Intent => self.parse_intent_definition(),
             TokenKind::While => self.parse_while_statement(),
@@ -1160,10 +1165,39 @@ impl Parser {
 
     fn parse_defer_statement(&mut self) -> Result<Statement, (String, Span)> {
         let defer_tok = self.advance();
-        let expr = self.parse_expression(Precedence::None)?;
+        let expr = if self.check(&TokenKind::LBrace) || self.check(&TokenKind::Colon) {
+            let block = self.parse_block()?;
+            let bspan = block.span;
+            Expr::Block(block, bspan)
+        } else {
+            self.parse_expression(Precedence::None)?
+        };
         let span = defer_tok.span.merge(expr.span());
         self.consume_statement_terminator();
         Ok(Statement::Defer { expr, span })
+    }
+
+    fn parse_with_statement(&mut self) -> Result<Statement, (String, Span)> {
+        let with_tok = self.advance(); // consume 'with'
+        let resource = self.parse_expression(Precedence::None)?;
+        let mut alias = None;
+        if self.match_token(&TokenKind::As) {
+            self.advance(); // consume 'as'
+            if let TokenKind::Ident(name) = &self.peek().kind {
+                alias = Some(name.clone());
+                self.advance();
+            } else {
+                return Err(("Expected identifier after 'as' in 'with' statement".to_string(), self.current_span()));
+            }
+        }
+        let body = self.parse_block()?;
+        let span = with_tok.span.merge(body.span);
+        Ok(Statement::With {
+            resource,
+            alias,
+            body,
+            span,
+        })
     }
 
     fn parse_try_statement(&mut self) -> Result<Statement, (String, Span)> {
@@ -1808,6 +1842,16 @@ impl Parser {
             TokenKind::Spawn => Ok(Expr::Ident("spawn".to_string(), token.span)),
             TokenKind::Type => Ok(Expr::Ident("type".to_string(), token.span)),
             TokenKind::Match => self.parse_match_expression(token),
+            TokenKind::Await => {
+                let inner = self.parse_expression(Precedence::Unary)?;
+                let span = token.span.merge(inner.span());
+                Ok(Expr::Await(Box::new(inner), span))
+            }
+            TokenKind::Comptime => {
+                let block = self.parse_block()?;
+                let span = token.span.merge(block.span);
+                Ok(Expr::Comptime(block, span))
+            }
 
             _ => Err((format!("Unexpected token in expression: '{:?}'", token.kind), token.span)),
         }

@@ -130,6 +130,12 @@ pub enum Statement {
         stmt: Box<Statement>,
         span: Span,
     },
+    With {
+        resource: Expr,
+        alias: Option<String>,
+        body: Block,
+        span: Span,
+    },
     Expr(Expr),
 }
 
@@ -186,6 +192,7 @@ impl Statement {
             Statement::ImplDef { span, .. } => *span,
             Statement::TypeAlias { span, .. } => *span,
             Statement::Decorated { span, .. } => *span,
+            Statement::With { span, .. } => *span,
             Statement::Expr(expr) => expr.span(),
         }
     }
@@ -276,6 +283,8 @@ pub enum Expr {
         step: Option<Box<Expr>>,
         span: Span,
     },
+    Await(Box<Expr>, Span),
+    Comptime(Block, Span),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -336,6 +345,8 @@ impl Expr {
             Expr::OptionalIndex(_, _, s) => *s,
             Expr::Try(_, s) => *s,
             Expr::Slice { span, .. } => *span,
+            Expr::Await(_, s) => *s,
+            Expr::Comptime(_, s) => *s,
         }
     }
 }
