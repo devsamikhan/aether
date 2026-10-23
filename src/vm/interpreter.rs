@@ -27,6 +27,7 @@ pub struct VM {
     pub modules_cache: HashMap<String, Value>,
     pub loading_modules: std::collections::HashSet<String>,
     pub exception_handlers: Vec<ExceptionHandler>,
+    pub security_policy: super::security::SecurityPolicy,
 }
 
 thread_local! {
@@ -70,6 +71,7 @@ impl VM {
             modules_cache: HashMap::new(),
             loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
+            security_policy: super::security::SecurityPolicy::default(),
         };
         vm.register_builtins();
         super::stdlib::register_stdlib(&mut vm.globals);
@@ -101,6 +103,7 @@ impl VM {
             modules_cache: HashMap::new(),
             loading_modules: std::collections::HashSet::new(),
             exception_handlers: Vec::new(),
+            security_policy: super::security::SecurityPolicy::default(),
         }
     }
 
@@ -655,6 +658,133 @@ impl VM {
             }
             Ok(args[0].clone())
         });
+
+        // Built-in Secret constructor: Secret("sk-...") -> redacted Value::Secret
+        self.define_native("Secret", |args| {
+            if args.is_empty() {
+                return Err("Secret(value) expects 1 argument".to_string());
+            }
+            let raw = match &args[0] {
+                Value::Secret(s) => (**s).clone(),
+                Value::String(s) => (**s).clone(),
+                other => format!("{}", other),
+            };
+            Ok(Value::secret(raw))
+        });
+
+        // Security & Sandbox Module
+        let mut sec_mod = HashMap::new();
+        sec_mod.insert("secret".to_string(), Value::Native("Security.secret".into(), |args| {
+            if args.is_empty() { return Err("Security.secret(value) expects 1 argument".into()); }
+            let raw = match &args[0] {
+                Value::Secret(s) => (**s).clone(),
+                Value::String(s) => (**s).clone(),
+                other => format!("{}", other),
+            };
+            Ok(Value::secret(raw))
+        }));
+        sec_mod.insert("expose".to_string(), Value::Native("Security.expose".into(), |args| {
+            if args.is_empty() { return Err("Security.expose(secret) expects 1 argument".into()); }
+            match &args[0] {
+                Value::Secret(s) => Ok(Value::string((**s).clone())),
+                Value::String(s) => Ok(Value::string((**s).clone())),
+                other => Ok(Value::string(format!("{}", other))),
+            }
+        }));
+        sec_mod.insert("scan".to_string(), Value::Native("Security.scan".into(), |args| {
+            if args.is_empty() { return Err("Security.scan(source_code) expects source string".into()); }
+            let src = format!("{}", args[0]);
+            let findings = super::security::scan_source_security(&src)?;
+            let mut out = Vec::with_capacity(findings.len());
+            for f in findings {
+                let mut m = HashMap::new();
+                m.insert("severity".to_string(), Value::string(f.severity));
+                m.insert("category".to_string(), Value::string(f.category));
+                m.insert("message".to_string(), Value::string(f.message));
+                m.insert("line".to_string(), Value::Int(f.line as i64));
+                out.push(Value::map(m));
+            }
+            Ok(Value::array(out))
+        }));
+        sec_mod.insert("sandbox".to_string(), Value::Native("Security.sandbox".into(), |args| {
+            if args.is_empty() { return Err("Security.sandbox(code, [options]) expects code string".into()); }
+            let code = format!("{}", args[0]);
+            let mut policy = super::security::SecurityPolicy::strict_sandbox(50_000);
+            if args.len() > 1 {
+                if let Value::Map(opts) = &args[1] {
+                    let guard = opts.lock();
+                    if let Some(Value::Int(fuel)) = guard.get("fuel") {
+                        policy.fuel_limit = Some((*fuel).max(1) as u64);
+                    }
+                    if let Some(Value::Bool(b)) = guard.get("allow_fs_read") {
+                        policy.allow_fs_read = *b;
+                    }
+                    if let Some(Value::Bool(b)) = guard.get("allow_fs_write") {
+                        policy.allow_fs_write = *b;
+                    }
+                    if let Some(Value::Bool(b)) = guard.get("allow_net") {
+                        policy.allow_net = *b;
+                    }
+                    if let Some(Value::Int(depth)) = guard.get("max_call_depth") {
+                        policy.max_call_depth = (*depth).max(4) as usize;
+                    }
+                }
+            }
+            super::run_source_sandboxed(&code, policy)
+        }));
+        self.globals.insert("Security".to_string(), Value::map(sec_mod));
+
+        // GC & Interner Module
+        let mut gc_mod = HashMap::new();
+        gc_mod.insert("collect_cycles".to_string(), Value::Native("GC.collect_cycles".into(), |args| {
+            if args.is_empty() { return Ok(Value::Int(0)); }
+            let broken = super::interner::break_reference_cycles(&args[0]);
+            Ok(Value::Int(broken as i64))
+        }));
+        gc_mod.insert("intern".to_string(), Value::Native("GC.intern".into(), |args| {
+            if args.is_empty() { return Err("GC.intern(str) expects string".into()); }
+            let s = format!("{}", args[0]);
+            let sym = super::interner::intern_symbol(&s);
+            Ok(Value::Int(sym.0 as i64))
+        }));
+        gc_mod.insert("resolve_symbol".to_string(), Value::Native("GC.resolve_symbol".into(), |args| {
+            if args.is_empty() { return Err("GC.resolve_symbol(id) expects symbol id".into()); }
+            if let Value::Int(id) = args[0] {
+                match super::interner::resolve_symbol(super::interner::SymbolId(id as u32)) {
+                    Some(s) => Ok(Value::string(s)),
+                    None => Ok(Value::Nil),
+                }
+            } else {
+                Err("Symbol ID must be an integer".into())
+            }
+        }));
+        gc_mod.insert("interned_count".to_string(), Value::Native("GC.interned_count".into(), |_| {
+            Ok(Value::Int(super::interner::interned_symbol_count() as i64))
+        }));
+        self.globals.insert("GC".to_string(), Value::map(gc_mod));
+
+        // Bytecode Cache (.aec) Module
+        let mut bc_mod = HashMap::new();
+        bc_mod.insert("compile_aec".to_string(), Value::Native("Bytecode.compile_aec".into(), |args| {
+            if args.is_empty() { return Err("Bytecode.compile_aec(source) expects source string".into()); }
+            let src = format!("{}", args[0]);
+            let raw_program = crate::syntax::parse(&src).map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
+            let (program, _) = super::optimizer::optimize_program(&raw_program);
+            let compiler = super::compiler::BytecodeCompiler::new("<main>", 0);
+            let func = compiler.compile(&program)?;
+            let bytes = super::bytecode_cache::serialize_compiled_function(&func, &src)?;
+            Ok(Value::string(super::crypto::base64_encode(&bytes)))
+        }));
+        bc_mod.insert("run_aec".to_string(), Value::Native("Bytecode.run_aec".into(), |args| {
+            if args.is_empty() { return Err("Bytecode.run_aec(aec_base64, [expected_source]) expects encoded .aec".into()); }
+            let b64 = format!("{}", args[0]);
+            let expected = if args.len() > 1 { Some(format!("{}", args[1])) } else { None };
+            let bytes = super::crypto::base64_decode(&b64)?;
+            let func = super::bytecode_cache::deserialize_compiled_function(&bytes, expected.as_deref())?;
+            let mut vm = VM::new();
+            vm.interpret(func)
+        }));
+        self.globals.insert("Bytecode".to_string(), Value::map(bc_mod));
     }
 
     pub fn define_native(&mut self, name: &str, func: NativeFn) {
@@ -696,6 +826,32 @@ impl VM {
             let mut frame = self.frames.pop().unwrap();
 
             while frame.ip < frame.function.chunk.code.len() {
+                if let Err(fuel_err) = self.security_policy.consume_fuel(1) {
+                    if !self.exception_handlers.is_empty() {
+                        self.handle_exception(&mut frame, Value::string(fuel_err))?;
+                        continue;
+                    } else {
+                        return Err(fuel_err);
+                    }
+                }
+                if self.frames.len() > self.security_policy.max_call_depth {
+                    let depth_err = format!(
+                        "StackOverflowError: Maximum VM call frame depth ({}) exceeded",
+                        self.security_policy.max_call_depth
+                    );
+                    if !self.exception_handlers.is_empty() {
+                        self.handle_exception(&mut frame, Value::string(depth_err))?;
+                        continue;
+                    } else {
+                        return Err(depth_err);
+                    }
+                }
+                if self.stack.len() > self.security_policy.max_stack_size {
+                    return Err(format!(
+                        "StackOverflowError: Maximum VM value stack size ({}) exceeded",
+                        self.security_policy.max_stack_size
+                    ));
+                }
                 let op = OpCode::from(frame.function.chunk.code[frame.ip]);
                 frame.ip += 1;
 

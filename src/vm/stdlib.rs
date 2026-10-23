@@ -34,6 +34,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     file_module.insert("read".to_string(), Value::Native("File.read".into(), |args| {
         if args.is_empty() { return Err("File.read(path) requires path string".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
         let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
         Ok(Value::string(content))
     }));
@@ -41,6 +42,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     file_module.insert("write".to_string(), Value::Native("File.write".into(), |args| {
         if args.len() < 2 { return Err("File.write(path, content) requires 2 arguments".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
         let content = format!("{}", args[1]);
         fs::write(&path, content).map_err(|e| format!("Failed to write file '{}': {}", path, e))?;
         Ok(Value::Bool(true))
@@ -49,6 +51,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     file_module.insert("append".to_string(), Value::Native("File.append".into(), |args| {
         if args.len() < 2 { return Err("File.append(path, content) requires 2 arguments".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
         let content = format!("{}", args[1]);
         let mut file = OpenOptions::new().create(true).append(true).open(&path)
             .map_err(|e| format!("Failed to open file for append '{}': {}", path, e))?;
@@ -59,12 +62,14 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     file_module.insert("exists".to_string(), Value::Native("File.exists".into(), |args| {
         if args.is_empty() { return Err("File.exists(path) requires path".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
         Ok(Value::Bool(Path::new(&path).exists()))
     }));
 
     file_module.insert("delete".to_string(), Value::Native("File.delete".into(), |args| {
         if args.is_empty() { return Err("File.delete(path) requires path".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
         fs::remove_file(&path).map_err(|e| format!("Failed to delete '{}': {}", path, e))?;
         Ok(Value::Bool(true))
     }));
@@ -72,6 +77,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
     file_module.insert("lines".to_string(), Value::Native("File.lines".into(), |args| {
         if args.is_empty() { return Err("File.lines(path) requires path".into()); }
         let path = format!("{}", args[0]);
+        let _ = crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
         let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
         let lines: Vec<Value> = content.lines().map(Value::string).collect();
         Ok(Value::array(lines))

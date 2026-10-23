@@ -24,11 +24,15 @@ pub mod hotreload;
 pub mod ai_engine;
 pub mod swarm;
 pub mod optimizer;
+pub mod security;
+pub mod interner;
+pub mod bytecode_cache;
 
 pub use bytecode::{Chunk, OpCode};
 pub use compiler::BytecodeCompiler;
 pub use interpreter::VM;
 pub use value::{CompiledFunction, Value};
+pub use security::SecurityPolicy;
 
 /// Executes an AETHER source string directly via AST/bytecode optimization and VM.
 pub fn run_source(source: &str) -> Result<Value, String> {
@@ -37,5 +41,16 @@ pub fn run_source(source: &str) -> Result<Value, String> {
     let compiler = BytecodeCompiler::new("<main>", 0);
     let compiled_fn = compiler.compile(&program)?;
     let mut vm = VM::new();
+    vm.interpret(compiled_fn)
+}
+
+/// Executes an AETHER source string inside a capability-restricted SecurityPolicy sandbox.
+pub fn run_source_sandboxed(source: &str, policy: SecurityPolicy) -> Result<Value, String> {
+    let raw_program = crate::syntax::parse(source).map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
+    let (program, _stats) = optimizer::optimize_program(&raw_program);
+    let compiler = BytecodeCompiler::new("<main>", 0);
+    let compiled_fn = compiler.compile(&program)?;
+    let mut vm = VM::new();
+    vm.security_policy = policy;
     vm.interpret(compiled_fn)
 }

@@ -354,7 +354,7 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 // HMAC-SHA256 (RFC 2104)
 // =========================================================================
 
-pub fn hmac_sha256(key: &[u8], message: &[u8]) -> String {
+pub fn hmac_sha256_bytes(key: &[u8], message: &[u8]) -> [u8; 32] {
     let mut k = [0u8; 64];
     if key.len() > 64 {
         let hash = sha256_bytes(key);
@@ -376,13 +376,228 @@ pub fn hmac_sha256(key: &[u8], message: &[u8]) -> String {
 
     let mut outer = k_opad.to_vec();
     outer.extend_from_slice(&inner_hash);
-    let outer_hash = sha256_bytes(&outer);
+    sha256_bytes(&outer)
+}
 
+pub fn hmac_sha256(key: &[u8], message: &[u8]) -> String {
+    let outer_hash = hmac_sha256_bytes(key, message);
     let mut res = String::with_capacity(64);
     for b in outer_hash {
         res.push_str(&format!("{:02x}", b));
     }
     res
+}
+
+// =========================================================================
+// Constant-Time Comparison (Timing Side-Channel Resistant)
+// =========================================================================
+
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+// =========================================================================
+// PBKDF2-HMAC-SHA256 Key Derivation (RFC 2898 / NIST SP 800-132)
+// =========================================================================
+
+pub fn pbkdf2_hmac_sha256(
+    password: &[u8],
+    salt: &[u8],
+    iterations: u32,
+    dk_len: usize,
+) -> Vec<u8> {
+    let iters = iterations.max(1);
+    let blocks = (dk_len + 31) / 32;
+    let mut derived = Vec::with_capacity(blocks * 32);
+
+    for block_idx in 1..=(blocks as u32) {
+        let mut salt_block = Vec::with_capacity(salt.len() + 4);
+        salt_block.extend_from_slice(salt);
+        salt_block.extend_from_slice(&block_idx.to_be_bytes());
+
+        let mut u = hmac_sha256_bytes(password, &salt_block);
+        let mut t = u;
+
+        for _ in 1..iters {
+            u = hmac_sha256_bytes(password, &u);
+            for i in 0..32 {
+                t[i] ^= u[i];
+            }
+        }
+        derived.extend_from_slice(&t);
+    }
+
+    derived.truncate(dk_len);
+    derived
+}
+
+// =========================================================================
+// ChaCha20 Stream Cipher (RFC 8439) + Authenticated AEAD Envelope
+// =========================================================================
+
+#[inline]
+fn quarter_round(state: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
+    state[a] = state[a].wrapping_add(state[b]);
+    state[d] ^= state[a];
+    state[d] = state[d].rotate_left(16);
+
+    state[c] = state[c].wrapping_add(state[d]);
+    state[b] ^= state[c];
+    state[b] = state[b].rotate_left(12);
+
+    state[a] = state[a].wrapping_add(state[b]);
+    state[d] ^= state[a];
+    state[d] = state[d].rotate_left(8);
+
+    state[c] = state[c].wrapping_add(state[d]);
+    state[b] ^= state[c];
+    state[b] = state[b].rotate_left(7);
+}
+
+pub fn chacha20_block(key: &[u8; 32], counter: u32, nonce: &[u8; 12]) -> [u8; 64] {
+    let mut state = [0u32; 16];
+    state[0] = 0x6170_7865; // "expa"
+    state[1] = 0x3320_646e; // "nd 3"
+    state[2] = 0x7962_2d32; // "2-by"
+    state[3] = 0x6b20_6574; // "te k"
+
+    for i in 0..8 {
+        state[4 + i] = u32::from_le_bytes([
+            key[i * 4],
+            key[i * 4 + 1],
+            key[i * 4 + 2],
+            key[i * 4 + 3],
+        ]);
+    }
+    state[12] = counter;
+    for i in 0..3 {
+        state[13 + i] = u32::from_le_bytes([
+            nonce[i * 4],
+            nonce[i * 4 + 1],
+            nonce[i * 4 + 2],
+            nonce[i * 4 + 3],
+        ]);
+    }
+
+    let mut working = state;
+    for _ in 0..10 {
+        // Column rounds
+        quarter_round(&mut working, 0, 4, 8, 12);
+        quarter_round(&mut working, 1, 5, 9, 13);
+        quarter_round(&mut working, 2, 6, 10, 14);
+        quarter_round(&mut working, 3, 7, 11, 15);
+        // Diagonal rounds
+        quarter_round(&mut working, 0, 5, 10, 15);
+        quarter_round(&mut working, 1, 6, 11, 12);
+        quarter_round(&mut working, 2, 7, 8, 13);
+        quarter_round(&mut working, 3, 4, 9, 14);
+    }
+
+    let mut out = [0u8; 64];
+    for i in 0..16 {
+        let word = working[i].wrapping_add(state[i]);
+        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+    }
+    out
+}
+
+pub fn chacha20_xor(key: &[u8; 32], initial_counter: u32, nonce: &[u8; 12], data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len());
+    for (block_idx, chunk) in data.chunks(64).enumerate() {
+        let keystream = chacha20_block(key, initial_counter.wrapping_add(block_idx as u32), nonce);
+        for (i, &b) in chunk.iter().enumerate() {
+            out.push(b ^ keystream[i]);
+        }
+    }
+    out
+}
+
+fn normalize_key_nonce(key_str: &str, nonce_str: &str) -> ([u8; 32], [u8; 12]) {
+    let key = sha256_bytes(key_str.as_bytes());
+    let nonce_hash = sha256_bytes(nonce_str.as_bytes());
+    let mut nonce = [0u8; 12];
+    nonce.copy_from_slice(&nonce_hash[0..12]);
+    (key, nonce)
+}
+
+fn compute_aead_tag(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], ciphertext: &[u8]) -> [u8; 32] {
+    let subkey_block = chacha20_block(key, 0, nonce);
+    let mut mac_input = Vec::with_capacity(aad.len() + ciphertext.len() + 28);
+    mac_input.extend_from_slice(nonce);
+    mac_input.extend_from_slice(&(aad.len() as u64).to_le_bytes());
+    mac_input.extend_from_slice(aad);
+    mac_input.extend_from_slice(&(ciphertext.len() as u64).to_le_bytes());
+    mac_input.extend_from_slice(ciphertext);
+    hmac_sha256_bytes(&subkey_block[0..32], &mac_input)
+}
+
+/// Encrypts `plaintext` with RFC 8439 ChaCha20 and appends a 256-bit authenticated tag,
+/// returning a Base64-encoded AEAD token.
+pub fn encrypt_aead(key_str: &str, nonce_str: &str, plaintext: &[u8], aad: &[u8]) -> String {
+    let (key, nonce) = normalize_key_nonce(key_str, nonce_str);
+    let ciphertext = chacha20_xor(&key, 1, &nonce, plaintext);
+    let tag = compute_aead_tag(&key, &nonce, aad, &ciphertext);
+
+    let mut payload = Vec::with_capacity(ciphertext.len() + 32);
+    payload.extend_from_slice(&ciphertext);
+    payload.extend_from_slice(&tag);
+    base64_encode(&payload)
+}
+
+/// Verifies the AEAD authentication tag in constant time and decrypts the ChaCha20 ciphertext.
+pub fn decrypt_aead(
+    key_str: &str,
+    nonce_str: &str,
+    encoded_payload: &str,
+    aad: &[u8],
+) -> Result<Vec<u8>, String> {
+    let payload = base64_decode(encoded_payload)?;
+    if payload.len() < 32 {
+        return Err("CryptoError: Invalid AEAD payload (shorter than authentication tag)".to_string());
+    }
+    let ct_len = payload.len() - 32;
+    let ciphertext = &payload[0..ct_len];
+    let provided_tag = &payload[ct_len..];
+
+    let (key, nonce) = normalize_key_nonce(key_str, nonce_str);
+    let expected_tag = compute_aead_tag(&key, &nonce, aad, ciphertext);
+
+    if !constant_time_eq(provided_tag, &expected_tag) {
+        return Err("CryptoError: AEAD authentication tag mismatch (tampered ciphertext or wrong key/AAD)".to_string());
+    }
+
+    Ok(chacha20_xor(&key, 1, &nonce, ciphertext))
+}
+
+pub fn random_hex(byte_len: usize) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let mut out = String::with_capacity(byte_len * 2);
+    let mut generated = 0usize;
+    while generated < byte_len {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let seed = format!("aether-csprng-{}-{}-{:?}", nanos, seq, std::thread::current().id());
+        let block = sha256_bytes(seed.as_bytes());
+        for &b in &block {
+            if generated >= byte_len {
+                break;
+            }
+            out.push_str(&format!("{:02x}", b));
+            generated += 1;
+        }
+    }
+    out
 }
 
 // =========================================================================
@@ -435,6 +650,58 @@ pub fn register_crypto_module(globals: &mut HashMap<String, Value>) {
         let key = format!("{}", args[0]);
         let msg = format!("{}", args[1]);
         Ok(Value::string(hmac_sha256(key.as_bytes(), msg.as_bytes())))
+    }));
+
+    crypto_module.insert("constant_time_eq".to_string(), Value::Native("Crypto.constant_time_eq".into(), |args| {
+        if args.len() < 2 { return Err("Crypto.constant_time_eq(a, b) expects 2 arguments".into()); }
+        let a = format!("{}", args[0]);
+        let b = format!("{}", args[1]);
+        Ok(Value::Bool(constant_time_eq(a.as_bytes(), b.as_bytes())))
+    }));
+
+    crypto_module.insert("pbkdf2".to_string(), Value::Native("Crypto.pbkdf2".into(), |args| {
+        if args.len() < 2 { return Err("Crypto.pbkdf2(password, salt, [iterations], [dk_len]) expects at least 2 arguments".into()); }
+        let password = format!("{}", args[0]);
+        let salt = format!("{}", args[1]);
+        let iterations = if args.len() > 2 {
+            match args[2] { Value::Int(i) => i.max(1) as u32, _ => 10_000 }
+        } else { 10_000 };
+        let dk_len = if args.len() > 3 {
+            match args[3] { Value::Int(i) => i.max(1) as usize, _ => 32 }
+        } else { 32 };
+        let dk = pbkdf2_hmac_sha256(password.as_bytes(), salt.as_bytes(), iterations, dk_len);
+        let mut hex = String::with_capacity(dk.len() * 2);
+        for b in dk {
+            hex.push_str(&format!("{:02x}", b));
+        }
+        Ok(Value::string(hex))
+    }));
+
+    crypto_module.insert("encrypt_aead".to_string(), Value::Native("Crypto.encrypt_aead".into(), |args| {
+        if args.len() < 3 { return Err("Crypto.encrypt_aead(key, nonce, plaintext, [aad]) expects at least 3 arguments".into()); }
+        let key = format!("{}", args[0]);
+        let nonce = format!("{}", args[1]);
+        let plaintext = format!("{}", args[2]);
+        let aad = if args.len() > 3 { format!("{}", args[3]) } else { String::new() };
+        Ok(Value::string(encrypt_aead(&key, &nonce, plaintext.as_bytes(), aad.as_bytes())))
+    }));
+
+    crypto_module.insert("decrypt_aead".to_string(), Value::Native("Crypto.decrypt_aead".into(), |args| {
+        if args.len() < 3 { return Err("Crypto.decrypt_aead(key, nonce, ciphertext, [aad]) expects at least 3 arguments".into()); }
+        let key = format!("{}", args[0]);
+        let nonce = format!("{}", args[1]);
+        let ct = format!("{}", args[2]);
+        let aad = if args.len() > 3 { format!("{}", args[3]) } else { String::new() };
+        let plain_bytes = decrypt_aead(&key, &nonce, &ct, aad.as_bytes())?;
+        let plain_str = String::from_utf8(plain_bytes).map_err(|e| format!("UTF-8 decode error: {}", e))?;
+        Ok(Value::string(plain_str))
+    }));
+
+    crypto_module.insert("random_hex".to_string(), Value::Native("Crypto.random_hex".into(), |args| {
+        let len = if !args.is_empty() {
+            match args[0] { Value::Int(i) => i.clamp(1, 4096) as usize, _ => 32 }
+        } else { 32 };
+        Ok(Value::string(random_hex(len)))
     }));
 
     globals.insert("Crypto".to_string(), Value::map(crypto_module));

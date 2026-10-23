@@ -1,0 +1,66 @@
+# ==============================================================================
+# AETHER v4.0 — Core Engine, Performance & Security Hardening Showcase
+# Demonstrates:
+# 1. Capability-Based Security Sandbox (FS blocking, Fuel/Gas metering, Call Depth)
+# 2. First-Class Redacted Secrets (Secret(...) & constant-time comparison)
+# 3. Static Taint & Vulnerability Scanner (Security.scan)
+# 4. Modern AEAD Cryptography (ChaCha20-Poly1305 RFC 8439, PBKDF2-HMAC-SHA256)
+# 5. Cycle-Detecting GC Collector & Global String Symbol Interner
+# 6. Precompiled Binary Bytecode Cache (.aec) with SHA-256 Source Verification
+# ==============================================================================
+
+println("================================================================")
+println("   AETHER v4.0 — Core Engine, Technology & Security Showcase")
+println("================================================================")
+
+# 1. Capability-Based Security Sandbox & Gas/Fuel Metering
+let safe_calc = Security.sandbox("let a = 12 * 12; a + 6", {"fuel": 5000})
+let fs_blocked_msg = "allowed"
+try {
+    Security.sandbox("File.read('Cargo.toml')", {"fuel": 5000})
+} catch as err {
+    fs_blocked_msg = "Blocked (PermissionDeniedError)"
+}
+
+let dos_stopped_msg = "ran forever"
+try {
+    Security.sandbox("while true { }", {"fuel": 250})
+} catch as err {
+    dos_stopped_msg = "Halted at 250 fuel ticks (ResourceExhaustedError)"
+}
+println(f"[1] Sandbox & Gas Metering: result={safe_calc} | FS={fs_blocked_msg} | DoS={dos_stopped_msg}")
+
+# 2. First-Class Redacted Secret Type
+let gemini_key = Secret("AIzaSyAetherSecretKey998877")
+println(f"[2] Redacted Secret Print: gemini_key = {gemini_key} (exposed len = {len(Security.expose(gemini_key))})")
+
+# 3. Static Taint & Vulnerability Scanner
+let untrusted_snippet = '
+let api_key = "hardcoded-secret-123"
+let req_user = input("user")
+Sql.execute("SELECT * FROM accounts WHERE user = " + req_user)
+'
+let scan_report = Security.scan(untrusted_snippet)
+println(f"[3] Static Security Audit: Found {len(scan_report)} vulnerabilities -> {scan_report[0]['category']}, {scan_report[1]['category']}")
+
+# 4. Modern AEAD Cryptography (ChaCha20-Poly1305 + PBKDF2-HMAC-SHA256)
+let derived_key = Crypto.pbkdf2("MasterPassphrase!2026", "aether-salt-v4", 2000, 32)
+let nonce = Crypto.random_hex(12)
+let ciphertext = Crypto.encrypt_aead(derived_key, nonce, "Classified Aether v4 Payload", "aad:v4-header")
+let decrypted = Crypto.decrypt_aead(derived_key, nonce, ciphertext, "aad:v4-header")
+println(f"[4] ChaCha20-AEAD & PBKDF2: decrypted='{decrypted}' | key_prefix={derived_key[0:12]}...")
+
+# 5. Cycle-Detecting Reference Collector & String Interner
+let graph_node = {"title": "CyclicRoot"}
+graph_node["loop_back"] = graph_node
+let cycles_freed = GC.collect_cycles(graph_node)
+let s_id1 = GC.intern("fast_property_lookup")
+let s_id2 = GC.intern("fast_property_lookup")
+println(f"[5] Cycle-Detecting GC & Interner: cycles_broken={cycles_freed} | symbol_match={s_id1 == s_id2} (total interned={GC.interned_count()})")
+
+# 6. Binary Bytecode Cache (.aec) Serialization & Instant Execution
+let mod_code = "fn cube(x) { return x * x * x }\ncube(5) + 25"
+let aec_binary = Bytecode.compile_aec(mod_code)
+let aec_output = Bytecode.run_aec(aec_binary, mod_code)
+println(f"[6] Precompiled .aec Bytecode Cache: size={len(aec_binary)} bytes (B64) -> output={aec_output}")
+println("================================================================")

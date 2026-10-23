@@ -148,12 +148,17 @@ pub enum Value {
         func: Box<Value>,
         cache: Arc<Mutex<HashMap<String, Value>>>,
     },
+    Secret(Arc<String>),
     DefaultSentinel,
 }
 
 impl Value {
     pub fn string(s: impl Into<String>) -> Self {
         Value::String(Arc::new(s.into()))
+    }
+
+    pub fn secret(s: impl Into<String>) -> Self {
+        Value::Secret(Arc::new(s.into()))
     }
 
     pub fn array(elements: Vec<Value>) -> Self {
@@ -220,6 +225,7 @@ impl Value {
             Value::EnumConstructor { .. } => "enum_constructor",
             Value::EnumVariant { .. } => "enum_variant",
             Value::Memoized { .. } => "function",
+            Value::Secret(_) => "secret",
             Value::DefaultSentinel => "default",
         }
     }
@@ -387,6 +393,7 @@ impl fmt::Display for Value {
                 }
             }
             Value::Memoized { func, .. } => write!(f, "<memoized {}>", func),
+            Value::Secret(_) => write!(f, "***REDACTED***"),
         }
     }
 }
@@ -395,6 +402,7 @@ impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::String(s) => write!(f, "\"{}\"", s),
+            Value::Secret(_) => write!(f, "Secret(\"***REDACTED***\")"),
             _ => write!(f, "{}", self),
         }
     }
@@ -448,6 +456,7 @@ impl PartialEq for Value {
             (Value::EnumVariant { enum_name: e1, variant: v1, fields: f1 }, Value::EnumVariant { enum_name: e2, variant: v2, fields: f2 }) => {
                 (e1 == e2 || e1.is_empty() || e2.is_empty()) && v1 == v2 && f1 == f2
             }
+            (Value::Secret(a), Value::Secret(b)) => super::crypto::constant_time_eq(a.as_bytes(), b.as_bytes()),
             _ => false,
         }
     }
