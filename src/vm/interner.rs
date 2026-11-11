@@ -3,9 +3,9 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
+use super::value::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::{OnceLock, RwLock};
-use super::value::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolId(pub u32);

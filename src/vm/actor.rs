@@ -101,7 +101,10 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
                 initial_state,
             };
 
-            get_actors().lock().unwrap().insert(id, Arc::new(Mutex::new(state)));
+            get_actors()
+                .lock()
+                .unwrap()
+                .insert(id, Arc::new(Mutex::new(state)));
             get_actor_names().lock().unwrap().insert(name, id);
 
             Ok(Value::Int(id as i64))
@@ -159,7 +162,10 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
         "ask".to_string(),
         Value::Native("Actor.ask".into(), |args| {
             if args.len() < 2 {
-                return Err("Actor.ask(actor_id, message, [timeout_ms]) expects at least 2 arguments".into());
+                return Err(
+                    "Actor.ask(actor_id, message, [timeout_ms]) expects at least 2 arguments"
+                        .into(),
+                );
             }
             let actor_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -182,7 +188,9 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
 
             {
                 let actors = get_actors().lock().unwrap();
-                let actor_arc = actors.get(&actor_id).ok_or_else(|| format!("Actor {} not found", actor_id))?;
+                let actor_arc = actors
+                    .get(&actor_id)
+                    .ok_or_else(|| format!("Actor {} not found", actor_id))?;
                 let actor = actor_arc.lock().unwrap();
                 if actor.status != ActorStatus::Running {
                     return Err(format!("Actor {} is not in Running state", actor_id));
@@ -220,7 +228,9 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
 
             let (mailbox_arc, cv_arc) = {
                 let actors = get_actors().lock().unwrap();
-                let actor_arc = actors.get(&actor_id).ok_or_else(|| format!("Actor {} not found", actor_id))?;
+                let actor_arc = actors
+                    .get(&actor_id)
+                    .ok_or_else(|| format!("Actor {} not found", actor_id))?;
                 let actor = actor_arc.lock().unwrap();
                 (Arc::clone(&actor.mailbox), Arc::clone(&actor.cv))
             };
@@ -245,7 +255,11 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
                     map.insert("has_reply".to_string(), Value::Bool(true));
                     // Store sender in global ephemeral map
                     let reply_id = NEXT_ACTOR_ID.fetch_add(1, Ordering::SeqCst);
-                    REPLY_CHANNELS.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap().insert(reply_id, tx_arc);
+                    REPLY_CHANNELS
+                        .get_or_init(|| Mutex::new(HashMap::new()))
+                        .lock()
+                        .unwrap()
+                        .insert(reply_id, tx_arc);
                     map.insert("reply_id".to_string(), Value::Int(reply_id as i64));
                 } else {
                     map.insert("has_reply".to_string(), Value::Bool(false));
@@ -456,19 +470,30 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
         "cluster_send".to_string(),
         Value::Native("Actor.cluster_send".into(), |args| {
             if args.len() < 3 {
-                return Err("cluster_send(node_name, target_actor, message) requires 3 arguments".into());
+                return Err(
+                    "cluster_send(node_name, target_actor, message) requires 3 arguments".into(),
+                );
             }
             let node_name = args[0].to_string();
             let target_actor = args[1].to_string();
             let msg_payload = args[2].to_string();
 
             let nodes = get_cluster_nodes().lock().unwrap();
-            let node = nodes.get(&node_name).ok_or_else(|| format!("Cluster node {} not registered", node_name))?;
+            let node = nodes
+                .get(&node_name)
+                .ok_or_else(|| format!("Cluster node {} not registered", node_name))?;
 
             if let Some(ref stream_arc) = node.stream {
-                let frame = format!("{}::{}::{}\n", target_actor, get_local_node_name().lock().unwrap(), msg_payload);
+                let frame = format!(
+                    "{}::{}::{}\n",
+                    target_actor,
+                    get_local_node_name().lock().unwrap(),
+                    msg_payload
+                );
                 let mut stream = stream_arc.lock().unwrap();
-                stream.write_all(frame.as_bytes()).map_err(|e| e.to_string())?;
+                stream
+                    .write_all(frame.as_bytes())
+                    .map_err(|e| e.to_string())?;
                 stream.flush().map_err(|e| e.to_string())?;
                 Ok(Value::Bool(true))
             } else {
@@ -494,7 +519,11 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
             listener.set_nonblocking(true).map_err(|e| e.to_string())?;
 
             let listener_id = NEXT_ACTOR_ID.fetch_add(1, Ordering::SeqCst);
-            CLUSTER_LISTENERS.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap().insert(listener_id, Arc::new(listener));
+            CLUSTER_LISTENERS
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+                .unwrap()
+                .insert(listener_id, Arc::new(listener));
 
             Ok(Value::Int(listener_id as i64))
         }),
@@ -513,15 +542,26 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
             };
 
             let listener_arc = {
-                let listeners = CLUSTER_LISTENERS.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
-                listeners.get(&listener_id).cloned().ok_or_else(|| format!("Listener {} not found", listener_id))?
+                let listeners = CLUSTER_LISTENERS
+                    .get_or_init(|| Mutex::new(HashMap::new()))
+                    .lock()
+                    .unwrap();
+                listeners
+                    .get(&listener_id)
+                    .cloned()
+                    .ok_or_else(|| format!("Listener {} not found", listener_id))?
             };
 
             // 1. Accept any incoming connections without blocking
             while let Ok((stream, _)) = listener_arc.accept() {
                 let _ = stream.set_nonblocking(true);
                 let _ = stream.set_nodelay(true);
-                get_accepted_streams().lock().unwrap().entry(listener_id).or_default().push(stream);
+                get_accepted_streams()
+                    .lock()
+                    .unwrap()
+                    .entry(listener_id)
+                    .or_default()
+                    .push(stream);
             }
 
             // 2. Poll across all active streams for next newline-delimited frame

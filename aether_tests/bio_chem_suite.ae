@@ -1,0 +1,59 @@
+# ==============================================================================
+# AETHER Bioinformatics & Computational Chemistry Native Test Suite
+# Executed natively by `aether test` inside the AETHER bytecode VM.
+# ==============================================================================
+
+test "dna 2-bit encoding, gc content, and reverse complement" {
+    let seq = Bio.dna("ATGCGATC")
+    assert_eq(seq.len, 8)
+    assert_eq(seq.raw_bytes, 2)
+    assert_eq(seq.gc_content(), 50.0)
+    assert_eq(seq.reverse_complement().to_string(), "GATCGCAT")
+    assert_eq(seq.transcribe(), "AUGCGAUC")
+}
+
+test "fasta parsing and sequence alignment" {
+    let fasta = ">seqA\nATGCGAT\n>seqB\nATGCCAT\n"
+    let records = Bio.parse_fasta(fasta)
+    assert_eq(records.len(), 2)
+    assert_eq(records[0].id, "seqA")
+    assert_eq(records[1].id, "seqB")
+
+    let dist = records[0].sequence.hamming_distance(records[1].sequence)
+    assert_eq(dist, 1)
+
+    let aln = Bio.align(records[0].sequence.to_string(), records[1].sequence.to_string(), 2, -1, -2)
+    assert(aln.identity_percent > 80.0)
+}
+
+test "kras g12d oncogenic mutation translation" {
+    let wt_dna = Bio.dna("ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGGTGGCGTAGGCAAG")
+    let g12d_dna = Bio.dna("ATGACTGAATATAAACTTGTGGTAGTTGGAGCTGATGGCGTAGGCAAG")
+
+    let wt_aa = wt_dna.translate(0)
+    let pt_aa = g12d_dna.translate(0)
+
+    assert_ne(wt_aa, pt_aa)
+    assert_eq(wt_aa[11], "G")
+    assert_eq(pt_aa[11], "D")
+}
+
+test "cheminformatics descriptors, lipinski ro5, and affinity model" {
+    let aspirin = Chem.from_smiles("CC(=O)OC1=CC=CC=C1C(=O)O")
+    let ro5 = aspirin.rule_of_five()
+    assert(ro5.is_drug_like)
+    assert(aspirin.weight() > 170.0)
+    assert(aspirin.weight() < 190.0)
+
+    let fp1 = aspirin.fingerprint(512)
+    let sim_self = Chem.tanimoto_similarity(fp1, fp1)
+    assert_eq(sim_self, 1.0)
+
+    let mut weights = []
+    for i in 0..512 {
+        if i % 8 == 0 { weights.push(0.25) } else { weights.push(0.01) }
+    }
+    let aff = Chem.predict_binding_affinity(aspirin, weights, 4.0)
+    assert(aff.pic50 > 0.0)
+    assert(aff.kd_nm > 0.0)
+}

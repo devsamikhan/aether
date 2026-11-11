@@ -61,7 +61,14 @@ impl<'a> SqlParser<'a> {
                 continue;
             }
 
-            if ch == ',' || ch == '(' || ch == ')' || ch == '*' || ch == '+' || ch == '-' || ch == '/' {
+            if ch == ','
+                || ch == '('
+                || ch == ')'
+                || ch == '*'
+                || ch == '+'
+                || ch == '-'
+                || ch == '/'
+            {
                 chars.next();
                 tokens.push(&input[i..i + 1]);
                 continue;
@@ -202,7 +209,10 @@ impl<'a> SqlParser<'a> {
             return Err("Expected FROM clause".into());
         }
 
-        let from = self.next_token().ok_or("Expected table name after FROM")?.to_string();
+        let from = self
+            .next_token()
+            .ok_or("Expected table name after FROM")?
+            .to_string();
 
         // WHERE clause
         let mut where_clause = None;
@@ -216,7 +226,10 @@ impl<'a> SqlParser<'a> {
             if !self.match_keyword("BY") {
                 return Err("Expected BY after ORDER".into());
             }
-            let col = self.next_token().ok_or("Expected column after ORDER BY")?.to_string();
+            let col = self
+                .next_token()
+                .ok_or("Expected column after ORDER BY")?
+                .to_string();
             let mut desc = false;
             if self.match_keyword("DESC") {
                 desc = true;
@@ -230,7 +243,11 @@ impl<'a> SqlParser<'a> {
         let mut limit = None;
         if self.match_keyword("LIMIT") {
             let lim_str = self.next_token().ok_or("Expected number after LIMIT")?;
-            limit = Some(lim_str.parse::<usize>().map_err(|_| "Invalid LIMIT number")?);
+            limit = Some(
+                lim_str
+                    .parse::<usize>()
+                    .map_err(|_| "Invalid LIMIT number")?,
+            );
         }
 
         Ok(SqlQuery {
@@ -275,7 +292,14 @@ impl<'a> SqlParser<'a> {
     fn parse_comparison(&mut self) -> Result<SqlExpr, String> {
         let left = self.parse_additive()?;
         if let Some(tok) = self.peek() {
-            if tok == "=" || tok == "!=" || tok == "<>" || tok == ">" || tok == "<" || tok == ">=" || tok == "<=" {
+            if tok == "="
+                || tok == "!="
+                || tok == "<>"
+                || tok == ">"
+                || tok == "<"
+                || tok == ">="
+                || tok == "<="
+            {
                 let op = self.next_token().unwrap().to_string();
                 let right = self.parse_additive()?;
                 return Ok(SqlExpr::BinaryOp {
@@ -328,7 +352,9 @@ impl<'a> SqlParser<'a> {
         let tok = self.next_token().ok_or("Unexpected end of expression")?;
 
         // String literal: 'hello' or "world"
-        if (tok.starts_with('\'') && tok.ends_with('\'')) || (tok.starts_with('"') && tok.ends_with('"')) {
+        if (tok.starts_with('\'') && tok.ends_with('\''))
+            || (tok.starts_with('"') && tok.ends_with('"'))
+        {
             let unquoted = &tok[1..tok.len() - 1];
             return Ok(SqlExpr::Literal(Value::string(unquoted.to_string())));
         }
@@ -374,7 +400,10 @@ impl<'a> SqlParser<'a> {
                 }
             }
             if self.next_token() != Some(")") {
-                return Err(format!("Expected closing ')' after function call '{}'", tok));
+                return Err(format!(
+                    "Expected closing ')' after function call '{}'",
+                    tok
+                ));
             }
             return Ok(SqlExpr::FunctionCall {
                 name: tok.to_lowercase(),
@@ -435,11 +464,15 @@ pub fn vector_l2_distance(a: &[f64], b: &[f64]) -> f64 {
 // 3. SQL Query Execution Engine
 // ==============================================================================
 
-pub fn execute_sql(query_str: &str, tables: &HashMap<String, Arc<Mutex<NativeDataFrame>>>) -> Result<NativeDataFrame, String> {
+pub fn execute_sql(
+    query_str: &str,
+    tables: &HashMap<String, Arc<Mutex<NativeDataFrame>>>,
+) -> Result<NativeDataFrame, String> {
     let mut parser = SqlParser::new(query_str);
     let query = parser.parse_query()?;
 
-    let df_arc = tables.get(&query.from)
+    let df_arc = tables
+        .get(&query.from)
         .ok_or_else(|| format!("Table '{}' not found in SQL context", query.from))?;
     let df = df_arc.lock().unwrap();
 
@@ -461,7 +494,8 @@ pub fn execute_sql(query_str: &str, tables: &HashMap<String, Arc<Mutex<NativeDat
     let mut result_columns = HashMap::new();
     let mut result_column_names = Vec::new();
 
-    let is_wildcard = query.select.len() == 1 && matches!(query.select[0].expr, SqlExpr::Column(ref c) if c == "*");
+    let is_wildcard = query.select.len() == 1
+        && matches!(query.select[0].expr, SqlExpr::Column(ref c) if c == "*");
 
     if is_wildcard {
         result_column_names = df.column_names.clone();
@@ -513,9 +547,12 @@ fn eval_row_expr(expr: &SqlExpr, df: &NativeDataFrame, row_idx: usize) -> Result
         }
 
         SqlExpr::Column(name) => {
-            let col = df.columns.get(name)
+            let col = df
+                .columns
+                .get(name)
                 .ok_or_else(|| format!("Column '{}' not found in table", name))?;
-            col.get(row_idx).ok_or_else(|| format!("Row {} out of bounds for column '{}'", row_idx, name))
+            col.get(row_idx)
+                .ok_or_else(|| format!("Row {} out of bounds for column '{}'", row_idx, name))
         }
 
         SqlExpr::BinaryOp { op, left, right } => {
@@ -530,28 +567,44 @@ fn eval_row_expr(expr: &SqlExpr, df: &NativeDataFrame, row_idx: usize) -> Result
                     (Value::Float(x), Value::Float(y)) => Ok(Value::Bool(x > y)),
                     (Value::Int(x), Value::Float(y)) => Ok(Value::Bool(x as f64 > y)),
                     (Value::Float(x), Value::Int(y)) => Ok(Value::Bool(x > y as f64)),
-                    (a, b) => Err(format!("Cannot compare '>' on types {} and {}", a.type_name(), b.type_name())),
+                    (a, b) => Err(format!(
+                        "Cannot compare '>' on types {} and {}",
+                        a.type_name(),
+                        b.type_name()
+                    )),
                 },
                 "<" => match (a, b) {
                     (Value::Int(x), Value::Int(y)) => Ok(Value::Bool(x < y)),
                     (Value::Float(x), Value::Float(y)) => Ok(Value::Bool(x < y)),
                     (Value::Int(x), Value::Float(y)) => Ok(Value::Bool((x as f64) < y)),
                     (Value::Float(x), Value::Int(y)) => Ok(Value::Bool(x < y as f64)),
-                    (a, b) => Err(format!("Cannot compare '<' on types {} and {}", a.type_name(), b.type_name())),
+                    (a, b) => Err(format!(
+                        "Cannot compare '<' on types {} and {}",
+                        a.type_name(),
+                        b.type_name()
+                    )),
                 },
                 ">=" => match (a, b) {
                     (Value::Int(x), Value::Int(y)) => Ok(Value::Bool(x >= y)),
                     (Value::Float(x), Value::Float(y)) => Ok(Value::Bool(x >= y)),
                     (Value::Int(x), Value::Float(y)) => Ok(Value::Bool(x as f64 >= y)),
                     (Value::Float(x), Value::Int(y)) => Ok(Value::Bool(x >= y as f64)),
-                    (a, b) => Err(format!("Cannot compare '>=' on types {} and {}", a.type_name(), b.type_name())),
+                    (a, b) => Err(format!(
+                        "Cannot compare '>=' on types {} and {}",
+                        a.type_name(),
+                        b.type_name()
+                    )),
                 },
                 "<=" => match (a, b) {
                     (Value::Int(x), Value::Int(y)) => Ok(Value::Bool(x <= y)),
                     (Value::Float(x), Value::Float(y)) => Ok(Value::Bool(x <= y)),
                     (Value::Int(x), Value::Float(y)) => Ok(Value::Bool((x as f64) <= y)),
                     (Value::Float(x), Value::Int(y)) => Ok(Value::Bool(x <= y as f64)),
-                    (a, b) => Err(format!("Cannot compare '<=' on types {} and {}", a.type_name(), b.type_name())),
+                    (a, b) => Err(format!(
+                        "Cannot compare '<=' on types {} and {}",
+                        a.type_name(),
+                        b.type_name()
+                    )),
                 },
                 "AND" => Ok(Value::Bool(a.is_truthy() && b.is_truthy())),
                 "OR" => Ok(Value::Bool(a.is_truthy() || b.is_truthy())),
@@ -578,7 +631,11 @@ fn eval_row_expr(expr: &SqlExpr, df: &NativeDataFrame, row_idx: usize) -> Result
                 },
                 "/" => match (a, b) {
                     (Value::Int(x), Value::Int(y)) => {
-                        if y == 0 { Err("Division by zero".into()) } else { Ok(Value::Float(x as f64 / y as f64)) }
+                        if y == 0 {
+                            Err("Division by zero".into())
+                        } else {
+                            Ok(Value::Float(x as f64 / y as f64))
+                        }
                     }
                     (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x / y)),
                     (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 / y)),
@@ -666,7 +723,10 @@ fn get_sql_tables() -> &'static Mutex<HashMap<String, Arc<Mutex<NativeDataFrame>
 }
 
 pub fn register_sql_table(name: &str, df: Arc<Mutex<NativeDataFrame>>) {
-    get_sql_tables().lock().unwrap().insert(name.to_lowercase(), df);
+    get_sql_tables()
+        .lock()
+        .unwrap()
+        .insert(name.to_lowercase(), df);
 }
 
 pub fn register_sql_module(globals: &mut HashMap<String, Value>) {

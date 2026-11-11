@@ -33,9 +33,18 @@ ARCH="$(uname -m)"
 case "$OS" in
     Linux)
         OS_TAG="linux"
+        if [ "$ARCH_TAG" = "aarch64" ]; then
+            ARCHIVE_ASSET="aether-linux-aarch64.tar.gz"
+            DIRECT_ASSET="aether-linux-arm64"
+        else
+            ARCHIVE_ASSET="aether-linux-x86_64.tar.gz"
+            DIRECT_ASSET="aether-linux-x64"
+        fi
         ;;
     Darwin)
         OS_TAG="macos"
+        ARCHIVE_ASSET="aether-macos-universal.tar.gz"
+        DIRECT_ASSET="aether-macos-universal"
         ;;
     *)
         echo -e "${RED}[ERROR] Unsupported Operating System: $OS${NC}"
@@ -43,20 +52,39 @@ case "$OS" in
         ;;
 esac
 
-case "$ARCH" in
-    x86_64|amd64)
-        ARCH_TAG="x86_64"
-        ;;
-    arm64|aarch64)
-        ARCH_TAG="aarch64"
-        ;;
-    *)
-        echo -e "${YELLOW}[WARN] Unknown architecture $ARCH, defaulting to x86_64${NC}"
-        ARCH_TAG="x86_64"
-        ;;
-esac
-
 echo -e "  Platform detected: ${GREEN}${OS_TAG}-${ARCH_TAG}${NC}"
+
+verify_sha256() {
+    local file_path="$1"
+    local sha_url="$2"
+    local sha_file="${file_path}.sha256"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$sha_url" -o "$sha_file" 2>/dev/null || return 0
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$sha_url" -O "$sha_file" 2>/dev/null || return 0
+    else
+        return 0
+    fi
+    if [ ! -s "$sha_file" ]; then
+        return 0
+    fi
+    local expected actual
+    expected="$(awk '{print tolower($1)}' "$sha_file")"
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "$file_path" | awk '{print tolower($1)}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        actual="$(shasum -a 256 "$file_path" | awk '{print tolower($1)}')"
+    else
+        return 0
+    fi
+    if [ -n "$expected" ] && [ "$expected" != "$actual" ]; then
+        echo -e "${RED}[ERROR] SHA-256 verification failed for $file_path${NC}"
+        echo "  Expected: $expected"
+        echo "  Actual:   $actual"
+        return 1
+    fi
+    echo -e "  ✓ Verified SHA-256 checksum"
+}
 
 # 3. Locate or Acquire AETHER Binary
 INSTALLED=false
@@ -81,9 +109,10 @@ if [ "$INSTALLED" = false ] && command -v cargo >/dev/null 2>&1 && [ -f "Cargo.t
 fi
 
 # Option C: Download from GitHub Releases
+RELEASE_BASE="${AETHER_RELEASE_BASE_URL:-https://github.com/devsamikhan/aether/releases/latest/download}"
 if [ "$INSTALLED" = false ]; then
-    DOWNLOAD_URL="https://github.com/devsamikhan/aether/releases/latest/download/aether-${OS_TAG}-${ARCH_TAG}.tar.gz"
-    echo -e "  ⬇️  Downloading AETHER precompiled binary from release..."
+    DOWNLOAD_URL="${RELEASE_BASE}/${ARCHIVE_ASSET}"
+    echo -e "  ⬇️  Downloading AETHER release archive (${ARCHIVE_ASSET})..."
     TMP_DIR="$(mktemp -d)"
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/aether.tar.gz" || true
@@ -92,10 +121,17 @@ if [ "$INSTALLED" = false ]; then
     fi
 
     if [ -f "$TMP_DIR/aether.tar.gz" ]; then
+        verify_sha256 "$TMP_DIR/aether.tar.gz" "${DOWNLOAD_URL}.sha256"
         tar -xzf "$TMP_DIR/aether.tar.gz" -C "$TMP_DIR"
-        if [ -f "$TMP_DIR/aether" ]; then
+        if [ -f "$TMP_DIR/bin/aether" ]; then
+            cp "$TMP_DIR/bin/aether" "$BIN_DIR/aether"
+            INSTALLED=true
+        elif [ -f "$TMP_DIR/aether" ]; then
             cp "$TMP_DIR/aether" "$BIN_DIR/aether"
             INSTALLED=true
+        fi
+        if [ -d "$TMP_DIR/libraries" ]; then
+            cp "$TMP_DIR/libraries/"*.ae "$LIB_DIR/" 2>/dev/null || true
         fi
     fi
     rm -rf "$TMP_DIR"
@@ -103,12 +139,15 @@ fi
 
 if [ "$INSTALLED" = false ]; then
     # Fallback attempt: direct binary fetch
-    echo -e "  ⚠️  Attempting standalone binary direct fetch..."
-    DIRECT_URL="https://github.com/devsamikhan/aether/releases/latest/download/aether-${OS_TAG}-${ARCH_TAG}"
+    echo -e "  ⚠️  Attempting standalone binary direct fetch (${DIRECT_ASSET})..."
+    DIRECT_URL="${RELEASE_BASE}/${DIRECT_ASSET}"
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$DIRECT_URL" -o "$BIN_DIR/aether" || true
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$DIRECT_URL" -O "$BIN_DIR/aether" || true
     fi
     if [ -f "$BIN_DIR/aether" ]; then
+        verify_sha256 "$BIN_DIR/aether" "${DIRECT_URL}.sha256"
         INSTALLED=true
     fi
 fi

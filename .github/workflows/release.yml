@@ -44,7 +44,9 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Verify All Test Suites (100% Pass Required)
-        run: cargo test --release --verbose
+        run: |
+          cargo test --release --verbose
+          cargo run --release -- test --all
 
       - name: Build Optimized Release Binary
         run: cargo build --release --target ${{ matrix.target }}

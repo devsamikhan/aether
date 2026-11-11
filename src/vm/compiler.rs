@@ -103,7 +103,10 @@ impl BytecodeCompiler {
                     self.emit_op(OpCode::Nil, *span);
                 }
 
-                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                if self.function.name != "<main>"
+                    && self.function.name != "<repl>"
+                    && self.scope_depth > 0
+                {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let const_idx = self.add_constant(Value::string(name.clone()));
@@ -167,7 +170,10 @@ impl BytecodeCompiler {
                             self.emit_op(OpCode::SetLocal, *id_span);
                             self.emit_u16(local_idx as u16, *id_span);
                             self.emit_op(OpCode::Pop, *span);
-                        } else if self.function.name != "<main>" && self.function.name != "<repl>" && *op == AssignOp::Assign {
+                        } else if self.function.name != "<main>"
+                            && self.function.name != "<repl>"
+                            && *op == AssignOp::Assign
+                        {
                             self.add_local(name.clone(), *id_span)?;
                         } else {
                             let const_idx = self.add_constant(Value::string(name.clone()));
@@ -182,7 +188,9 @@ impl BytecodeCompiler {
                         if self.function.name != "<main>" && self.function.name != "<repl>" {
                             for t in targets {
                                 if let Expr::Ident(name, id_span) = t {
-                                    if !self.global_vars.contains(name) && self.resolve_local(name).is_none() {
+                                    if !self.global_vars.contains(name)
+                                        && self.resolve_local(name).is_none()
+                                    {
                                         self.emit_op(OpCode::Nil, *id_span);
                                         self.add_local(name.clone(), *id_span)?;
                                     }
@@ -198,20 +206,24 @@ impl BytecodeCompiler {
                             match t {
                                 Expr::Ident(name, id_span) => {
                                     if self.global_vars.contains(name) {
-                                        let const_idx = self.add_constant(Value::string(name.clone()));
+                                        let const_idx =
+                                            self.add_constant(Value::string(name.clone()));
                                         self.emit_op(OpCode::SetGlobal, *id_span);
                                         self.emit_u16(const_idx as u16, *id_span);
                                     } else if let Some(local_idx) = self.resolve_local(name) {
                                         self.emit_op(OpCode::SetLocal, *id_span);
                                         self.emit_u16(local_idx as u16, *id_span);
                                     } else {
-                                        let const_idx = self.add_constant(Value::string(name.clone()));
+                                        let const_idx =
+                                            self.add_constant(Value::string(name.clone()));
                                         self.emit_op(OpCode::SetGlobal, *id_span);
                                         self.emit_u16(const_idx as u16, *id_span);
                                     }
                                     self.emit_op(OpCode::Pop, *span);
                                 }
-                                _ => return Err("Invalid assignment target in unpacking".to_string()),
+                                _ => {
+                                    return Err("Invalid assignment target in unpacking".to_string())
+                                }
                             }
                         }
                     }
@@ -319,7 +331,8 @@ impl BytecodeCompiler {
 
                 let mut sub_compiler = BytecodeCompiler::new(name, min_arity);
                 sub_compiler.function.max_arity = regular_params.len();
-                sub_compiler.function.param_names = regular_params.iter().map(|p| p.name.clone()).collect();
+                sub_compiler.function.param_names =
+                    regular_params.iter().map(|p| p.name.clone()).collect();
                 sub_compiler.function.has_varargs = varargs_param.is_some();
                 sub_compiler.function.varargs_param = varargs_param.clone();
                 sub_compiler.function.has_kwargs = kwargs_param.is_some();
@@ -403,7 +416,12 @@ impl BytecodeCompiler {
                     sub_compiler.compile_expression(res)?;
                     sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
-                } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+                } else if !sub_compiler
+                    .function
+                    .chunk
+                    .code
+                    .ends_with(&[OpCode::Return as u8])
+                {
                     sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Nil, *span);
                     sub_compiler.emit_op(OpCode::Return, *span);
@@ -429,7 +447,10 @@ impl BytecodeCompiler {
                     self.emit_u16(captured_vars.len() as u16, *span);
                 }
 
-                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                if self.function.name != "<main>"
+                    && self.function.name != "<repl>"
+                    && self.scope_depth > 0
+                {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let glob_idx = self.add_constant(Value::string(name.clone()));
@@ -485,7 +506,10 @@ impl BytecodeCompiler {
                                 pushed_result = true;
                                 continue;
                             }
-                            Statement::Return { value, span: r_span } => {
+                            Statement::Return {
+                                value,
+                                span: r_span,
+                            } => {
                                 if let Some(val) = value {
                                     sub_compiler.compile_expression(val)?;
                                 } else {
@@ -713,7 +737,11 @@ impl BytecodeCompiler {
                     self.emit_op(OpCode::Pop, *span);
                 }
                 let jump = self.emit_jump(OpCode::Jump, *span);
-                self.loop_stack.last_mut().unwrap().continue_jumps.push(jump);
+                self.loop_stack
+                    .last_mut()
+                    .unwrap()
+                    .continue_jumps
+                    .push(jump);
             }
             Statement::Pass(_) => {
                 // No-operation
@@ -816,7 +844,12 @@ impl BytecodeCompiler {
                 if let Some(ref res) = body.result {
                     sub_compiler.compile_expression(res)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
-                } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+                } else if !sub_compiler
+                    .function
+                    .chunk
+                    .code
+                    .ends_with(&[OpCode::Return as u8])
+                {
                     sub_compiler.emit_op(OpCode::Nil, *span);
                     sub_compiler.emit_op(OpCode::Return, *span);
                 }
@@ -851,7 +884,10 @@ impl BytecodeCompiler {
                 self.emit_op(OpCode::Constant, *span);
                 self.emit_u16(const_idx as u16, *span);
 
-                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                if self.function.name != "<main>"
+                    && self.function.name != "<repl>"
+                    && self.scope_depth > 0
+                {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let glob_idx = self.add_constant(Value::string(name.clone()));
@@ -859,7 +895,12 @@ impl BytecodeCompiler {
                     self.emit_u16(glob_idx as u16, *span);
                 }
             }
-            Statement::EnumDef { name, variants, span, .. } => {
+            Statement::EnumDef {
+                name,
+                variants,
+                span,
+                ..
+            } => {
                 let mut enum_map = HashMap::new();
                 for v in variants {
                     let variant_val = if v.fields.is_empty() {
@@ -891,7 +932,10 @@ impl BytecodeCompiler {
                 self.emit_op(OpCode::Constant, *span);
                 self.emit_u16(const_idx as u16, *span);
 
-                if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                if self.function.name != "<main>"
+                    && self.function.name != "<repl>"
+                    && self.scope_depth > 0
+                {
                     self.add_local(name.clone(), *span)?;
                 } else {
                     let glob_idx = self.add_constant(Value::string(name.clone()));
@@ -902,7 +946,12 @@ impl BytecodeCompiler {
             Statement::TraitDef { .. } | Statement::TypeAlias { .. } => {
                 // Statically checked in TypeChecker; no runtime bytecode needed
             }
-            Statement::ImplDef { target_type, methods, span, .. } => {
+            Statement::ImplDef {
+                target_type,
+                methods,
+                span,
+                ..
+            } => {
                 for m_stmt in methods {
                     if let Statement::FnDef {
                         name: m_name,
@@ -912,7 +961,8 @@ impl BytecodeCompiler {
                         ..
                     } = m_stmt
                     {
-                        let compiled = self.compile_method(target_type, m_name, params, m_body, *m_span)?;
+                        let compiled =
+                            self.compile_method(target_type, m_name, params, m_body, *m_span)?;
                         let fn_idx = self.add_constant(Value::Function(Arc::new(compiled)));
                         self.emit_op(OpCode::Constant, *m_span);
                         self.emit_u16(fn_idx as u16, *m_span);
@@ -925,7 +975,11 @@ impl BytecodeCompiler {
                     }
                 }
             }
-            Statement::Decorated { decorators, stmt, span } => {
+            Statement::Decorated {
+                decorators,
+                stmt,
+                span,
+            } => {
                 self.compile_statement(stmt)?;
                 if let Statement::FnDef { name, .. } = stmt.as_ref() {
                     for dec in decorators.iter().rev() {
@@ -945,7 +999,10 @@ impl BytecodeCompiler {
                         self.emit_op(OpCode::Call, *span);
                         self.emit_byte(1, *span);
 
-                        if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+                        if self.function.name != "<main>"
+                            && self.function.name != "<repl>"
+                            && self.scope_depth > 0
+                        {
                             if let Some(local_idx) = self.resolve_local(name) {
                                 self.emit_op(OpCode::SetLocal, *span);
                                 self.emit_u16(local_idx as u16, *span);
@@ -959,7 +1016,12 @@ impl BytecodeCompiler {
                     }
                 }
             }
-            Statement::ClassDef { name, bases, body, span } => {
+            Statement::ClassDef {
+                name,
+                bases,
+                body,
+                span,
+            } => {
                 let mut methods = HashMap::new();
                 let mut class_vars = HashMap::new();
 
@@ -972,7 +1034,8 @@ impl BytecodeCompiler {
                             span: m_span,
                             ..
                         } => {
-                            let compiled = self.compile_method(name, m_name, params, m_body, *m_span)?;
+                            let compiled =
+                                self.compile_method(name, m_name, params, m_body, *m_span)?;
                             methods.insert(m_name.clone(), Arc::new(compiled));
                         }
                         Statement::Assign {
@@ -1092,20 +1155,25 @@ impl BytecodeCompiler {
                 if let Some(ref e) = expr {
                     self.compile_expression(e)?;
                 } else {
-                    let err_const = self.add_constant(Value::string("RuntimeError: Exception raised"));
+                    let err_const =
+                        self.add_constant(Value::string("RuntimeError: Exception raised"));
                     self.emit_op(OpCode::Constant, *span);
                     self.emit_u16(err_const as u16, *span);
                 }
                 self.emit_op(OpCode::Raise, *span);
             }
-            Statement::Import { module, alias, span } => {
+            Statement::Import {
+                module,
+                alias,
+                span,
+            } => {
                 let mod_const = self.add_constant(Value::string(module.clone()));
                 self.emit_op(OpCode::ImportModule, *span);
                 self.emit_u16(mod_const as u16, *span);
 
-                let bind_name = alias.clone().unwrap_or_else(|| {
-                    module.split('.').last().unwrap_or(module).to_string()
-                });
+                let bind_name = alias
+                    .clone()
+                    .unwrap_or_else(|| module.split('.').last().unwrap_or(module).to_string());
 
                 if self.scope_depth > 0 {
                     self.add_local(bind_name, *span)?;
@@ -1115,7 +1183,11 @@ impl BytecodeCompiler {
                     self.emit_u16(glob_idx as u16, *span);
                 }
             }
-            Statement::FromImport { module, symbols, span } => {
+            Statement::FromImport {
+                module,
+                symbols,
+                span,
+            } => {
                 for (sym, alias) in symbols {
                     let mod_const = self.add_constant(Value::string(module.clone()));
                     let sym_const = self.add_constant(Value::string(sym.clone()));
@@ -1177,72 +1249,70 @@ impl BytecodeCompiler {
                     self.emit_u16(const_idx as u16, *span);
                 }
             }
-            Expr::Binary(left, op, right, span) => {
-                match op {
-                    BinaryOp::And => {
-                        self.compile_expression(left)?;
-                        let end_jump = self.emit_jump(OpCode::JumpIfFalse, *span);
-                        self.emit_op(OpCode::Pop, *span);
-                        self.compile_expression(right)?;
-                        self.patch_jump(end_jump);
-                    }
-                    BinaryOp::Or => {
-                        self.compile_expression(left)?;
-                        let else_jump = self.emit_jump(OpCode::JumpIfFalse, *span);
-                        let end_jump = self.emit_jump(OpCode::Jump, *span);
-                        self.patch_jump(else_jump);
-                        self.emit_op(OpCode::Pop, *span);
-                        self.compile_expression(right)?;
-                        self.patch_jump(end_jump);
-                    }
-                    BinaryOp::NullCoalesce => {
-                        self.compile_expression(left)?;
-                        let keep_jump = self.emit_jump(OpCode::JumpIfNotNil, *span);
-                        self.emit_op(OpCode::Pop, *span);
-                        self.compile_expression(right)?;
-                        self.patch_jump(keep_jump);
-                    }
-                    BinaryOp::Range => {
-                        self.compile_expression(left)?;
-                        self.compile_expression(right)?;
-                        self.emit_op(OpCode::BuildRange, *span);
-                    }
-                    BinaryOp::RangeInclusive => {
-                        self.compile_expression(left)?;
-                        self.compile_expression(right)?;
-                        self.emit_op(OpCode::BuildRangeInclusive, *span);
-                    }
-                    BinaryOp::In => {
-                        let fn_idx = self.add_constant(Value::string("__in"));
-                        self.emit_op(OpCode::GetGlobal, *span);
-                        self.emit_u16(fn_idx as u16, *span);
-                        self.compile_expression(left)?;
-                        self.compile_expression(right)?;
-                        self.emit_op(OpCode::Call, *span);
-                        self.emit_byte(2, *span);
-                    }
-                    _ => {
-                        self.compile_expression(left)?;
-                        self.compile_expression(right)?;
+            Expr::Binary(left, op, right, span) => match op {
+                BinaryOp::And => {
+                    self.compile_expression(left)?;
+                    let end_jump = self.emit_jump(OpCode::JumpIfFalse, *span);
+                    self.emit_op(OpCode::Pop, *span);
+                    self.compile_expression(right)?;
+                    self.patch_jump(end_jump);
+                }
+                BinaryOp::Or => {
+                    self.compile_expression(left)?;
+                    let else_jump = self.emit_jump(OpCode::JumpIfFalse, *span);
+                    let end_jump = self.emit_jump(OpCode::Jump, *span);
+                    self.patch_jump(else_jump);
+                    self.emit_op(OpCode::Pop, *span);
+                    self.compile_expression(right)?;
+                    self.patch_jump(end_jump);
+                }
+                BinaryOp::NullCoalesce => {
+                    self.compile_expression(left)?;
+                    let keep_jump = self.emit_jump(OpCode::JumpIfNotNil, *span);
+                    self.emit_op(OpCode::Pop, *span);
+                    self.compile_expression(right)?;
+                    self.patch_jump(keep_jump);
+                }
+                BinaryOp::Range => {
+                    self.compile_expression(left)?;
+                    self.compile_expression(right)?;
+                    self.emit_op(OpCode::BuildRange, *span);
+                }
+                BinaryOp::RangeInclusive => {
+                    self.compile_expression(left)?;
+                    self.compile_expression(right)?;
+                    self.emit_op(OpCode::BuildRangeInclusive, *span);
+                }
+                BinaryOp::In => {
+                    let fn_idx = self.add_constant(Value::string("__in"));
+                    self.emit_op(OpCode::GetGlobal, *span);
+                    self.emit_u16(fn_idx as u16, *span);
+                    self.compile_expression(left)?;
+                    self.compile_expression(right)?;
+                    self.emit_op(OpCode::Call, *span);
+                    self.emit_byte(2, *span);
+                }
+                _ => {
+                    self.compile_expression(left)?;
+                    self.compile_expression(right)?;
 
-                        match op {
-                            BinaryOp::Add => self.emit_op(OpCode::Add, *span),
-                            BinaryOp::Sub => self.emit_op(OpCode::Sub, *span),
-                            BinaryOp::Mul => self.emit_op(OpCode::Mul, *span),
-                            BinaryOp::Div => self.emit_op(OpCode::Div, *span),
-                            BinaryOp::Mod => self.emit_op(OpCode::Mod, *span),
-                            BinaryOp::Pow => self.emit_op(OpCode::Pow, *span),
-                            BinaryOp::Equal => self.emit_op(OpCode::Equal, *span),
-                            BinaryOp::NotEqual => self.emit_op(OpCode::NotEqual, *span),
-                            BinaryOp::Less => self.emit_op(OpCode::Less, *span),
-                            BinaryOp::LessEqual => self.emit_op(OpCode::LessEqual, *span),
-                            BinaryOp::Greater => self.emit_op(OpCode::Greater, *span),
-                            BinaryOp::GreaterEqual => self.emit_op(OpCode::GreaterEqual, *span),
-                            _ => unreachable!(),
-                        }
+                    match op {
+                        BinaryOp::Add => self.emit_op(OpCode::Add, *span),
+                        BinaryOp::Sub => self.emit_op(OpCode::Sub, *span),
+                        BinaryOp::Mul => self.emit_op(OpCode::Mul, *span),
+                        BinaryOp::Div => self.emit_op(OpCode::Div, *span),
+                        BinaryOp::Mod => self.emit_op(OpCode::Mod, *span),
+                        BinaryOp::Pow => self.emit_op(OpCode::Pow, *span),
+                        BinaryOp::Equal => self.emit_op(OpCode::Equal, *span),
+                        BinaryOp::NotEqual => self.emit_op(OpCode::NotEqual, *span),
+                        BinaryOp::Less => self.emit_op(OpCode::Less, *span),
+                        BinaryOp::LessEqual => self.emit_op(OpCode::LessEqual, *span),
+                        BinaryOp::Greater => self.emit_op(OpCode::Greater, *span),
+                        BinaryOp::GreaterEqual => self.emit_op(OpCode::GreaterEqual, *span),
+                        _ => unreachable!(),
                     }
                 }
-            }
+            },
             Expr::Unary(op, inner, span) => {
                 self.compile_expression(inner)?;
                 match op {
@@ -1251,7 +1321,12 @@ impl BytecodeCompiler {
                 }
             }
             Expr::Call(callee, args, span) => {
-                let has_named_or_star = args.iter().any(|a| matches!(a, Expr::NamedArg(..) | Expr::StarArg(..) | Expr::DoubleStarArg(..)));
+                let has_named_or_star = args.iter().any(|a| {
+                    matches!(
+                        a,
+                        Expr::NamedArg(..) | Expr::StarArg(..) | Expr::DoubleStarArg(..)
+                    )
+                });
                 if !has_named_or_star {
                     self.compile_expression(callee)?;
                     for arg in args {
@@ -1414,7 +1489,13 @@ impl BytecodeCompiler {
                 self.emit_op(OpCode::Constant, *span);
                 self.emit_u16(idx as u16, *span);
             }
-            Expr::Slice { obj, start, end, step, span } => {
+            Expr::Slice {
+                obj,
+                start,
+                end,
+                step,
+                span,
+            } => {
                 self.compile_expression(obj)?;
                 if let Some(s) = start {
                     self.compile_expression(s)?;
@@ -1519,7 +1600,8 @@ impl BytecodeCompiler {
 
                 let mut sub_compiler = BytecodeCompiler::new("<lambda>", min_arity);
                 sub_compiler.function.max_arity = regular_params.len();
-                sub_compiler.function.param_names = regular_params.iter().map(|p| p.name.clone()).collect();
+                sub_compiler.function.param_names =
+                    regular_params.iter().map(|p| p.name.clone()).collect();
                 sub_compiler.function.has_varargs = varargs_param.is_some();
                 sub_compiler.function.varargs_param = varargs_param.clone();
                 sub_compiler.function.has_kwargs = kwargs_param.is_some();
@@ -1579,7 +1661,12 @@ impl BytecodeCompiler {
                     sub_compiler.compile_expression(res)?;
                     sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Return, *span);
-                } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+                } else if !sub_compiler
+                    .function
+                    .chunk
+                    .code
+                    .ends_with(&[OpCode::Return as u8])
+                {
                     sub_compiler.emit_deferred_cleanups(*span)?;
                     sub_compiler.emit_op(OpCode::Nil, *span);
                     sub_compiler.emit_op(OpCode::Return, *span);
@@ -1606,9 +1693,10 @@ impl BytecodeCompiler {
                 }
             }
             Expr::Super(span) => {
-                let class_name = self.current_class_name.clone().ok_or_else(|| {
-                    "super() can only be used inside a class method".to_string()
-                })?;
+                let class_name = self
+                    .current_class_name
+                    .clone()
+                    .ok_or_else(|| "super() can only be used inside a class method".to_string())?;
                 let self_slot = self.resolve_local("self").ok_or_else(|| {
                     "super() requires 'self' parameter in enclosing method".to_string()
                 })?;
@@ -1621,7 +1709,13 @@ impl BytecodeCompiler {
 
                 self.emit_op(OpCode::Super, *span);
             }
-            Expr::ListComp { element, item, iter, condition, span } => {
+            Expr::ListComp {
+                element,
+                item,
+                iter,
+                condition,
+                span,
+            } => {
                 let append_call = Expr::Call(
                     Box::new(Expr::Ident("append".to_string(), *span)),
                     vec![
@@ -1678,7 +1772,14 @@ impl BytecodeCompiler {
                 let call = Expr::Call(Box::new(lambda), vec![*iter.clone()], *span);
                 self.compile_expression(&call)?;
             }
-            Expr::DictComp { key, value, item, iter, condition, span } => {
+            Expr::DictComp {
+                key,
+                value,
+                item,
+                iter,
+                condition,
+                span,
+            } => {
                 let assign_stmt = Statement::Assign {
                     target: Expr::Index(
                         Box::new(Expr::Ident("__comp_map".to_string(), *span)),
@@ -1830,7 +1931,12 @@ impl BytecodeCompiler {
             sub_compiler.compile_expression(res)?;
             sub_compiler.emit_deferred_cleanups(span)?;
             sub_compiler.emit_op(OpCode::Return, span);
-        } else if !sub_compiler.function.chunk.code.ends_with(&[OpCode::Return as u8]) {
+        } else if !sub_compiler
+            .function
+            .chunk
+            .code
+            .ends_with(&[OpCode::Return as u8])
+        {
             sub_compiler.emit_deferred_cleanups(span)?;
             sub_compiler.emit_op(OpCode::Nil, span);
             sub_compiler.emit_op(OpCode::Return, span);
@@ -1867,7 +1973,8 @@ impl BytecodeCompiler {
             self.emit_op(OpCode::Pop, span);
             return Ok(());
         }
-        if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0 {
+        if self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0
+        {
             self.add_local(name.to_string(), span)?;
         } else {
             let const_idx = self.add_constant(Value::string(name.to_string()));
@@ -1911,8 +2018,9 @@ impl BytecodeCompiler {
                     self.emit_op(OpCode::Pop, span);
                     return Ok(());
                 }
-                let is_local_scope =
-                    self.function.name != "<main>" && self.function.name != "<repl>" && self.scope_depth > 0;
+                let is_local_scope = self.function.name != "<main>"
+                    && self.function.name != "<repl>"
+                    && self.scope_depth > 0;
                 if is_local_scope {
                     let map_slot = self.locals.len();
                     self.add_local("__destruct_map".to_string(), span)?;
@@ -2347,7 +2455,9 @@ impl BytecodeCompiler {
                 self.prescan_captures_in_expr(target);
                 self.prescan_captures_in_expr(value);
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.prescan_captures_in_expr(condition);
                 self.prescan_captures_in_block(body);
             }
@@ -2396,7 +2506,10 @@ impl BytecodeCompiler {
                     let _ = self.resolve_local(name);
                 }
             }
-            Expr::Binary(l, _, r, _) | Expr::Pipe(l, r, _) | Expr::Index(l, r, _) | Expr::OptionalIndex(l, r, _) => {
+            Expr::Binary(l, _, r, _)
+            | Expr::Pipe(l, r, _)
+            | Expr::Index(l, r, _)
+            | Expr::OptionalIndex(l, r, _) => {
                 self.prescan_captures_in_expr(l);
                 self.prescan_captures_in_expr(r);
             }
@@ -2434,7 +2547,10 @@ impl BytecodeCompiler {
                     self.prescan_captures_in_expr(a);
                 }
             }
-            Expr::Array(els, _) | Expr::Tuple(els, _) | Expr::Set(els, _) | Expr::FString(els, _) => {
+            Expr::Array(els, _)
+            | Expr::Tuple(els, _)
+            | Expr::Set(els, _)
+            | Expr::FString(els, _) => {
                 for el in els {
                     self.prescan_captures_in_expr(el);
                 }
@@ -2543,7 +2659,9 @@ impl BytecodeCompiler {
         }
 
         if let Some(ref parent_locals) = self.parent_locals {
-            let in_parent = parent_locals.iter().any(|l| l.name == name && !l.name.is_empty());
+            let in_parent = parent_locals
+                .iter()
+                .any(|l| l.name == name && !l.name.is_empty());
             if in_parent {
                 if let Some(pos) = self.captured.iter().position(|c| c == name) {
                     return Some(pos + 1);

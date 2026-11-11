@@ -4,8 +4,8 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
-use crate::syntax::ast::*;
 use super::bytecode::{Chunk, OpCode};
+use crate::syntax::ast::*;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct OptimizationStats {

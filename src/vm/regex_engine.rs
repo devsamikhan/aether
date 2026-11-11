@@ -4,16 +4,16 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
-use std::collections::HashMap;
 use super::value::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 enum RegexAtom {
     Any,
     Literal(char),
-    Digit(bool),      // true = \d, false = \D
-    Word(bool),       // true = \w, false = \W
-    Space(bool),      // true = \s, false = \S
+    Digit(bool), // true = \d, false = \D
+    Word(bool),  // true = \w, false = \W
+    Space(bool), // true = \s, false = \S
     CharClass {
         negated: bool,
         singles: Vec<char>,
@@ -453,13 +453,21 @@ fn match_atom(atom: &RegexAtom, chars: &[char], pos: usize) -> Option<usize> {
                     singles,
                     ranges,
                 } => {
-                    let in_class = singles.contains(&c)
-                        || ranges.iter().any(|(lo, hi)| c >= *lo && c <= *hi);
-                    if *negated { !in_class } else { in_class }
+                    let in_class =
+                        singles.contains(&c) || ranges.iter().any(|(lo, hi)| c >= *lo && c <= *hi);
+                    if *negated {
+                        !in_class
+                    } else {
+                        in_class
+                    }
                 }
                 RegexAtom::Group(_) => unreachable!(),
             };
-            if matched { Some(pos + 1) } else { None }
+            if matched {
+                Some(pos + 1)
+            } else {
+                None
+            }
         }
     }
 }
@@ -511,7 +519,9 @@ pub fn register_regex_module(globals: &mut HashMap<String, Value>) {
         "replace".to_string(),
         Value::Native("Regex.replace".into(), |args| {
             if args.len() < 3 {
-                return Err("Regex.replace(pattern, text, replacement) requires 3 arguments".into());
+                return Err(
+                    "Regex.replace(pattern, text, replacement) requires 3 arguments".into(),
+                );
             }
             let pat = RegexPattern::compile(&format!("{}", args[0]))?;
             let text = format!("{}", args[1]);

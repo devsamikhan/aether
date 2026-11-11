@@ -18,8 +18,8 @@ const K256: [u32; 64] = [
 
 pub fn sha256_bytes(input: &[u8]) -> [u8; 32] {
     let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
     ];
 
     let bit_len = (input.len() as u64) * 8;
@@ -33,12 +33,20 @@ pub fn sha256_bytes(input: &[u8]) -> [u8; 32] {
     for chunk in msg.chunks_exact(64) {
         let mut w = [0u32; 64];
         for i in 0..16 {
-            w[i] = u32::from_be_bytes([chunk[i * 4], chunk[i * 4 + 1], chunk[i * 4 + 2], chunk[i * 4 + 3]]);
+            w[i] = u32::from_be_bytes([
+                chunk[i * 4],
+                chunk[i * 4 + 1],
+                chunk[i * 4 + 2],
+                chunk[i * 4 + 3],
+            ]);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
             let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+            w[i] = w[i - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[i - 7])
+                .wrapping_add(s1);
         }
 
         let mut a = h[0];
@@ -121,7 +129,12 @@ pub fn sha1_bytes(input: &[u8]) -> [u8; 20] {
     for chunk in msg.chunks_exact(64) {
         let mut w = [0u32; 80];
         for i in 0..16 {
-            w[i] = u32::from_be_bytes([chunk[i * 4], chunk[i * 4 + 1], chunk[i * 4 + 2], chunk[i * 4 + 3]]);
+            w[i] = u32::from_be_bytes([
+                chunk[i * 4],
+                chunk[i * 4 + 1],
+                chunk[i * 4 + 2],
+                chunk[i * 4 + 3],
+            ]);
         }
         for i in 16..80 {
             w[i] = (w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]).rotate_left(1);
@@ -144,7 +157,8 @@ pub fn sha1_bytes(input: &[u8]) -> [u8; 20] {
                 (b ^ c ^ d, 0xca62c1d6u32)
             };
 
-            let temp = a.rotate_left(5)
+            let temp = a
+                .rotate_left(5)
                 .wrapping_add(f)
                 .wrapping_add(e)
                 .wrapping_add(k)
@@ -208,27 +222,33 @@ pub fn md5(input: &[u8]) -> String {
     msg.extend_from_slice(&bit_len.to_le_bytes());
 
     let s = [
-        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
-        5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
-        4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
-        6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5,
+        9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10,
+        15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
     ];
 
     let k: [u32; 64] = [
-        0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
-        0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
-        0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
-        0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
-        0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
-        0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
-        0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
-        0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
+        0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613,
+        0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193,
+        0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d,
+        0x02441453, 0xd8a1e681, 0xe7d3fbc8, 0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+        0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122,
+        0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa,
+        0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665, 0xf4292244,
+        0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+        0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb,
+        0xeb86d391,
     ];
 
     for chunk in msg.chunks_exact(64) {
         let mut m = [0u32; 16];
         for i in 0..16 {
-            m[i] = u32::from_le_bytes([chunk[i * 4], chunk[i * 4 + 1], chunk[i * 4 + 2], chunk[i * 4 + 3]]);
+            m[i] = u32::from_le_bytes([
+                chunk[i * 4],
+                chunk[i * 4 + 1],
+                chunk[i * 4 + 2],
+                chunk[i * 4 + 3],
+            ]);
         }
 
         let (mut aa, mut bb, mut cc, mut dd) = (a, b, c, d);
@@ -331,17 +351,21 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
             return Err("Invalid Base64 chunk length".into());
         }
 
-        let c0 = decode_table(chunk[0]).ok_or_else(|| format!("Invalid Base64 char: {}", chunk[0] as char))?;
-        let c1 = decode_table(chunk[1]).ok_or_else(|| format!("Invalid Base64 char: {}", chunk[1] as char))?;
+        let c0 = decode_table(chunk[0])
+            .ok_or_else(|| format!("Invalid Base64 char: {}", chunk[0] as char))?;
+        let c1 = decode_table(chunk[1])
+            .ok_or_else(|| format!("Invalid Base64 char: {}", chunk[1] as char))?;
 
         out.push((c0 << 2) | (c1 >> 4));
 
         if chunk[2] != b'=' {
-            let c2 = decode_table(chunk[2]).ok_or_else(|| format!("Invalid Base64 char: {}", chunk[2] as char))?;
+            let c2 = decode_table(chunk[2])
+                .ok_or_else(|| format!("Invalid Base64 char: {}", chunk[2] as char))?;
             out.push(((c1 & 0x0F) << 4) | (c2 >> 2));
 
             if chunk[3] != b'=' {
-                let c3 = decode_table(chunk[3]).ok_or_else(|| format!("Invalid Base64 char: {}", chunk[3] as char))?;
+                let c3 = decode_table(chunk[3])
+                    .ok_or_else(|| format!("Invalid Base64 char: {}", chunk[3] as char))?;
                 out.push(((c2 & 0x03) << 6) | c3);
             }
         }
@@ -407,12 +431,7 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 // PBKDF2-HMAC-SHA256 Key Derivation (RFC 2898 / NIST SP 800-132)
 // =========================================================================
 
-pub fn pbkdf2_hmac_sha256(
-    password: &[u8],
-    salt: &[u8],
-    iterations: u32,
-    dk_len: usize,
-) -> Vec<u8> {
+pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dk_len: usize) -> Vec<u8> {
     let iters = iterations.max(1);
     let blocks = (dk_len + 31) / 32;
     let mut derived = Vec::with_capacity(blocks * 32);
@@ -469,12 +488,8 @@ pub fn chacha20_block(key: &[u8; 32], counter: u32, nonce: &[u8; 12]) -> [u8; 64
     state[3] = 0x6b20_6574; // "te k"
 
     for i in 0..8 {
-        state[4 + i] = u32::from_le_bytes([
-            key[i * 4],
-            key[i * 4 + 1],
-            key[i * 4 + 2],
-            key[i * 4 + 3],
-        ]);
+        state[4 + i] =
+            u32::from_le_bytes([key[i * 4], key[i * 4 + 1], key[i * 4 + 2], key[i * 4 + 3]]);
     }
     state[12] = counter;
     for i in 0..3 {
@@ -508,7 +523,12 @@ pub fn chacha20_block(key: &[u8; 32], counter: u32, nonce: &[u8; 12]) -> [u8; 64
     out
 }
 
-pub fn chacha20_xor(key: &[u8; 32], initial_counter: u32, nonce: &[u8; 12], data: &[u8]) -> Vec<u8> {
+pub fn chacha20_xor(
+    key: &[u8; 32],
+    initial_counter: u32,
+    nonce: &[u8; 12],
+    data: &[u8],
+) -> Vec<u8> {
     let mut out = Vec::with_capacity(data.len());
     for (block_idx, chunk) in data.chunks(64).enumerate() {
         let keystream = chacha20_block(key, initial_counter.wrapping_add(block_idx as u32), nonce);
@@ -560,7 +580,9 @@ pub fn decrypt_aead(
 ) -> Result<Vec<u8>, String> {
     let payload = base64_decode(encoded_payload)?;
     if payload.len() < 32 {
-        return Err("CryptoError: Invalid AEAD payload (shorter than authentication tag)".to_string());
+        return Err(
+            "CryptoError: Invalid AEAD payload (shorter than authentication tag)".to_string(),
+        );
     }
     let ct_len = payload.len() - 32;
     let ciphertext = &payload[0..ct_len];
@@ -570,7 +592,10 @@ pub fn decrypt_aead(
     let expected_tag = compute_aead_tag(&key, &nonce, aad, ciphertext);
 
     if !constant_time_eq(provided_tag, &expected_tag) {
-        return Err("CryptoError: AEAD authentication tag mismatch (tampered ciphertext or wrong key/AAD)".to_string());
+        return Err(
+            "CryptoError: AEAD authentication tag mismatch (tampered ciphertext or wrong key/AAD)"
+                .to_string(),
+        );
     }
 
     Ok(chacha20_xor(&key, 1, &nonce, ciphertext))
@@ -587,7 +612,12 @@ pub fn random_hex(byte_len: usize) -> String {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let seed = format!("aether-csprng-{}-{}-{:?}", nanos, seq, std::thread::current().id());
+        let seed = format!(
+            "aether-csprng-{}-{}-{:?}",
+            nanos,
+            seq,
+            std::thread::current().id()
+        );
         let block = sha256_bytes(seed.as_bytes());
         for &b in &block {
             if generated >= byte_len {
@@ -607,57 +637,98 @@ pub fn random_hex(byte_len: usize) -> String {
 pub fn register_crypto_module(globals: &mut HashMap<String, Value>) {
     let mut crypto_module = HashMap::new();
 
-    crypto_module.insert("sha256".to_string(), Value::Native("Crypto.sha256".into(), |args| {
-        if args.is_empty() { return Err("Crypto.sha256(data) expects data argument".into()); }
-        let s = format!("{}", args[0]);
-        Ok(Value::string(sha256(s.as_bytes())))
-    }));
+    crypto_module.insert(
+        "sha256".to_string(),
+        Value::Native("Crypto.sha256".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.sha256(data) expects data argument".into());
+            }
+            let s = format!("{}", args[0]);
+            Ok(Value::string(sha256(s.as_bytes())))
+        }),
+    );
 
-    crypto_module.insert("sha1".to_string(), Value::Native("Crypto.sha1".into(), |args| {
-        if args.is_empty() { return Err("Crypto.sha1(data) expects data argument".into()); }
-        let s = format!("{}", args[0]);
-        Ok(Value::string(sha1(s.as_bytes())))
-    }));
+    crypto_module.insert(
+        "sha1".to_string(),
+        Value::Native("Crypto.sha1".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.sha1(data) expects data argument".into());
+            }
+            let s = format!("{}", args[0]);
+            Ok(Value::string(sha1(s.as_bytes())))
+        }),
+    );
 
-    crypto_module.insert("sec_websocket_accept".to_string(), Value::Native("Crypto.sec_websocket_accept".into(), |args| {
-        if args.is_empty() { return Err("Crypto.sec_websocket_accept(key) expects key argument".into()); }
-        let s = format!("{}", args[0]);
-        Ok(Value::string(sec_websocket_accept(&s)))
-    }));
+    crypto_module.insert(
+        "sec_websocket_accept".to_string(),
+        Value::Native("Crypto.sec_websocket_accept".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.sec_websocket_accept(key) expects key argument".into());
+            }
+            let s = format!("{}", args[0]);
+            Ok(Value::string(sec_websocket_accept(&s)))
+        }),
+    );
 
-    crypto_module.insert("md5".to_string(), Value::Native("Crypto.md5".into(), |args| {
-        if args.is_empty() { return Err("Crypto.md5(data) expects data argument".into()); }
-        let s = format!("{}", args[0]);
-        Ok(Value::string(md5(s.as_bytes())))
-    }));
+    crypto_module.insert(
+        "md5".to_string(),
+        Value::Native("Crypto.md5".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.md5(data) expects data argument".into());
+            }
+            let s = format!("{}", args[0]);
+            Ok(Value::string(md5(s.as_bytes())))
+        }),
+    );
 
-    crypto_module.insert("base64_encode".to_string(), Value::Native("Crypto.base64_encode".into(), |args| {
-        if args.is_empty() { return Err("Crypto.base64_encode(data) expects data argument".into()); }
-        let s = format!("{}", args[0]);
-        Ok(Value::string(base64_encode(s.as_bytes())))
-    }));
+    crypto_module.insert(
+        "base64_encode".to_string(),
+        Value::Native("Crypto.base64_encode".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.base64_encode(data) expects data argument".into());
+            }
+            let s = format!("{}", args[0]);
+            Ok(Value::string(base64_encode(s.as_bytes())))
+        }),
+    );
 
-    crypto_module.insert("base64_decode".to_string(), Value::Native("Crypto.base64_decode".into(), |args| {
-        if args.is_empty() { return Err("Crypto.base64_decode(data) expects data string".into()); }
-        let s = format!("{}", args[0]);
-        let decoded = base64_decode(&s)?;
-        let text = String::from_utf8(decoded).map_err(|e| format!("UTF-8 decode error: {}", e))?;
-        Ok(Value::string(text))
-    }));
+    crypto_module.insert(
+        "base64_decode".to_string(),
+        Value::Native("Crypto.base64_decode".into(), |args| {
+            if args.is_empty() {
+                return Err("Crypto.base64_decode(data) expects data string".into());
+            }
+            let s = format!("{}", args[0]);
+            let decoded = base64_decode(&s)?;
+            let text =
+                String::from_utf8(decoded).map_err(|e| format!("UTF-8 decode error: {}", e))?;
+            Ok(Value::string(text))
+        }),
+    );
 
-    crypto_module.insert("hmac_sha256".to_string(), Value::Native("Crypto.hmac_sha256".into(), |args| {
-        if args.len() < 2 { return Err("Crypto.hmac_sha256(key, message) expects 2 arguments".into()); }
-        let key = format!("{}", args[0]);
-        let msg = format!("{}", args[1]);
-        Ok(Value::string(hmac_sha256(key.as_bytes(), msg.as_bytes())))
-    }));
+    crypto_module.insert(
+        "hmac_sha256".to_string(),
+        Value::Native("Crypto.hmac_sha256".into(), |args| {
+            if args.len() < 2 {
+                return Err("Crypto.hmac_sha256(key, message) expects 2 arguments".into());
+            }
+            let key = format!("{}", args[0]);
+            let msg = format!("{}", args[1]);
+            Ok(Value::string(hmac_sha256(key.as_bytes(), msg.as_bytes())))
+        }),
+    );
 
-    crypto_module.insert("constant_time_eq".to_string(), Value::Native("Crypto.constant_time_eq".into(), |args| {
-        if args.len() < 2 { return Err("Crypto.constant_time_eq(a, b) expects 2 arguments".into()); }
-        let a = format!("{}", args[0]);
-        let b = format!("{}", args[1]);
-        Ok(Value::Bool(constant_time_eq(a.as_bytes(), b.as_bytes())))
-    }));
+    crypto_module.insert(
+        "constant_time_eq".to_string(),
+        Value::Native("Crypto.constant_time_eq".into(), |args| {
+            if args.len() < 2 {
+                return Err("Crypto.constant_time_eq(a, b) expects 2 arguments".into());
+            }
+            let a = format!("{}", args[0]);
+            let b = format!("{}", args[1]);
+            Ok(Value::Bool(constant_time_eq(a.as_bytes(), b.as_bytes())))
+        }),
+    );
 
     crypto_module.insert("pbkdf2".to_string(), Value::Native("Crypto.pbkdf2".into(), |args| {
         if args.len() < 2 { return Err("Crypto.pbkdf2(password, salt, [iterations], [dk_len]) expects at least 2 arguments".into()); }
@@ -697,12 +768,20 @@ pub fn register_crypto_module(globals: &mut HashMap<String, Value>) {
         Ok(Value::string(plain_str))
     }));
 
-    crypto_module.insert("random_hex".to_string(), Value::Native("Crypto.random_hex".into(), |args| {
-        let len = if !args.is_empty() {
-            match args[0] { Value::Int(i) => i.clamp(1, 4096) as usize, _ => 32 }
-        } else { 32 };
-        Ok(Value::string(random_hex(len)))
-    }));
+    crypto_module.insert(
+        "random_hex".to_string(),
+        Value::Native("Crypto.random_hex".into(), |args| {
+            let len = if !args.is_empty() {
+                match args[0] {
+                    Value::Int(i) => i.clamp(1, 4096) as usize,
+                    _ => 32,
+                }
+            } else {
+                32
+            };
+            Ok(Value::string(random_hex(len)))
+        }),
+    );
 
     globals.insert("Crypto".to_string(), Value::map(crypto_module));
 }

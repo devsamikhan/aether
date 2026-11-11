@@ -40,7 +40,11 @@ pub extern "C" fn aether_native_println_i64(val: i64) {
     println!("{}", val);
 }
 
-pub extern "C" fn aether_native_print_str(ptr: *const u8, len: usize) {
+/// Prints a UTF-8 byte slice provided by compiled native code.
+///
+/// # Safety
+/// `ptr` must point to at least `len` readable bytes if non-null and `len > 0`.
+pub unsafe extern "C" fn aether_native_print_str(ptr: *const u8, len: usize) {
     if !ptr.is_null() && len > 0 {
         let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
         if let Ok(s) = std::str::from_utf8(slice) {
@@ -49,7 +53,11 @@ pub extern "C" fn aether_native_print_str(ptr: *const u8, len: usize) {
     }
 }
 
-pub extern "C" fn aether_native_println_str(ptr: *const u8, len: usize) {
+/// Prints a UTF-8 byte slice followed by a newline from compiled native code.
+///
+/// # Safety
+/// `ptr` must point to at least `len` readable bytes if non-null and `len > 0`.
+pub unsafe extern "C" fn aether_native_println_str(ptr: *const u8, len: usize) {
     if !ptr.is_null() && len > 0 {
         let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
         if let Ok(s) = std::str::from_utf8(slice) {

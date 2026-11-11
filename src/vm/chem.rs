@@ -447,36 +447,51 @@ impl Molecule {
 
         // 1. Reactive warhead / Electrophilic Michael Acceptor (Covalent modifier alert)
         if s.contains("C(=O)C=C") || s.contains("C=CC(=O)") {
-            alerts.push(Value::string("Reactive Electrophile (Michael Acceptor / Acrylamide)"));
+            alerts.push(Value::string(
+                "Reactive Electrophile (Michael Acceptor / Acrylamide)",
+            ));
         }
 
         // 2. Aromatic Nitro (Ames Mutagenicity Alert)
         if s.contains("N(=O)=O") || s.contains("[N+](=O)[O-]") {
-            alerts.push(Value::string("Aromatic Nitro (Potential Mutagenicity / Carcinogenicity)"));
+            alerts.push(Value::string(
+                "Aromatic Nitro (Potential Mutagenicity / Carcinogenicity)",
+            ));
         }
 
         // 3. Aliphatic Alkyl Halide (DNA Alkylation Risk)
         let has_aliphatic_halide = self.atoms.iter().any(|a| {
             matches!(a.symbol.as_str(), "Cl" | "Br" | "I")
-                && a.neighbors.iter().any(|(n_idx, _)| !self.atoms[*n_idx].is_aromatic && self.atoms[*n_idx].symbol == "C")
+                && a.neighbors.iter().any(|(n_idx, _)| {
+                    !self.atoms[*n_idx].is_aromatic && self.atoms[*n_idx].symbol == "C"
+                })
         });
         if has_aliphatic_halide {
-            alerts.push(Value::string("Aliphatic Alkyl Halide (DNA Alkylating Potential)"));
+            alerts.push(Value::string(
+                "Aliphatic Alkyl Halide (DNA Alkylating Potential)",
+            ));
         }
 
         // 4. Quinone / Catechol (PAINS Redox Cycling Alert)
         if s.contains("C1=CC(=O)C=CC1=O") || s.contains("Oc1c(O)cccc1") {
-            alerts.push(Value::string("PAINS Alert: Quinone / Catechol (Redox Cycling & Protein Aggregation)"));
+            alerts.push(Value::string(
+                "PAINS Alert: Quinone / Catechol (Redox Cycling & Protein Aggregation)",
+            ));
         }
 
         // 5. Rhodanine core (PAINS Assay Interferer)
         if s.contains("SC(=S)N") || s.contains("C=C1SC(=O)NC1=O") {
-            alerts.push(Value::string("PAINS Alert: Rhodanine / Thiazolidinedione (Assay Interference)"));
+            alerts.push(Value::string(
+                "PAINS Alert: Rhodanine / Thiazolidinedione (Assay Interference)",
+            ));
         }
 
         // 6. hERG Cardiotoxicity Risk (High lipophilicity + basic aliphatic nitrogen)
         let has_basic_nitrogen = self.atoms.iter().any(|a| {
-            a.symbol == "N" && !a.is_aromatic && a.neighbors.len() >= 2 && a.neighbors.iter().all(|(_, b)| *b <= 1.1)
+            a.symbol == "N"
+                && !a.is_aromatic
+                && a.neighbors.len() >= 2
+                && a.neighbors.iter().all(|(_, b)| *b <= 1.1)
         });
         let herg_risk = if logp > 3.8 && has_basic_nitrogen {
             "High (hERG Potassium Channel Block Risk)"
@@ -496,14 +511,19 @@ impl Molecule {
         };
 
         let pains_free = !alerts.iter().any(|a| a.to_string().contains("PAINS"));
-        let is_safe = alerts.is_empty() && (herg_risk == "Low" || herg_risk.starts_with("Moderate")) && (hep_risk == "Low" || hep_risk == "Moderate");
+        let is_safe = alerts.is_empty()
+            && (herg_risk == "Low" || herg_risk.starts_with("Moderate"))
+            && (hep_risk == "Low" || hep_risk == "Moderate");
 
         let mut res = HashMap::new();
         res.insert("is_safe".to_string(), Value::Bool(is_safe));
         res.insert("pains_free".to_string(), Value::Bool(pains_free));
         res.insert("alert_count".to_string(), Value::Int(alerts.len() as i64));
         res.insert("alerts".to_string(), Value::array(alerts));
-        res.insert("herg_cardiotoxicity_risk".to_string(), Value::string(herg_risk));
+        res.insert(
+            "herg_cardiotoxicity_risk".to_string(),
+            Value::string(herg_risk),
+        );
         res.insert("hepatotoxicity_risk".to_string(), Value::string(hep_risk));
 
         res
@@ -640,7 +660,10 @@ fn parse_atom_symbol(slice: &[char]) -> Result<(String, bool, usize), String> {
         return Ok((ch.to_string(), false, 1));
     }
 
-    Err(format!("ChemError: Unsupported atom token '{}' in SMILES", ch))
+    Err(format!(
+        "ChemError: Unsupported atom token '{}' in SMILES",
+        ch
+    ))
 }
 
 pub fn tanimoto_similarity(fp1: &[f64], fp2: &[f64]) -> f64 {
@@ -696,7 +719,10 @@ pub fn extract_molecule(val: &Value) -> Result<Arc<Molecule>, String> {
             if let Some(Value::Int(id)) = map.get("_chem_mol") {
                 let reg = get_chem_registry().lock();
                 reg.get(&(*id as u64)).cloned().ok_or_else(|| {
-                    format!("ChemError: Molecule handle #{} not found or deallocated", id)
+                    format!(
+                        "ChemError: Molecule handle #{} not found or deallocated",
+                        id
+                    )
                 })
             } else {
                 Err("ChemError: Expected a Chem.Molecule object".into())

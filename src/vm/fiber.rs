@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, Condvar, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 
 pub type FiberTask = Box<dyn FnOnce() + Send + 'static>;
@@ -89,7 +89,9 @@ impl WorkStealingScheduler {
                         // 3. Idle wait
                         let q = my_queue.tasks.lock().unwrap();
                         if q.is_empty() && !is_shutdown.load(Ordering::Relaxed) {
-                            let _ = my_queue.cv.wait_timeout(q, std::time::Duration::from_millis(20));
+                            let _ = my_queue
+                                .cv
+                                .wait_timeout(q, std::time::Duration::from_millis(20));
                         }
                     }
                 })

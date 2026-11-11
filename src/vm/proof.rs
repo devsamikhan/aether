@@ -4,9 +4,9 @@
 // Pure Rust Standard Library (Zero Third-Party Crates)
 // ==============================================================================
 
+use super::value::Value;
 use crate::syntax::ast::*;
 use crate::syntax::parse;
-use super::value::Value;
 use std::collections::HashMap;
 
 // ==============================================================================
@@ -78,11 +78,19 @@ impl SymExpr {
             SymExpr::Mul(a, b) => Some(a.evaluate(env)? * b.evaluate(env)?),
             SymExpr::Div(a, b) => {
                 let denom = b.evaluate(env)?;
-                if denom == 0 { None } else { Some(a.evaluate(env)? / denom) }
+                if denom == 0 {
+                    None
+                } else {
+                    Some(a.evaluate(env)? / denom)
+                }
             }
             SymExpr::Mod(a, b) => {
                 let denom = b.evaluate(env)?;
-                if denom == 0 { None } else { Some(a.evaluate(env)? % denom) }
+                if denom == 0 {
+                    None
+                } else {
+                    Some(a.evaluate(env)? % denom)
+                }
             }
         }
     }
@@ -160,32 +168,32 @@ impl ConstraintSolver {
 
     fn refine_domains(&mut self, c: &Constraint) -> bool {
         match c {
-            Constraint::Ge(SymExpr::Var(v), SymExpr::Const(k)) |
-            Constraint::Le(SymExpr::Const(k), SymExpr::Var(v)) => {
+            Constraint::Ge(SymExpr::Var(v), SymExpr::Const(k))
+            | Constraint::Le(SymExpr::Const(k), SymExpr::Var(v)) => {
                 let dom = self.domains.entry(v.clone()).or_default();
                 dom.min = dom.min.max(*k);
                 dom.min <= dom.max
             }
-            Constraint::Gt(SymExpr::Var(v), SymExpr::Const(k)) |
-            Constraint::Lt(SymExpr::Const(k), SymExpr::Var(v)) => {
+            Constraint::Gt(SymExpr::Var(v), SymExpr::Const(k))
+            | Constraint::Lt(SymExpr::Const(k), SymExpr::Var(v)) => {
                 let dom = self.domains.entry(v.clone()).or_default();
                 dom.min = dom.min.max(*k + 1);
                 dom.min <= dom.max
             }
-            Constraint::Le(SymExpr::Var(v), SymExpr::Const(k)) |
-            Constraint::Ge(SymExpr::Const(k), SymExpr::Var(v)) => {
+            Constraint::Le(SymExpr::Var(v), SymExpr::Const(k))
+            | Constraint::Ge(SymExpr::Const(k), SymExpr::Var(v)) => {
                 let dom = self.domains.entry(v.clone()).or_default();
                 dom.max = dom.max.min(*k);
                 dom.min <= dom.max
             }
-            Constraint::Lt(SymExpr::Var(v), SymExpr::Const(k)) |
-            Constraint::Gt(SymExpr::Const(k), SymExpr::Var(v)) => {
+            Constraint::Lt(SymExpr::Var(v), SymExpr::Const(k))
+            | Constraint::Gt(SymExpr::Const(k), SymExpr::Var(v)) => {
                 let dom = self.domains.entry(v.clone()).or_default();
                 dom.max = dom.max.min(*k - 1);
                 dom.min <= dom.max
             }
-            Constraint::Eq(SymExpr::Var(v), SymExpr::Const(k)) |
-            Constraint::Eq(SymExpr::Const(k), SymExpr::Var(v)) => {
+            Constraint::Eq(SymExpr::Var(v), SymExpr::Const(k))
+            | Constraint::Eq(SymExpr::Const(k), SymExpr::Var(v)) => {
                 let dom = self.domains.entry(v.clone()).or_default();
                 dom.min = dom.min.max(*k);
                 dom.max = dom.max.min(*k);
@@ -231,7 +239,10 @@ impl ConstraintSolver {
         current_env: &mut HashMap<String, i64>,
     ) -> bool {
         if idx == vars.len() {
-            return self.constraints.iter().all(|c| c.is_satisfied(current_env) == Some(true));
+            return self
+                .constraints
+                .iter()
+                .all(|c| c.is_satisfied(current_env) == Some(true));
         }
 
         let var = &vars[idx];
@@ -268,18 +279,29 @@ pub struct SymbolicVerifier {
 
 impl SymbolicVerifier {
     pub fn new() -> Self {
-        Self { reports: Vec::new() }
+        Self {
+            reports: Vec::new(),
+        }
     }
 
     pub fn verify_program(&mut self, program: &Program) -> &[VerificationReport] {
         for stmt in &program.statements {
             match stmt {
-                Statement::IntentDef { name, params, require, ensure, body, .. } => {
+                Statement::IntentDef {
+                    name,
+                    params,
+                    require,
+                    ensure,
+                    body,
+                    ..
+                } => {
                     let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
                     let report = self.verify_function(name, &param_names, require, ensure, body);
                     self.reports.push(report);
                 }
-                Statement::FnDef { name, params, body, .. } => {
+                Statement::FnDef {
+                    name, params, body, ..
+                } => {
                     let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
                     let report = self.verify_function(name, &param_names, &[], &[], body);
                     self.reports.push(report);
@@ -310,7 +332,8 @@ impl SymbolicVerifier {
             }
         }
 
-        let mut paths: Vec<(HashMap<String, SymExpr>, ConstraintSolver, Option<SymExpr>)> = Vec::new();
+        let mut paths: Vec<(HashMap<String, SymExpr>, ConstraintSolver, Option<SymExpr>)> =
+            Vec::new();
         let mut vulnerabilities = Vec::new();
 
         Self::explore_block(
@@ -324,7 +347,10 @@ impl SymbolicVerifier {
         let paths_explored = paths.len().max(1);
         let mut is_verified = true;
         let mut counter_example = None;
-        let mut diagnostic = format!("Mathematical Proof: Verified {} execution paths.", paths_explored);
+        let mut diagnostic = format!(
+            "Mathematical Proof: Verified {} execution paths.",
+            paths_explored
+        );
 
         // Verify postconditions across all feasible paths
         if !ensure.is_empty() {
@@ -358,7 +384,10 @@ impl SymbolicVerifier {
         }
 
         if is_verified && !vulnerabilities.is_empty() {
-            diagnostic = format!("Verified contracts, but detected {} potential vulnerabilities.", vulnerabilities.len());
+            diagnostic = format!(
+                "Verified contracts, but detected {} potential vulnerabilities.",
+                vulnerabilities.len()
+            );
         }
 
         VerificationReport {
@@ -382,7 +411,9 @@ impl SymbolicVerifier {
 
         for stmt in &block.statements {
             match stmt {
-                Statement::Let { name, initializer, .. } => {
+                Statement::Let {
+                    name, initializer, ..
+                } => {
                     let val = if let Some(init) = initializer {
                         Self::eval_sym_expr(init, &env, vulnerabilities)
                     } else {
@@ -390,23 +421,37 @@ impl SymbolicVerifier {
                     };
                     env.insert(name.clone(), val);
                 }
-                Statement::Assign { target, op, value, .. } => {
+                Statement::Assign {
+                    target, op, value, ..
+                } => {
                     let rhs = Self::eval_sym_expr(value, &env, vulnerabilities);
                     if let Expr::Ident(name, _) = target {
                         let curr = env.get(name).cloned().unwrap_or(SymExpr::Const(0));
                         let new_val = match op {
                             AssignOp::Assign => rhs,
-                            AssignOp::AddAssign => SymExpr::Add(Box::new(curr), Box::new(rhs)).simplify(),
-                            AssignOp::SubAssign => SymExpr::Sub(Box::new(curr), Box::new(rhs)).simplify(),
-                            AssignOp::MulAssign => SymExpr::Mul(Box::new(curr), Box::new(rhs)).simplify(),
-                            AssignOp::DivAssign => SymExpr::Div(Box::new(curr), Box::new(rhs)).simplify(),
-                            AssignOp::ModAssign => SymExpr::Mod(Box::new(curr), Box::new(rhs)).simplify(),
+                            AssignOp::AddAssign => {
+                                SymExpr::Add(Box::new(curr), Box::new(rhs)).simplify()
+                            }
+                            AssignOp::SubAssign => {
+                                SymExpr::Sub(Box::new(curr), Box::new(rhs)).simplify()
+                            }
+                            AssignOp::MulAssign => {
+                                SymExpr::Mul(Box::new(curr), Box::new(rhs)).simplify()
+                            }
+                            AssignOp::DivAssign => {
+                                SymExpr::Div(Box::new(curr), Box::new(rhs)).simplify()
+                            }
+                            AssignOp::ModAssign => {
+                                SymExpr::Mod(Box::new(curr), Box::new(rhs)).simplify()
+                            }
                         };
                         env.insert(name.clone(), new_val);
                     }
                 }
                 Statement::Return { value, .. } => {
-                    let ret = value.as_ref().map(|v| Self::eval_sym_expr(v, &env, vulnerabilities));
+                    let ret = value
+                        .as_ref()
+                        .map(|v| Self::eval_sym_expr(v, &env, vulnerabilities));
                     paths.push((env.clone(), solver.clone(), ret));
                     returned = true;
                     break;
@@ -416,7 +461,10 @@ impl SymbolicVerifier {
         }
 
         if !returned {
-            let ret = block.result.as_ref().map(|r| Self::eval_sym_expr(r, &env, vulnerabilities));
+            let ret = block
+                .result
+                .as_ref()
+                .map(|r| Self::eval_sym_expr(r, &env, vulnerabilities));
             paths.push((env, solver, ret));
         }
     }
@@ -441,13 +489,19 @@ impl SymbolicVerifier {
                     BinaryOp::Mul => SymExpr::Mul(Box::new(l), Box::new(r)).simplify(),
                     BinaryOp::Div => {
                         if let SymExpr::Const(0) = &r {
-                            vulnerabilities.push(format!("Division by Zero Vulnerability at line {}: divisor evaluates to 0", span.line));
+                            vulnerabilities.push(format!(
+                                "Division by Zero Vulnerability at line {}: divisor evaluates to 0",
+                                span.line
+                            ));
                         }
                         SymExpr::Div(Box::new(l), Box::new(r)).simplify()
                     }
                     BinaryOp::Mod => {
                         if let SymExpr::Const(0) = &r {
-                            vulnerabilities.push(format!("Modulo by Zero Vulnerability at line {}: divisor evaluates to 0", span.line));
+                            vulnerabilities.push(format!(
+                                "Modulo by Zero Vulnerability at line {}: divisor evaluates to 0",
+                                span.line
+                            ));
                         }
                         SymExpr::Mod(Box::new(l), Box::new(r)).simplify()
                     }
@@ -494,36 +548,46 @@ pub fn register_proof_module(globals: &mut HashMap<String, Value>) {
                 return Err("Proof.verify(source) requires source code string".into());
             }
             let src = args[0].to_string();
-            let program = parse(&src).map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
+            let program =
+                parse(&src).map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
 
             let mut verifier = SymbolicVerifier::new();
             let reports = verifier.verify_program(&program);
 
-            let val_reports: Vec<Value> = reports.iter().map(|r| {
-                let mut map = HashMap::new();
-                map.insert("function".to_string(), Value::string(r.function_name.clone()));
-                map.insert("verified".to_string(), Value::Bool(r.is_verified));
-                map.insert("paths".to_string(), Value::Int(r.paths_explored as i64));
-                map.insert("diagnostic".to_string(), Value::string(r.diagnostic.clone()));
+            let val_reports: Vec<Value> = reports
+                .iter()
+                .map(|r| {
+                    let mut map = HashMap::new();
+                    map.insert(
+                        "function".to_string(),
+                        Value::string(r.function_name.clone()),
+                    );
+                    map.insert("verified".to_string(), Value::Bool(r.is_verified));
+                    map.insert("paths".to_string(), Value::Int(r.paths_explored as i64));
+                    map.insert(
+                        "diagnostic".to_string(),
+                        Value::string(r.diagnostic.clone()),
+                    );
 
-                let mut vulns = Vec::new();
-                for v in &r.vulnerabilities {
-                    vulns.push(Value::string(v.clone()));
-                }
-                map.insert("vulnerabilities".to_string(), Value::array(vulns));
-
-                if let Some(ce) = &r.counter_example {
-                    let mut ce_map = HashMap::new();
-                    for (k, v) in ce {
-                        ce_map.insert(k.clone(), Value::Int(*v));
+                    let mut vulns = Vec::new();
+                    for v in &r.vulnerabilities {
+                        vulns.push(Value::string(v.clone()));
                     }
-                    map.insert("counter_example".to_string(), Value::map(ce_map));
-                } else {
-                    map.insert("counter_example".to_string(), Value::Nil);
-                }
+                    map.insert("vulnerabilities".to_string(), Value::array(vulns));
 
-                Value::map(map)
-            }).collect();
+                    if let Some(ce) = &r.counter_example {
+                        let mut ce_map = HashMap::new();
+                        for (k, v) in ce {
+                            ce_map.insert(k.clone(), Value::Int(*v));
+                        }
+                        map.insert("counter_example".to_string(), Value::map(ce_map));
+                    } else {
+                        map.insert("counter_example".to_string(), Value::Nil);
+                    }
+
+                    Value::map(map)
+                })
+                .collect();
 
             Ok(Value::array(val_reports))
         }),

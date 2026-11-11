@@ -224,7 +224,10 @@ impl PropertyGraph {
 
         impl Ord for State {
             fn cmp(&self, other: &Self) -> Ordering {
-                other.cost.partial_cmp(&self.cost).unwrap_or(Ordering::Equal)
+                other
+                    .cost
+                    .partial_cmp(&self.cost)
+                    .unwrap_or(Ordering::Equal)
             }
         }
 
@@ -239,7 +242,10 @@ impl PropertyGraph {
         let mut heap = BinaryHeap::new();
 
         dist.insert(start_id, 0.0);
-        heap.push(State { cost: 0.0, node: start_id });
+        heap.push(State {
+            cost: 0.0,
+            node: start_id,
+        });
 
         while let Some(State { cost, node }) = heap.pop() {
             if node == target_id {
@@ -267,7 +273,10 @@ impl PropertyGraph {
                         if next_cost < *dist.get(&next).unwrap_or(&f64::INFINITY) {
                             dist.insert(next, next_cost);
                             prev.insert(next, node);
-                            heap.push(State { cost: next_cost, node: next });
+                            heap.push(State {
+                                cost: next_cost,
+                                node: next,
+                            });
                         }
                     }
                 }
@@ -376,7 +385,10 @@ fn get_registry() -> &'static Mutex<HashMap<u64, Arc<Mutex<PropertyGraph>>>> {
 pub fn create_graph(name: &str) -> u64 {
     let id = NEXT_GRAPH_ID.fetch_add(1, AtomicOrdering::SeqCst);
     let graph = PropertyGraph::new(id, name.to_string());
-    get_registry().lock().unwrap().insert(id, Arc::new(Mutex::new(graph)));
+    get_registry()
+        .lock()
+        .unwrap()
+        .insert(id, Arc::new(Mutex::new(graph)));
     id
 }
 
@@ -400,7 +412,11 @@ pub fn register_graph_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "create".to_string(),
         Value::Native("Graph.create".into(), |args| {
-            let name = if !args.is_empty() { args[0].to_string() } else { "graph".to_string() };
+            let name = if !args.is_empty() {
+                args[0].to_string()
+            } else {
+                "graph".to_string()
+            };
             let id = create_graph(&name);
             Ok(Value::Int(id as i64))
         }),
@@ -538,18 +554,31 @@ pub fn register_graph_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "pagerank".to_string(),
         Value::Native("Graph.pagerank".into(), |args| {
-            if args.is_empty() { return Err("Graph.pagerank(graph_id) requires graph_id".into()); }
+            if args.is_empty() {
+                return Err("Graph.pagerank(graph_id) requires graph_id".into());
+            }
             let gid = match args[0] {
                 Value::Int(i) => i as u64,
                 _ => return Err("graph_id must be integer".into()),
             };
             let iters = if args.len() > 1 {
-                match args[1] { Value::Int(i) => i as usize, _ => 20 }
-            } else { 20 };
+                match args[1] {
+                    Value::Int(i) => i as usize,
+                    _ => 20,
+                }
+            } else {
+                20
+            };
 
             let damping = if args.len() > 2 {
-                match args[2] { Value::Float(f) => f, Value::Int(i) => i as f64, _ => 0.85 }
-            } else { 0.85 };
+                match args[2] {
+                    Value::Float(f) => f,
+                    Value::Int(i) => i as f64,
+                    _ => 0.85,
+                }
+            } else {
+                0.85
+            };
 
             let g_arc = get_graph(gid)?;
             let g = g_arc.lock().unwrap();
@@ -567,10 +596,27 @@ pub fn register_graph_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "bfs".to_string(),
         Value::Native("Graph.bfs".into(), |args| {
-            if args.len() < 2 { return Err("Graph.bfs(graph_id, start_id, [depth]) requires at least 2 arguments".into()); }
-            let gid = match args[0] { Value::Int(i) => i as u64, _ => return Err("graph_id must be integer".into()) };
-            let start = match args[1] { Value::Int(i) => i as u64, _ => return Err("start_id must be integer".into()) };
-            let depth = if args.len() > 2 { match args[2] { Value::Int(i) => i as usize, _ => 10 } } else { 10 };
+            if args.len() < 2 {
+                return Err(
+                    "Graph.bfs(graph_id, start_id, [depth]) requires at least 2 arguments".into(),
+                );
+            }
+            let gid = match args[0] {
+                Value::Int(i) => i as u64,
+                _ => return Err("graph_id must be integer".into()),
+            };
+            let start = match args[1] {
+                Value::Int(i) => i as u64,
+                _ => return Err("start_id must be integer".into()),
+            };
+            let depth = if args.len() > 2 {
+                match args[2] {
+                    Value::Int(i) => i as usize,
+                    _ => 10,
+                }
+            } else {
+                10
+            };
 
             let g_arc = get_graph(gid)?;
             let g = g_arc.lock().unwrap();
@@ -584,10 +630,27 @@ pub fn register_graph_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "dfs".to_string(),
         Value::Native("Graph.dfs".into(), |args| {
-            if args.len() < 2 { return Err("Graph.dfs(graph_id, start_id, [depth]) requires at least 2 arguments".into()); }
-            let gid = match args[0] { Value::Int(i) => i as u64, _ => return Err("graph_id must be integer".into()) };
-            let start = match args[1] { Value::Int(i) => i as u64, _ => return Err("start_id must be integer".into()) };
-            let depth = if args.len() > 2 { match args[2] { Value::Int(i) => i as usize, _ => 10 } } else { 10 };
+            if args.len() < 2 {
+                return Err(
+                    "Graph.dfs(graph_id, start_id, [depth]) requires at least 2 arguments".into(),
+                );
+            }
+            let gid = match args[0] {
+                Value::Int(i) => i as u64,
+                _ => return Err("graph_id must be integer".into()),
+            };
+            let start = match args[1] {
+                Value::Int(i) => i as u64,
+                _ => return Err("start_id must be integer".into()),
+            };
+            let depth = if args.len() > 2 {
+                match args[2] {
+                    Value::Int(i) => i as usize,
+                    _ => 10,
+                }
+            } else {
+                10
+            };
 
             let g_arc = get_graph(gid)?;
             let g = g_arc.lock().unwrap();

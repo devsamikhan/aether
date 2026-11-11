@@ -26,26 +26,34 @@ pub fn allocate_agent(name: &str, role: &str) -> u64 {
 
 pub fn agent_chat(id: u64, prompt: &str) -> Result<String, String> {
     let mut reg = get_agent_registry().lock().unwrap();
-    let agent = reg.get_mut(&id).ok_or_else(|| format!("Agent with ID {} not found", id))?;
+    let agent = reg
+        .get_mut(&id)
+        .ok_or_else(|| format!("Agent with ID {} not found", id))?;
     Ok(agent.chat(prompt))
 }
 
 pub fn agent_add_knowledge(id: u64, text: &str) -> Result<(), String> {
     let mut reg = get_agent_registry().lock().unwrap();
-    let agent = reg.get_mut(&id).ok_or_else(|| format!("Agent with ID {} not found", id))?;
+    let agent = reg
+        .get_mut(&id)
+        .ok_or_else(|| format!("Agent with ID {} not found", id))?;
     agent.add_knowledge(text);
     Ok(())
 }
 
 pub fn agent_get_history(id: u64) -> Result<Vec<(String, String)>, String> {
     let reg = get_agent_registry().lock().unwrap();
-    let agent = reg.get(&id).ok_or_else(|| format!("Agent with ID {} not found", id))?;
+    let agent = reg
+        .get(&id)
+        .ok_or_else(|| format!("Agent with ID {} not found", id))?;
     Ok(agent.history.clone())
 }
 
 pub fn agent_clear(id: u64) -> Result<(), String> {
     let mut reg = get_agent_registry().lock().unwrap();
-    let agent = reg.get_mut(&id).ok_or_else(|| format!("Agent with ID {} not found", id))?;
+    let agent = reg
+        .get_mut(&id)
+        .ok_or_else(|| format!("Agent with ID {} not found", id))?;
     agent.clear_history();
     Ok(())
 }
@@ -75,7 +83,9 @@ pub fn generate_embedding(text: &str) -> Vec<f64> {
             let pos_enc = (pos as f64 * freq).sin();
 
             // Word hash projection
-            let h_proj = (((word_hash.wrapping_mul((dim + 1) as u64) >> 16) & 0xFFF) as f64 - 2048.0) / 2048.0;
+            let h_proj = (((word_hash.wrapping_mul((dim + 1) as u64) >> 16) & 0xFFF) as f64
+                - 2048.0)
+                / 2048.0;
             vec[dim] += h_proj + pos_enc * 0.2;
         }
 
@@ -142,7 +152,9 @@ pub struct VectorRagStore {
 
 impl VectorRagStore {
     pub fn new() -> Self {
-        Self { documents: Vec::new() }
+        Self {
+            documents: Vec::new(),
+        }
     }
 
     pub fn add(&mut self, text: &str) -> usize {
@@ -220,7 +232,10 @@ impl LocalAgent {
             format!("I am {}, an autonomous on-device AI Agent running natively on the AETHER 2.0 VM runtime without external dependencies.{}", self.name, context_addon)
         } else if lower.contains("syntax") || lower.contains("aether") {
             format!("AETHER 2.0 combines Python-like zero-ceremony syntax with native C/C++ execution speed: functions use `fn` or `def`, variables use `let`, intents use `intent require: ensure:`, and pipelines use `|>`.{}", context_addon)
-        } else if lower.contains("performance") || lower.contains("fast") || lower.contains("benchmark") {
+        } else if lower.contains("performance")
+            || lower.contains("fast")
+            || lower.contains("benchmark")
+        {
             format!("AETHER compiles ahead-of-time (AOT) to native machine code via Cranelift and runs unboxed values in a zero-garbage bytecode VM, beating CPython by 4x to 6x.{}", context_addon)
         } else if lower.contains("mobile") || lower.contains("android") || lower.contains("apk") {
             format!("AETHER includes a pure-Rust Zero-SDK Dalvik DEX assembler and APK packager, allowing 1-click builds and deployments to Android devices without Android Studio or Gradle.{}", context_addon)

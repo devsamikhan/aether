@@ -10,13 +10,21 @@ readme = "README.md"
 keywords = ["compiler", "programming-language", "rust", "crdt"]
 categories = ["compilers", "development-tools"]
 
+[features]
+default = []
+python-interop = ["dep:pyo3"]
+
 [dependencies]
 # Core dependencies
 clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-pyo3 = { version = "0.21", features = ["auto-initialize", "macros", "abi3-py38"] }
+pyo3 = { version = "0.21", features = ["auto-initialize", "macros", "abi3-py38"], optional = true }
+
+# Pure-Rust HTTPS/TLS (zero external OpenSSL system dependency)
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1.0"
 
 # For CRDT library
 hashbrown = "0.14"
@@ -57,6 +65,10 @@ strip = true
 [[bin]]
 name = "aether"
 path = "src/main.rs"
+
+[[test]]
+name = "python_interop_tests"
+required-features = ["python-interop"]
 
 [lib]
 name = "aether"

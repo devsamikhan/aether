@@ -48,9 +48,9 @@ impl TypedColumn {
             TypedColumn::Float(v) => v.get(idx).map(|&f| Value::Float(f)),
             TypedColumn::String(v) => v.get(idx).map(|s| Value::string(s.clone())),
             TypedColumn::Bool(v) => v.get(idx).map(|&b| Value::Bool(b)),
-            TypedColumn::Vector(v) => v.get(idx).map(|vec| {
-                Value::array(vec.iter().map(|&f| Value::Float(f)).collect())
-            }),
+            TypedColumn::Vector(v) => v
+                .get(idx)
+                .map(|vec| Value::array(vec.iter().map(|&f| Value::Float(f)).collect())),
         }
     }
 
@@ -60,9 +60,10 @@ impl TypedColumn {
             TypedColumn::Float(v) => v.iter().map(|&f| Value::Float(f)).collect(),
             TypedColumn::String(v) => v.iter().map(|s| Value::string(s.clone())).collect(),
             TypedColumn::Bool(v) => v.iter().map(|&b| Value::Bool(b)).collect(),
-            TypedColumn::Vector(v) => v.iter().map(|vec| {
-                Value::array(vec.iter().map(|&f| Value::Float(f)).collect())
-            }).collect(),
+            TypedColumn::Vector(v) => v
+                .iter()
+                .map(|vec| Value::array(vec.iter().map(|&f| Value::Float(f)).collect()))
+                .collect(),
         }
     }
 
@@ -92,11 +93,15 @@ impl TypedColumn {
             for v in vals {
                 match v {
                     Value::Array(arr) => {
-                        let f_vec = arr.lock().iter().map(|item| match item {
-                            Value::Float(f) => *f,
-                            Value::Int(i) => *i as f64,
-                            _ => 0.0,
-                        }).collect();
+                        let f_vec = arr
+                            .lock()
+                            .iter()
+                            .map(|item| match item {
+                                Value::Float(f) => *f,
+                                Value::Int(i) => *i as f64,
+                                _ => 0.0,
+                            })
+                            .collect();
                         vecs.push(f_vec);
                     }
                     _ => vecs.push(Vec::new()),
@@ -141,23 +146,43 @@ impl TypedColumn {
     pub fn filter_by_mask(&self, mask: &[bool]) -> Self {
         match self {
             TypedColumn::Int(v) => {
-                let filtered = v.iter().zip(mask).filter_map(|(&n, &m)| if m { Some(n) } else { None }).collect();
+                let filtered = v
+                    .iter()
+                    .zip(mask)
+                    .filter_map(|(&n, &m)| if m { Some(n) } else { None })
+                    .collect();
                 TypedColumn::Int(filtered)
             }
             TypedColumn::Float(v) => {
-                let filtered = v.iter().zip(mask).filter_map(|(&f, &m)| if m { Some(f) } else { None }).collect();
+                let filtered = v
+                    .iter()
+                    .zip(mask)
+                    .filter_map(|(&f, &m)| if m { Some(f) } else { None })
+                    .collect();
                 TypedColumn::Float(filtered)
             }
             TypedColumn::String(v) => {
-                let filtered = v.iter().zip(mask).filter_map(|(s, &m)| if m { Some(s.clone()) } else { None }).collect();
+                let filtered = v
+                    .iter()
+                    .zip(mask)
+                    .filter_map(|(s, &m)| if m { Some(s.clone()) } else { None })
+                    .collect();
                 TypedColumn::String(filtered)
             }
             TypedColumn::Bool(v) => {
-                let filtered = v.iter().zip(mask).filter_map(|(&b, &m)| if m { Some(b) } else { None }).collect();
+                let filtered = v
+                    .iter()
+                    .zip(mask)
+                    .filter_map(|(&b, &m)| if m { Some(b) } else { None })
+                    .collect();
                 TypedColumn::Bool(filtered)
             }
             TypedColumn::Vector(v) => {
-                let filtered = v.iter().zip(mask).filter_map(|(vec, &m)| if m { Some(vec.clone()) } else { None }).collect();
+                let filtered = v
+                    .iter()
+                    .zip(mask)
+                    .filter_map(|(vec, &m)| if m { Some(vec.clone()) } else { None })
+                    .collect();
                 TypedColumn::Vector(filtered)
             }
         }
@@ -167,9 +192,13 @@ impl TypedColumn {
         match self {
             TypedColumn::Int(v) => TypedColumn::Int(indices.iter().map(|&i| v[i]).collect()),
             TypedColumn::Float(v) => TypedColumn::Float(indices.iter().map(|&i| v[i]).collect()),
-            TypedColumn::String(v) => TypedColumn::String(indices.iter().map(|&i| v[i].clone()).collect()),
+            TypedColumn::String(v) => {
+                TypedColumn::String(indices.iter().map(|&i| v[i].clone()).collect())
+            }
             TypedColumn::Bool(v) => TypedColumn::Bool(indices.iter().map(|&i| v[i]).collect()),
-            TypedColumn::Vector(v) => TypedColumn::Vector(indices.iter().map(|&i| v[i].clone()).collect()),
+            TypedColumn::Vector(v) => {
+                TypedColumn::Vector(indices.iter().map(|&i| v[i].clone()).collect())
+            }
         }
     }
 
@@ -201,7 +230,9 @@ impl TypedColumn {
         match self {
             TypedColumn::Int(v) => Value::Float(v.iter().sum::<i64>() as f64 / v.len() as f64),
             TypedColumn::Float(v) => Value::Float(v.iter().sum::<f64>() / v.len() as f64),
-            TypedColumn::Bool(v) => Value::Float(v.iter().filter(|&&b| b).count() as f64 / v.len() as f64),
+            TypedColumn::Bool(v) => {
+                Value::Float(v.iter().filter(|&&b| b).count() as f64 / v.len() as f64)
+            }
             TypedColumn::String(_) | TypedColumn::Vector(_) => Value::Nil,
         }
     }
@@ -225,7 +256,9 @@ impl TypedColumn {
         }
         match self {
             TypedColumn::Int(v) => Value::Int(*v.iter().max().unwrap()),
-            TypedColumn::Float(v) => Value::Float(v.iter().cloned().fold(f64::NEG_INFINITY, f64::max)),
+            TypedColumn::Float(v) => {
+                Value::Float(v.iter().cloned().fold(f64::NEG_INFINITY, f64::max))
+            }
             TypedColumn::String(v) => Value::string(v.iter().max().cloned().unwrap_or_default()),
             TypedColumn::Bool(v) => Value::Bool(*v.iter().max().unwrap()),
             TypedColumn::Vector(_) => Value::Nil,
@@ -331,7 +364,10 @@ impl NativeDataFrame {
     }
 
     pub fn sort_by(&self, col_name: &str, descending: bool) -> Result<Self, String> {
-        let col = self.columns.get(col_name).ok_or_else(|| format!("Column '{}' not found", col_name))?;
+        let col = self
+            .columns
+            .get(col_name)
+            .ok_or_else(|| format!("Column '{}' not found", col_name))?;
         let mut indices: Vec<usize> = (0..self.row_count).collect();
 
         match col {
@@ -392,7 +428,10 @@ impl NativeDataFrame {
     }
 
     pub fn group_by(&self, by_col: &str, aggs: &HashMap<String, String>) -> Result<Self, String> {
-        let group_col = self.columns.get(by_col).ok_or_else(|| format!("Column '{}' not found for group_by", by_col))?;
+        let group_col = self
+            .columns
+            .get(by_col)
+            .ok_or_else(|| format!("Column '{}' not found for group_by", by_col))?;
 
         // 1. Build buckets of row indices by group key
         let mut buckets: HashMap<String, Vec<usize>> = HashMap::new();
@@ -423,8 +462,9 @@ impl NativeDataFrame {
 
         // 2. Compute aggregated metrics per bucket
         for (target_col_name, op_name) in aggs {
-            let src_col = self.columns.get(target_col_name)
-                .ok_or_else(|| format!("Target aggregation column '{}' not found", target_col_name))?;
+            let src_col = self.columns.get(target_col_name).ok_or_else(|| {
+                format!("Target aggregation column '{}' not found", target_col_name)
+            })?;
 
             let result_col_name = format!("{}_{}", target_col_name, op_name);
             col_names.push(result_col_name.clone());
@@ -460,8 +500,14 @@ impl NativeDataFrame {
     }
 
     pub fn join(&self, other: &NativeDataFrame, on_key: &str, how: &str) -> Result<Self, String> {
-        let left_key_col = self.columns.get(on_key).ok_or_else(|| format!("Key '{}' not found in left DataFrame", on_key))?;
-        let right_key_col = other.columns.get(on_key).ok_or_else(|| format!("Key '{}' not found in right DataFrame", on_key))?;
+        let left_key_col = self
+            .columns
+            .get(on_key)
+            .ok_or_else(|| format!("Key '{}' not found in left DataFrame", on_key))?;
+        let right_key_col = other
+            .columns
+            .get(on_key)
+            .ok_or_else(|| format!("Key '{}' not found in right DataFrame", on_key))?;
 
         // Index right DataFrame by key
         let mut right_index: HashMap<String, Vec<usize>> = HashMap::new();
@@ -469,7 +515,10 @@ impl NativeDataFrame {
             let k = match right_key_col {
                 TypedColumn::String(v) => v[i].clone(),
                 TypedColumn::Int(v) => v[i].to_string(),
-                _ => right_key_col.get(i).map(|v| v.to_string()).unwrap_or_default(),
+                _ => right_key_col
+                    .get(i)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
             };
             right_index.entry(k).or_default().push(i);
         }
@@ -481,7 +530,10 @@ impl NativeDataFrame {
             let k = match left_key_col {
                 TypedColumn::String(v) => v[i].clone(),
                 TypedColumn::Int(v) => v[i].to_string(),
-                _ => left_key_col.get(i).map(|v| v.to_string()).unwrap_or_default(),
+                _ => left_key_col
+                    .get(i)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
             };
 
             if let Some(r_indices) = right_index.get(&k) {
@@ -546,7 +598,10 @@ impl NativeDataFrame {
         for row in 0..self.row_count {
             let mut row_items = Vec::with_capacity(self.column_names.len());
             for col_name in &self.column_names {
-                let s = self.columns[col_name].get(row).map(|v| v.to_string()).unwrap_or_default();
+                let s = self.columns[col_name]
+                    .get(row)
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
                 row_items.push(s);
             }
             out.push_str(&row_items.join(","));
@@ -556,13 +611,18 @@ impl NativeDataFrame {
     }
 
     pub fn from_csv(csv_str: &str) -> Result<Self, String> {
-        let lines: Vec<&str> = csv_str.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        let lines: Vec<&str> = csv_str
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
         if lines.is_empty() {
             return Ok(Self::new(Vec::new(), HashMap::new()));
         }
 
         let headers: Vec<String> = lines[0].split(',').map(|s| s.trim().to_string()).collect();
-        let mut raw_columns: Vec<Vec<String>> = vec![Vec::with_capacity(lines.len() - 1); headers.len()];
+        let mut raw_columns: Vec<Vec<String>> =
+            vec![Vec::with_capacity(lines.len() - 1); headers.len()];
 
         for line in &lines[1..] {
             let fields: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
@@ -650,7 +710,10 @@ fn get_dataframes() -> &'static Mutex<HashMap<u64, Arc<Mutex<NativeDataFrame>>>>
 
 pub fn register_df(df: NativeDataFrame) -> u64 {
     let id = NEXT_DF_ID.fetch_add(1, Ordering::SeqCst);
-    get_dataframes().lock().unwrap().insert(id, Arc::new(Mutex::new(df)));
+    get_dataframes()
+        .lock()
+        .unwrap()
+        .insert(id, Arc::new(Mutex::new(df)));
     id
 }
 
@@ -739,7 +802,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
         "select".to_string(),
         Value::Native("DataFrame.select".into(), |args| {
             if args.len() < 2 {
-                return Err("DataFrame.select(df_id, col_names) requires df_id and array of columns".into());
+                return Err(
+                    "DataFrame.select(df_id, col_names) requires df_id and array of columns".into(),
+                );
             }
             let df_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -790,7 +855,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
         "with_column".to_string(),
         Value::Native("DataFrame.with_column".into(), |args| {
             if args.len() < 3 {
-                return Err("DataFrame.with_column(df_id, name, values) requires 3 arguments".into());
+                return Err(
+                    "DataFrame.with_column(df_id, name, values) requires 3 arguments".into(),
+                );
             }
             let df_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -841,7 +908,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
         "group_by".to_string(),
         Value::Native("DataFrame.group_by".into(), |args| {
             if args.len() < 3 {
-                return Err("DataFrame.group_by(df_id, group_col, aggs) requires 3 arguments".into());
+                return Err(
+                    "DataFrame.group_by(df_id, group_col, aggs) requires 3 arguments".into(),
+                );
             }
             let df_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -849,8 +918,17 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
             };
             let group_col = args[1].to_string();
             let aggs: HashMap<String, String> = match &args[2] {
-                Value::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), v.to_string())).collect(),
-                _ => return Err("aggs must be a Map of column -> operation (e.g. {'salary': 'mean'})".into()),
+                Value::Map(m) => m
+                    .lock()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.to_string()))
+                    .collect(),
+                _ => {
+                    return Err(
+                        "aggs must be a Map of column -> operation (e.g. {'salary': 'mean'})"
+                            .into(),
+                    )
+                }
             };
 
             let df_arc = get_df(df_id)?;
@@ -925,7 +1003,11 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
             };
             let df_arc = get_df(df_id)?;
             let df = df_arc.lock().unwrap();
-            let items: Vec<Value> = df.column_names.iter().map(|s| Value::string(s.clone())).collect();
+            let items: Vec<Value> = df
+                .column_names
+                .iter()
+                .map(|s| Value::string(s.clone()))
+                .collect();
             Ok(Value::array(items))
         }),
     );
@@ -944,7 +1026,10 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
             let name = args[1].to_string();
             let df_arc = get_df(df_id)?;
             let df = df_arc.lock().unwrap();
-            let col = df.columns.get(&name).ok_or_else(|| format!("Column '{}' not found", name))?;
+            let col = df
+                .columns
+                .get(&name)
+                .ok_or_else(|| format!("Column '{}' not found", name))?;
             Ok(Value::array(col.to_values()))
         }),
     );
@@ -974,7 +1059,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
             for (name, col) in &df.columns {
                 new_cols.insert(name.clone(), col.slice(0, n));
             }
-            Ok(Value::Int(register_df(NativeDataFrame::new(df.column_names.clone(), new_cols)) as i64))
+            Ok(Value::Int(
+                register_df(NativeDataFrame::new(df.column_names.clone(), new_cols)) as i64,
+            ))
         }),
     );
 
@@ -1013,7 +1100,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
         "vec_op".to_string(),
         Value::Native("DataFrame.vec_op".into(), |args| {
             if args.len() < 3 {
-                return Err("DataFrame.vec_op(op, col_a, col_b_or_scalar) requires 3 arguments".into());
+                return Err(
+                    "DataFrame.vec_op(op, col_a, col_b_or_scalar) requires 3 arguments".into(),
+                );
             }
             let op = args[0].to_string();
 
@@ -1064,7 +1153,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
         "to_tensor_flat".to_string(),
         Value::Native("DataFrame.to_tensor_flat".into(), |args| {
             if args.len() < 2 {
-                return Err("DataFrame.to_tensor_flat(df_id, col_names) requires 2 arguments".into());
+                return Err(
+                    "DataFrame.to_tensor_flat(df_id, col_names) requires 2 arguments".into(),
+                );
             }
             let df_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -1084,7 +1175,9 @@ pub fn register_dataframe_module(globals: &mut HashMap<String, Value>) {
 
             for r in 0..rows {
                 for name in &col_names {
-                    let col = df.columns.get(name)
+                    let col = df
+                        .columns
+                        .get(name)
                         .ok_or_else(|| format!("Tensor conversion column '{}' not found", name))?;
                     let val = match col.get(r).unwrap_or(Value::Float(0.0)) {
                         Value::Float(f) => Value::Float(f),

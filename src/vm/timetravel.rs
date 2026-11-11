@@ -80,7 +80,8 @@ impl TimeTravelSession {
     pub fn record_mutation(&mut self, var_name: &str, new_val: Value) -> u64 {
         self.current_step += 1;
         let old_val = self.current_state.get(var_name).cloned();
-        self.current_state.insert(var_name.to_string(), new_val.clone());
+        self.current_state
+            .insert(var_name.to_string(), new_val.clone());
 
         self.deltas.push(StateDelta::VarMutation {
             step: self.current_step,
@@ -104,7 +105,8 @@ impl TimeTravelSession {
     pub fn create_checkpoint(&mut self, name: &str) -> u64 {
         self.current_step += 1;
         let snapshot = self.current_state.clone();
-        self.checkpoints.insert(name.to_string(), (self.current_step, snapshot.clone()));
+        self.checkpoints
+            .insert(name.to_string(), (self.current_step, snapshot.clone()));
 
         self.deltas.push(StateDelta::Checkpoint {
             step: self.current_step,
@@ -117,13 +119,18 @@ impl TimeTravelSession {
 
     /// Restores the exact state from a named checkpoint
     pub fn restore_checkpoint(&mut self, name: &str) -> Result<u64, String> {
-        let (step, snapshot) = self.checkpoints.get(name)
+        let (step, snapshot) = self
+            .checkpoints
+            .get(name)
             .cloned()
             .ok_or_else(|| format!("Checkpoint '{}' not found", name))?;
 
         self.current_state = snapshot;
         self.current_step += 1;
-        self.record_log(&format!("TimeTravel: Rewound to checkpoint '{}' at step {}", name, step));
+        self.record_log(&format!(
+            "TimeTravel: Rewound to checkpoint '{}' at step {}",
+            name, step
+        ));
         Ok(step)
     }
 
@@ -139,7 +146,9 @@ impl TimeTravelSession {
         while idx > 0 && rolled_back < steps {
             idx -= 1;
             match &self.deltas[idx] {
-                StateDelta::VarMutation { var_name, old_val, .. } => {
+                StateDelta::VarMutation {
+                    var_name, old_val, ..
+                } => {
                     match old_val {
                         Some(val) => {
                             self.current_state.insert(var_name.clone(), val.clone());
@@ -156,12 +165,16 @@ impl TimeTravelSession {
 
         // Truncate undone deltas
         self.deltas.truncate(idx);
-        self.current_step = self.deltas.last().map(|d| match d {
-            StateDelta::VarMutation { step, .. } => *step,
-            StateDelta::StepOp { step, .. } => *step,
-            StateDelta::Checkpoint { step, .. } => *step,
-            StateDelta::LogOutput { step, .. } => *step,
-        }).unwrap_or(0);
+        self.current_step = self
+            .deltas
+            .last()
+            .map(|d| match d {
+                StateDelta::VarMutation { step, .. } => *step,
+                StateDelta::StepOp { step, .. } => *step,
+                StateDelta::Checkpoint { step, .. } => *step,
+                StateDelta::LogOutput { step, .. } => *step,
+            })
+            .unwrap_or(0);
 
         Ok(rolled_back)
     }
@@ -176,15 +189,26 @@ impl TimeTravelSession {
         self.branches.insert(branch_name.to_string(), branch_state);
         self.active_timeline = branch_name.to_string();
 
-        self.record_log(&format!("TimeTravel: Created and switched to branch '{}'", branch_name));
+        self.record_log(&format!(
+            "TimeTravel: Created and switched to branch '{}'",
+            branch_name
+        ));
         Ok(branch_name.to_string())
     }
 
     /// Computes the diff between two checkpoints
-    pub fn diff_checkpoints(&self, cp_a: &str, cp_b: &str) -> Result<HashMap<String, (Value, Value)>, String> {
-        let (_, snap_a) = self.checkpoints.get(cp_a)
+    pub fn diff_checkpoints(
+        &self,
+        cp_a: &str,
+        cp_b: &str,
+    ) -> Result<HashMap<String, (Value, Value)>, String> {
+        let (_, snap_a) = self
+            .checkpoints
+            .get(cp_a)
             .ok_or_else(|| format!("Checkpoint '{}' not found", cp_a))?;
-        let (_, snap_b) = self.checkpoints.get(cp_b)
+        let (_, snap_b) = self
+            .checkpoints
+            .get(cp_b)
             .ok_or_else(|| format!("Checkpoint '{}' not found", cp_b))?;
 
         let mut diffs = HashMap::new();
@@ -215,35 +239,50 @@ impl TimeTravelSession {
 
     /// Generates structured execution history log
     pub fn history_entries(&self) -> Vec<Value> {
-        self.deltas.iter().map(|d| {
-            let mut map = HashMap::new();
-            match d {
-                StateDelta::VarMutation { step, var_name, old_val, new_val } => {
-                    map.insert("type".to_string(), Value::string("mutation"));
-                    map.insert("step".to_string(), Value::Int(*step as i64));
-                    map.insert("variable".to_string(), Value::string(var_name.clone()));
-                    map.insert("old_value".to_string(), old_val.clone().unwrap_or(Value::Nil));
-                    map.insert("new_value".to_string(), new_val.clone());
+        self.deltas
+            .iter()
+            .map(|d| {
+                let mut map = HashMap::new();
+                match d {
+                    StateDelta::VarMutation {
+                        step,
+                        var_name,
+                        old_val,
+                        new_val,
+                    } => {
+                        map.insert("type".to_string(), Value::string("mutation"));
+                        map.insert("step".to_string(), Value::Int(*step as i64));
+                        map.insert("variable".to_string(), Value::string(var_name.clone()));
+                        map.insert(
+                            "old_value".to_string(),
+                            old_val.clone().unwrap_or(Value::Nil),
+                        );
+                        map.insert("new_value".to_string(), new_val.clone());
+                    }
+                    StateDelta::StepOp {
+                        step,
+                        op_name,
+                        details,
+                    } => {
+                        map.insert("type".to_string(), Value::string("step"));
+                        map.insert("step".to_string(), Value::Int(*step as i64));
+                        map.insert("op".to_string(), Value::string(op_name.clone()));
+                        map.insert("details".to_string(), Value::string(details.clone()));
+                    }
+                    StateDelta::Checkpoint { step, name, .. } => {
+                        map.insert("type".to_string(), Value::string("checkpoint"));
+                        map.insert("step".to_string(), Value::Int(*step as i64));
+                        map.insert("name".to_string(), Value::string(name.clone()));
+                    }
+                    StateDelta::LogOutput { step, message } => {
+                        map.insert("type".to_string(), Value::string("log"));
+                        map.insert("step".to_string(), Value::Int(*step as i64));
+                        map.insert("message".to_string(), Value::string(message.clone()));
+                    }
                 }
-                StateDelta::StepOp { step, op_name, details } => {
-                    map.insert("type".to_string(), Value::string("step"));
-                    map.insert("step".to_string(), Value::Int(*step as i64));
-                    map.insert("op".to_string(), Value::string(op_name.clone()));
-                    map.insert("details".to_string(), Value::string(details.clone()));
-                }
-                StateDelta::Checkpoint { step, name, .. } => {
-                    map.insert("type".to_string(), Value::string("checkpoint"));
-                    map.insert("step".to_string(), Value::Int(*step as i64));
-                    map.insert("name".to_string(), Value::string(name.clone()));
-                }
-                StateDelta::LogOutput { step, message } => {
-                    map.insert("type".to_string(), Value::string("log"));
-                    map.insert("step".to_string(), Value::Int(*step as i64));
-                    map.insert("message".to_string(), Value::string(message.clone()));
-                }
-            }
-            Value::map(map)
-        }).collect()
+                Value::map(map)
+            })
+            .collect()
     }
 }
 
@@ -261,7 +300,10 @@ fn get_sessions() -> &'static Mutex<HashMap<u64, Arc<Mutex<TimeTravelSession>>>>
 pub fn create_session() -> u64 {
     let id = NEXT_SESSION_ID.fetch_add(1, Ordering::SeqCst);
     let session = TimeTravelSession::new(id);
-    get_sessions().lock().unwrap().insert(id, Arc::new(Mutex::new(session)));
+    get_sessions()
+        .lock()
+        .unwrap()
+        .insert(id, Arc::new(Mutex::new(session)));
     id
 }
 
@@ -295,7 +337,9 @@ pub fn register_timetravel_module(globals: &mut HashMap<String, Value>) {
         "record".to_string(),
         Value::Native("TimeTravel.record".into(), |args| {
             if args.len() < 3 {
-                return Err("TimeTravel.record(session_id, var_name, value) requires 3 arguments".into());
+                return Err(
+                    "TimeTravel.record(session_id, var_name, value) requires 3 arguments".into(),
+                );
             }
             let id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -379,7 +423,9 @@ pub fn register_timetravel_module(globals: &mut HashMap<String, Value>) {
         "branch".to_string(),
         Value::Native("TimeTravel.branch".into(), |args| {
             if args.len() < 2 {
-                return Err("TimeTravel.branch(session_id, branch_name) requires 2 arguments".into());
+                return Err(
+                    "TimeTravel.branch(session_id, branch_name) requires 2 arguments".into(),
+                );
             }
             let id = match args[0] {
                 Value::Int(i) => i as u64,

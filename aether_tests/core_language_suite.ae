@@ -1,0 +1,71 @@
+# ==============================================================================
+# AETHER Core Language & Runtime Regression Suite
+# Executed natively by `aether test` inside the AETHER bytecode VM.
+# ==============================================================================
+
+fn add_scaled(a, b, scale) {
+    return (a + b) * scale
+}
+
+fn make_multiplier(factor) {
+    return |x| x * factor
+}
+
+test "arithmetic, functions, and closures" {
+    assert_eq(add_scaled(2, 3, 4), 20)
+    let triple = make_multiplier(3)
+    assert_eq(triple(7), 21)
+
+    let items = [10, 20, 30]
+    items.push(40)
+    assert_eq(items.len(), 4)
+    assert_eq(items[3], 40)
+
+    let profile = { "name": "aether", "active": true }
+    assert_eq(profile["name"], "aether")
+    assert(profile["active"])
+}
+
+test "loops and conditional control flow" {
+    let mut sum = 0
+    for i in 1..6 {
+        if i % 2 == 0 {
+            sum = sum + i
+        } else {
+            sum = sum + 1
+        }
+    }
+    # i = 1(+1), 2(+2), 3(+1), 4(+4), 5(+1) => 9
+    assert_eq(sum, 9)
+
+    let mut count = 0
+    while count < 3 {
+        count = count + 1
+    }
+    assert_eq(count, 3)
+}
+
+test "structured exception handling try catch and assert_throws" {
+    let mut caught = false
+    let mut message = ""
+    try {
+        raise "DivisionGuard: zero denominator"
+    } catch as err {
+        caught = true
+        message = "" + err
+    }
+    assert(caught)
+    assert(message.contains("DivisionGuard"))
+
+    assert_throws(|| {
+        raise "InvariantViolation: expected failure"
+    }, "InvariantViolation")
+}
+
+test "json serialization and roundtrip parsing" {
+    let raw = "[{\"id\": 1, \"tag\": \"alpha\"}, {\"id\": 2, \"tag\": \"beta\"}]"
+    let parsed = Json.parse(raw)
+    assert_eq(parsed.len(), 2)
+    assert_eq(parsed[0]["tag"], "alpha")
+    assert_eq(parsed[1]["id"], 2)
+}

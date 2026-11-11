@@ -103,6 +103,7 @@ n2 = None
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_type_conversions() {
     let code = r#"
 # int() conversions

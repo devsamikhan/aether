@@ -97,7 +97,10 @@ impl FlowStream {
         if size == 0 || self.events.is_empty() {
             return Vec::new();
         }
-        self.events.chunks(size).map(|chunk| chunk.to_vec()).collect()
+        self.events
+            .chunks(size)
+            .map(|chunk| chunk.to_vec())
+            .collect()
     }
 
     /// Partitions events into Sliding Windows of (size, slide)
@@ -156,53 +159,70 @@ impl FlowStream {
 
 /// Computes standard statistical aggregations over an array of stream windows
 pub fn aggregate_windows(windows: &[Vec<StreamEvent>], agg_op: &str) -> Vec<Value> {
-    windows.iter().map(|win| {
-        let op = agg_op.to_lowercase();
-        if win.is_empty() {
-            return Value::Nil;
-        }
-
-        let extract_nums: Vec<f64> = win.iter().filter_map(|e| match e.value {
-            Value::Int(i) => Some(i as f64),
-            Value::Float(f) => Some(f),
-            _ => None,
-        }).collect();
-
-        match op.as_str() {
-            "count" => Value::Int(win.len() as i64),
-            "sum" => {
-                let s: f64 = extract_nums.iter().sum();
-                Value::Float(s)
+    windows
+        .iter()
+        .map(|win| {
+            let op = agg_op.to_lowercase();
+            if win.is_empty() {
+                return Value::Nil;
             }
-            "mean" | "avg" => {
-                if extract_nums.is_empty() {
-                    Value::Float(0.0)
-                } else {
+
+            let extract_nums: Vec<f64> = win
+                .iter()
+                .filter_map(|e| match e.value {
+                    Value::Int(i) => Some(i as f64),
+                    Value::Float(f) => Some(f),
+                    _ => None,
+                })
+                .collect();
+
+            match op.as_str() {
+                "count" => Value::Int(win.len() as i64),
+                "sum" => {
                     let s: f64 = extract_nums.iter().sum();
-                    Value::Float(s / extract_nums.len() as f64)
+                    Value::Float(s)
+                }
+                "mean" | "avg" => {
+                    if extract_nums.is_empty() {
+                        Value::Float(0.0)
+                    } else {
+                        let s: f64 = extract_nums.iter().sum();
+                        Value::Float(s / extract_nums.len() as f64)
+                    }
+                }
+                "min" => {
+                    let m = extract_nums.iter().cloned().fold(f64::INFINITY, f64::min);
+                    if m.is_infinite() {
+                        Value::Nil
+                    } else {
+                        Value::Float(m)
+                    }
+                }
+                "max" => {
+                    let m = extract_nums
+                        .iter()
+                        .cloned()
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    if m.is_infinite() {
+                        Value::Nil
+                    } else {
+                        Value::Float(m)
+                    }
+                }
+                "first" => win.first().map(|e| e.value.clone()).unwrap_or(Value::Nil),
+                "last" => win.last().map(|e| e.value.clone()).unwrap_or(Value::Nil),
+                "values" => {
+                    let vals: Vec<Value> = win.iter().map(|e| e.value.clone()).collect();
+                    Value::array(vals)
+                }
+                _ => {
+                    // Default to array of values
+                    let vals: Vec<Value> = win.iter().map(|e| e.value.clone()).collect();
+                    Value::array(vals)
                 }
             }
-            "min" => {
-                let m = extract_nums.iter().cloned().fold(f64::INFINITY, f64::min);
-                if m.is_infinite() { Value::Nil } else { Value::Float(m) }
-            }
-            "max" => {
-                let m = extract_nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-                if m.is_infinite() { Value::Nil } else { Value::Float(m) }
-            }
-            "first" => win.first().map(|e| e.value.clone()).unwrap_or(Value::Nil),
-            "last" => win.last().map(|e| e.value.clone()).unwrap_or(Value::Nil),
-            "values" => {
-                let vals: Vec<Value> = win.iter().map(|e| e.value.clone()).collect();
-                Value::array(vals)
-            }
-            _ => {
-                // Default to array of values
-                let vals: Vec<Value> = win.iter().map(|e| e.value.clone()).collect();
-                Value::array(vals)
-            }
-        }
-    }).collect()
+        })
+        .collect()
 }
 
 // ==============================================================================
@@ -219,7 +239,10 @@ fn get_registry() -> &'static Mutex<HashMap<u64, Arc<Mutex<FlowStream>>>> {
 pub fn create_stream(name: &str, capacity: usize) -> u64 {
     let id = NEXT_STREAM_ID.fetch_add(1, Ordering::SeqCst);
     let stream = FlowStream::new(id, name.to_string(), capacity);
-    get_registry().lock().unwrap().insert(id, Arc::new(Mutex::new(stream)));
+    get_registry()
+        .lock()
+        .unwrap()
+        .insert(id, Arc::new(Mutex::new(stream)));
     id
 }
 
@@ -243,7 +266,11 @@ pub fn register_flow_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "create".to_string(),
         Value::Native("Flow.create".into(), |args| {
-            let name = if !args.is_empty() { args[0].to_string() } else { "stream".to_string() };
+            let name = if !args.is_empty() {
+                args[0].to_string()
+            } else {
+                "stream".to_string()
+            };
             let cap = if args.len() > 1 {
                 match args[1] {
                     Value::Int(i) => i as usize,
@@ -290,7 +317,9 @@ pub fn register_flow_module(globals: &mut HashMap<String, Value>) {
         "emit_batch".to_string(),
         Value::Native("Flow.emit_batch".into(), |args| {
             if args.len() < 2 {
-                return Err("Flow.emit_batch(stream_id, array) requires at least 2 arguments".into());
+                return Err(
+                    "Flow.emit_batch(stream_id, array) requires at least 2 arguments".into(),
+                );
             }
             let id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -324,7 +353,10 @@ pub fn register_flow_module(globals: &mut HashMap<String, Value>) {
         "tumbling_window".to_string(),
         Value::Native("Flow.tumbling_window".into(), |args| {
             if args.len() < 2 {
-                return Err("Flow.tumbling_window(stream_id, size, [agg_op]) requires at least 2 arguments".into());
+                return Err(
+                    "Flow.tumbling_window(stream_id, size, [agg_op]) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -334,7 +366,11 @@ pub fn register_flow_module(globals: &mut HashMap<String, Value>) {
                 Value::Int(i) => i as usize,
                 _ => return Err("size must be integer".into()),
             };
-            let agg_op = if args.len() > 2 { args[2].to_string() } else { "values".to_string() };
+            let agg_op = if args.len() > 2 {
+                args[2].to_string()
+            } else {
+                "values".to_string()
+            };
 
             let s_arc = get_stream(id)?;
             let s = s_arc.lock().unwrap();
@@ -402,7 +438,9 @@ pub fn register_flow_module(globals: &mut HashMap<String, Value>) {
     mod_map.insert(
         "count".to_string(),
         Value::Native("Flow.count".into(), |args| {
-            if args.is_empty() { return Err("Flow.count(stream_id) requires stream_id".into()); }
+            if args.is_empty() {
+                return Err("Flow.count(stream_id) requires stream_id".into());
+            }
             let id = match args[0] {
                 Value::Int(i) => i as u64,
                 _ => return Err("stream_id must be integer".into()),

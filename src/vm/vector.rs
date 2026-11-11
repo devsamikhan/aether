@@ -254,7 +254,9 @@ pub fn register_vector_module(globals: &mut HashMap<String, Value>) {
             let item_id = args[1].to_string();
 
             let stores = get_vector_stores().lock().unwrap();
-            let store_arc = stores.get(&index_id).ok_or_else(|| format!("Vector store {} not found", index_id))?;
+            let store_arc = stores
+                .get(&index_id)
+                .ok_or_else(|| format!("Vector store {} not found", index_id))?;
             let store = store_arc.lock().unwrap();
 
             if let Some(rec) = store.records.get(&item_id) {
@@ -284,7 +286,9 @@ pub fn register_vector_module(globals: &mut HashMap<String, Value>) {
             let item_id = args[1].to_string();
 
             let stores = get_vector_stores().lock().unwrap();
-            let store_arc = stores.get(&index_id).ok_or_else(|| format!("Vector store {} not found", index_id))?;
+            let store_arc = stores
+                .get(&index_id)
+                .ok_or_else(|| format!("Vector store {} not found", index_id))?;
             let mut store = store_arc.lock().unwrap();
 
             Ok(Value::Bool(store.records.remove(&item_id).is_some()))
@@ -303,7 +307,9 @@ pub fn register_vector_module(globals: &mut HashMap<String, Value>) {
                 _ => return Err("index_id must be integer".into()),
             };
             let stores = get_vector_stores().lock().unwrap();
-            let store_arc = stores.get(&index_id).ok_or_else(|| format!("Vector store {} not found", index_id))?;
+            let store_arc = stores
+                .get(&index_id)
+                .ok_or_else(|| format!("Vector store {} not found", index_id))?;
             let store = store_arc.lock().unwrap();
             Ok(Value::Int(store.records.len() as i64))
         }),
@@ -321,7 +327,9 @@ pub fn register_vector_module(globals: &mut HashMap<String, Value>) {
                 _ => return Err("index_id must be integer".into()),
             };
             let stores = get_vector_stores().lock().unwrap();
-            let store_arc = stores.get(&index_id).ok_or_else(|| format!("Vector store {} not found", index_id))?;
+            let store_arc = stores
+                .get(&index_id)
+                .ok_or_else(|| format!("Vector store {} not found", index_id))?;
             let mut store = store_arc.lock().unwrap();
             store.records.clear();
             Ok(Value::Bool(true))

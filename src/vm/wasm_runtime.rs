@@ -355,7 +355,10 @@ impl WasmInstance {
 
         while pc < code.len() {
             if *fuel == 0 {
-                return Err("AetherEdge sandbox execution fuel exhausted (infinite loop prevented)".to_string());
+                return Err(
+                    "AetherEdge sandbox execution fuel exhausted (infinite loop prevented)"
+                        .to_string(),
+                );
             }
             *fuel -= 1;
 
@@ -485,7 +488,8 @@ impl WasmInstance {
                                 while pc < code.len() && d > 0 {
                                     let next_op = code[pc];
                                     pc += 1;
-                                    if next_op == OP_BLOCK || next_op == OP_LOOP || next_op == OP_IF {
+                                    if next_op == OP_BLOCK || next_op == OP_LOOP || next_op == OP_IF
+                                    {
                                         d += 1;
                                         pc += 1;
                                     } else if next_op == OP_END {
@@ -663,7 +667,11 @@ impl WasmInstance {
                         let bytes: [u8; 8] = self.memory[addr..addr + 8].try_into().unwrap();
                         stack.push(i64::from_le_bytes(bytes));
                     } else {
-                        return Err(format!("Memory load out of bounds: {} (len {})", addr, self.memory.len()));
+                        return Err(format!(
+                            "Memory load out of bounds: {} (len {})",
+                            addr,
+                            self.memory.len()
+                        ));
                     }
                 }
                 OP_I32_STORE | OP_I64_STORE => {
@@ -675,7 +683,11 @@ impl WasmInstance {
                     if addr + 8 <= self.memory.len() {
                         self.memory[addr..addr + 8].copy_from_slice(&val.to_le_bytes());
                     } else {
-                        return Err(format!("Memory store out of bounds: {} (len {})", addr, self.memory.len()));
+                        return Err(format!(
+                            "Memory store out of bounds: {} (len {})",
+                            addr,
+                            self.memory.len()
+                        ));
                     }
                 }
                 OP_MEMORY_SIZE => {
@@ -817,10 +829,13 @@ pub fn register_wasm_module(globals: &mut HashMap<String, Value>) {
             let raw_bytes: Vec<u8> = match &args[0] {
                 Value::Array(arr) => {
                     let items = arr.lock();
-                    items.iter().map(|v| match v {
-                        Value::Int(i) => *i as u8,
-                        _ => 0,
-                    }).collect()
+                    items
+                        .iter()
+                        .map(|v| match v {
+                            Value::Int(i) => *i as u8,
+                            _ => 0,
+                        })
+                        .collect()
                 }
                 Value::String(s) => s.as_bytes().to_vec(),
                 _ => return Err("Wasm.load expects array of bytes".into()),
@@ -935,10 +950,14 @@ pub fn register_wasm_module(globals: &mut HashMap<String, Value>) {
             };
             let bytes = match &args[2] {
                 Value::String(s) => s.as_bytes().to_vec(),
-                Value::Array(arr) => arr.lock().iter().map(|v| match v {
-                    Value::Int(i) => *i as u8,
-                    _ => 0,
-                }).collect(),
+                Value::Array(arr) => arr
+                    .lock()
+                    .iter()
+                    .map(|v| match v {
+                        Value::Int(i) => *i as u8,
+                        _ => 0,
+                    })
+                    .collect(),
                 _ => return Err("Data must be string or byte array".into()),
             };
 

@@ -38,11 +38,11 @@ fn test_aether_pack_primitive_serialization_roundtrip() {
     assert_eq!(unpacked_neg, Value::Int(-456789123));
 
     // 4. Float
-    let val_float = Value::Float(3.141592653589793);
+    let val_float = Value::Float(std::f64::consts::PI);
     let bytes_float = AetherPack::pack(&val_float);
     let unpacked_float = AetherPack::unpack(&bytes_float).expect("Failed to unpack float");
     if let Value::Float(f) = unpacked_float {
-        assert!((f - 3.141592653589793).abs() < 1e-12);
+        assert!((f - std::f64::consts::PI).abs() < 1e-12);
     } else {
         panic!("Expected Float, got {:?}", unpacked_float);
     }

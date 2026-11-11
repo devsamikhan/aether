@@ -1,18 +1,18 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 #[derive(Clone)]
 pub struct CompiledFunction {
     pub name: String,
-    pub arity: usize,            // min required positional arguments
-    pub max_arity: usize,        // total positional parameters
+    pub arity: usize,     // min required positional arguments
+    pub max_arity: usize, // total positional parameters
     pub param_names: Vec<String>,
-    pub has_varargs: bool,       // *args
+    pub has_varargs: bool, // *args
     pub varargs_param: Option<String>,
-    pub has_kwargs: bool,        // **kwargs
+    pub has_kwargs: bool, // **kwargs
     pub kwargs_param: Option<String>,
     pub upvalue_count: usize,
     pub chunk: super::bytecode::Chunk,
@@ -116,7 +116,10 @@ pub enum Value {
         upvalues: Arc<Mutex<Vec<Value>>>,
     },
     Native(String, NativeFn),
-    BoundMethod { receiver: Arc<Value>, method: String },
+    BoundMethod {
+        receiver: Arc<Value>,
+        method: String,
+    },
     BoundUserMethod {
         receiver: Arc<ClassInstance>,
         function: Arc<CompiledFunction>,
@@ -272,7 +275,8 @@ impl Value {
             }
             Value::String(s) => serde_json::Value::String((**s).clone()),
             Value::Array(arr) => {
-                let items: Vec<serde_json::Value> = arr.lock().iter().map(|v| v.to_json()).collect();
+                let items: Vec<serde_json::Value> =
+                    arr.lock().iter().map(|v| v.to_json()).collect();
                 serde_json::Value::Array(items)
             }
             Value::Tuple(tup) => {
@@ -314,7 +318,9 @@ impl fmt::Display for Value {
                 let items = arr.lock();
                 write!(f, "[")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", item)?;
                 }
                 write!(f, "]")
@@ -322,7 +328,9 @@ impl fmt::Display for Value {
             Value::Tuple(tup) => {
                 write!(f, "(")?;
                 for (i, item) in tup.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", item)?;
                 }
                 if tup.len() == 1 {
@@ -334,7 +342,9 @@ impl fmt::Display for Value {
                 let items = set.lock();
                 write!(f, "{{")?;
                 for (i, item) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", item)?;
                 }
                 write!(f, "}}")
@@ -343,7 +353,9 @@ impl fmt::Display for Value {
                 let m = map.lock();
                 write!(f, "{{")?;
                 for (i, (k, v)) in m.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}: {}", k, v)?;
                 }
                 write!(f, "}}")
@@ -360,7 +372,9 @@ impl fmt::Display for Value {
                 write!(f, "{} {{", inst.name)?;
                 let fields = inst.fields.lock();
                 for (i, (k, v)) in fields.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}: {}", k, v)?;
                 }
                 write!(f, "}}")
@@ -371,22 +385,34 @@ impl fmt::Display for Value {
                 write!(f, "<{} object>", inst.class.name)
             }
             Value::BoundUserMethod { receiver, function } => {
-                write!(f, "<bound method {} of <{} object>>", function.name, receiver.class.name)
+                write!(
+                    f,
+                    "<bound method {} of <{} object>>",
+                    function.name, receiver.class.name
+                )
             }
             Value::BoundStructMethod { receiver, function } => {
                 write!(f, "<bound method {} of {}>", function.name, receiver.name)
             }
             Value::SuperInstance { class, .. } => write!(f, "<super: <class {}>>", class.name),
-            Value::EnumConstructor { enum_name, variant, .. } => {
+            Value::EnumConstructor {
+                enum_name, variant, ..
+            } => {
                 write!(f, "<enum constructor {}::{}>", enum_name, variant)
             }
-            Value::EnumVariant { enum_name, variant, fields } => {
+            Value::EnumVariant {
+                enum_name,
+                variant,
+                fields,
+            } => {
                 if fields.is_empty() {
                     write!(f, "{}::{}", enum_name, variant)
                 } else {
                     write!(f, "{}::{}(", enum_name, variant)?;
                     for (i, item) in fields.iter().enumerate() {
-                        if i > 0 { write!(f, ", ")?; }
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
                         write!(f, "{}", item)?;
                     }
                     write!(f, ")")
@@ -431,32 +457,82 @@ impl PartialEq for Value {
             }
             (Value::Map(a), Value::Map(b)) => *a.lock() == *b.lock(),
             (Value::Function(a), Value::Function(b)) => a == b,
-            (Value::Closure { function: f1, upvalues: u1 }, Value::Closure { function: f2, upvalues: u2 }) => {
-                f1 == f2 && *u1.lock() == *u2.lock()
-            }
+            (
+                Value::Closure {
+                    function: f1,
+                    upvalues: u1,
+                },
+                Value::Closure {
+                    function: f2,
+                    upvalues: u2,
+                },
+            ) => f1 == f2 && *u1.lock() == *u2.lock(),
             (Value::StructDef(a), Value::StructDef(b)) => a.name == b.name && a.fields == b.fields,
             (Value::StructInstance(a), Value::StructInstance(b)) => {
                 a.name == b.name && *a.fields.lock() == *b.fields.lock()
             }
             (Value::DefaultSentinel, Value::DefaultSentinel) => true,
-            (Value::ClassDef(a), Value::ClassDef(b)) => Arc::ptr_eq(a, b) || (a.name == b.name && a.bases == b.bases),
+            (Value::ClassDef(a), Value::ClassDef(b)) => {
+                Arc::ptr_eq(a, b) || (a.name == b.name && a.bases == b.bases)
+            }
             (Value::ClassInstance(a), Value::ClassInstance(b)) => Arc::ptr_eq(&a.fields, &b.fields),
-            (Value::SuperInstance { receiver: r1, class: c1 }, Value::SuperInstance { receiver: r2, class: c2 }) => {
-                Arc::ptr_eq(&r1.fields, &r2.fields) && Arc::ptr_eq(c1, c2)
+            (
+                Value::SuperInstance {
+                    receiver: r1,
+                    class: c1,
+                },
+                Value::SuperInstance {
+                    receiver: r2,
+                    class: c2,
+                },
+            ) => Arc::ptr_eq(&r1.fields, &r2.fields) && Arc::ptr_eq(c1, c2),
+            (
+                Value::BoundUserMethod {
+                    receiver: r1,
+                    function: f1,
+                },
+                Value::BoundUserMethod {
+                    receiver: r2,
+                    function: f2,
+                },
+            ) => Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2,
+            (
+                Value::BoundStructMethod {
+                    receiver: r1,
+                    function: f1,
+                },
+                Value::BoundStructMethod {
+                    receiver: r2,
+                    function: f2,
+                },
+            ) => Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2,
+            (
+                Value::EnumConstructor {
+                    enum_name: e1,
+                    variant: v1,
+                    arity: a1,
+                },
+                Value::EnumConstructor {
+                    enum_name: e2,
+                    variant: v2,
+                    arity: a2,
+                },
+            ) => e1 == e2 && v1 == v2 && a1 == a2,
+            (
+                Value::EnumVariant {
+                    enum_name: e1,
+                    variant: v1,
+                    fields: f1,
+                },
+                Value::EnumVariant {
+                    enum_name: e2,
+                    variant: v2,
+                    fields: f2,
+                },
+            ) => (e1 == e2 || e1.is_empty() || e2.is_empty()) && v1 == v2 && f1 == f2,
+            (Value::Secret(a), Value::Secret(b)) => {
+                super::crypto::constant_time_eq(a.as_bytes(), b.as_bytes())
             }
-            (Value::BoundUserMethod { receiver: r1, function: f1 }, Value::BoundUserMethod { receiver: r2, function: f2 }) => {
-                Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2
-            }
-            (Value::BoundStructMethod { receiver: r1, function: f1 }, Value::BoundStructMethod { receiver: r2, function: f2 }) => {
-                Arc::ptr_eq(&r1.fields, &r2.fields) && f1 == f2
-            }
-            (Value::EnumConstructor { enum_name: e1, variant: v1, arity: a1 }, Value::EnumConstructor { enum_name: e2, variant: v2, arity: a2 }) => {
-                e1 == e2 && v1 == v2 && a1 == a2
-            }
-            (Value::EnumVariant { enum_name: e1, variant: v1, fields: f1 }, Value::EnumVariant { enum_name: e2, variant: v2, fields: f2 }) => {
-                (e1 == e2 || e1.is_empty() || e2.is_empty()) && v1 == v2 && f1 == f2
-            }
-            (Value::Secret(a), Value::Secret(b)) => super::crypto::constant_time_eq(a.as_bytes(), b.as_bytes()),
             _ => false,
         }
     }

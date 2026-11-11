@@ -67,7 +67,10 @@ impl ReloadReport {
             "globals_preserved".to_string(),
             Value::array(self.globals_preserved.iter().map(Value::string).collect()),
         );
-        map.insert("duration_us".to_string(), Value::Int(self.duration_us as i64));
+        map.insert(
+            "duration_us".to_string(),
+            Value::Int(self.duration_us as i64),
+        );
         map.insert("success".to_string(), Value::Bool(self.success));
         if let Some(err) = &self.error {
             map.insert("error".to_string(), Value::string(err.clone()));
@@ -211,7 +214,8 @@ pub fn hot_reload(
                     for (m_name, m_fn) in new_methods {
                         old_methods.insert(m_name, m_fn);
                     }
-                    vm.globals.insert(k.clone(), Value::ClassDef(old_class_arc.clone()));
+                    vm.globals
+                        .insert(k.clone(), Value::ClassDef(old_class_arc.clone()));
                     classes_updated.push(k);
                 } else {
                     vm.globals.insert(k, Value::ClassDef(new_class_arc));
@@ -292,8 +296,8 @@ pub fn run_live_watcher(file_path: &str, poll_interval_ms: u64) -> Result<(), St
         .and_then(|m| m.modified())
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let initial_source = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+    let initial_source =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
 
     let mut vm = VM::new();
 
@@ -315,7 +319,10 @@ pub fn run_live_watcher(file_path: &str, poll_interval_ms: u64) -> Result<(), St
     }
 
     println!("\n[AetherLive 🟢] Initial code active. File watcher online.");
-    println!("[AetherLive 💡] Edit and save '{}' to trigger instant hot code swapping.", file_path);
+    println!(
+        "[AetherLive 💡] Edit and save '{}' to trigger instant hot code swapping.",
+        file_path
+    );
     println!("[AetherLive 💡] Press Ctrl+C to terminate.\n");
 
     let poll_dur = Duration::from_millis(poll_interval_ms.max(50));
@@ -333,7 +340,9 @@ pub fn run_live_watcher(file_path: &str, poll_interval_ms: u64) -> Result<(), St
 
                     match fs::read_to_string(path) {
                         Ok(new_source) => {
-                            println!("[AetherLive ⚡] File change detected! Initiating hot-swap...");
+                            println!(
+                                "[AetherLive ⚡] File change detected! Initiating hot-swap..."
+                            );
                             match hot_reload(&mut vm, &new_source, None) {
                                 Ok(report) => {
                                     println!(
@@ -390,10 +399,17 @@ pub fn register_hotreload_module(globals: &mut HashMap<String, Value>) {
         "reload".to_string(),
         Value::Native("HotReload.reload".into(), |args| {
             if args.is_empty() {
-                return Err("HotReload.reload(source_string, [preserve_state]) requires source string".into());
+                return Err(
+                    "HotReload.reload(source_string, [preserve_state]) requires source string"
+                        .into(),
+                );
             }
             let source = args[0].to_string();
-            let preserve = if args.len() > 1 { args[1].is_truthy() } else { true };
+            let preserve = if args.len() > 1 {
+                args[1].is_truthy()
+            } else {
+                true
+            };
 
             let config = ReloadConfig {
                 preserve_globals: preserve,
@@ -411,10 +427,16 @@ pub fn register_hotreload_module(globals: &mut HashMap<String, Value>) {
         "reload_file".to_string(),
         Value::Native("HotReload.reload_file".into(), |args| {
             if args.is_empty() {
-                return Err("HotReload.reload_file(file_path, [preserve_state]) requires file path".into());
+                return Err(
+                    "HotReload.reload_file(file_path, [preserve_state]) requires file path".into(),
+                );
             }
             let path = args[0].to_string();
-            let preserve = if args.len() > 1 { args[1].is_truthy() } else { true };
+            let preserve = if args.len() > 1 {
+                args[1].is_truthy()
+            } else {
+                true
+            };
 
             let config = ReloadConfig {
                 preserve_globals: preserve,

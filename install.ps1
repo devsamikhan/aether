@@ -38,14 +38,74 @@ if (Test-Path "target\release\aether.exe") {
     Write-Host "  [OK] Installed compiled binary to: $BinDir\aether.exe" -ForegroundColor Green
     $Installed = $true
 } else {
-    Write-Host "  Downloading precompiled AETHER binary from GitHub Release..." -ForegroundColor Yellow
-    $ReleaseUrl = "https://github.com/devsamikhan/aether/releases/latest/download/aether-windows-x64.exe"
+    Write-Host "  Downloading precompiled AETHER archive from GitHub Release..." -ForegroundColor Yellow
+    $BaseUrl = "https://github.com/devsamikhan/aether/releases/latest/download"
+    $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("aether-install-" + [System.Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
     try {
-        Invoke-WebRequest -Uri $ReleaseUrl -OutFile "$BinDir\aether.exe" -UseBasicParsing
-        Write-Host "  [OK] Downloaded standalone binary to: $BinDir\aether.exe" -ForegroundColor Green
+        $ZipUrl = "$BaseUrl/aether-windows-x86_64.zip"
+        $ZipShaUrl = "$BaseUrl/aether-windows-x86_64.zip.sha256"
+        $ZipPath = Join-Path $TempDir "aether-windows-x86_64.zip"
+        $ZipShaPath = Join-Path $TempDir "aether-windows-x86_64.zip.sha256"
+
+        Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
+        try {
+            Invoke-WebRequest -Uri $ZipShaUrl -OutFile $ZipShaPath -UseBasicParsing
+            $ExpectedHash = ((Get-Content $ZipShaPath -Raw) -split '\s+')[0].Trim().ToLowerInvariant()
+            $ActualHash = (Get-FileHash -Path $ZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if (-not $ExpectedHash -or $ExpectedHash -ne $ActualHash) {
+                throw "SHA-256 verification failed for aether-windows-x86_64.zip (expected $ExpectedHash, got $ActualHash)"
+            }
+            Write-Host "  [OK] Verified SHA-256 checksum for release archive." -ForegroundColor Green
+        } catch {
+            if ($_.Exception.Message -like "SHA-256 verification failed*") { throw }
+            Write-Host "  [WARN] Checksum file unavailable, proceeding with extracted archive." -ForegroundColor Yellow
+        }
+
+        $ExtractDir = Join-Path $TempDir "extracted"
+        Expand-Archive -Path $ZipPath -DestinationPath $ExtractDir -Force
+        $ExeCandidate = Join-Path $ExtractDir "bin\aether.exe"
+        if (-not (Test-Path $ExeCandidate)) {
+            $ExeCandidate = Join-Path $ExtractDir "aether.exe"
+        }
+        if (-not (Test-Path $ExeCandidate)) {
+            throw "Release archive did not contain aether.exe"
+        }
+        Copy-Item -Path $ExeCandidate -Destination "$BinDir\aether.exe" -Force
+        $ExtractedLibs = Join-Path $ExtractDir "libraries"
+        if (Test-Path $ExtractedLibs) {
+            Copy-Item -Path "$ExtractedLibs\*.ae" -Destination $LibDir -Force
+            Write-Host "  [OK] Installed standard libraries from archive to: $LibDir" -ForegroundColor Green
+        }
+        Write-Host "  [OK] Installed release binary to: $BinDir\aether.exe" -ForegroundColor Green
         $Installed = $true
     } catch {
-        Write-Host "  Could not download precompiled release: $_" -ForegroundColor Red
+        Write-Host "  Archive install fallback triggered: $_" -ForegroundColor Yellow
+        try {
+            $ExeUrl = "$BaseUrl/aether-windows-x64.exe"
+            $ExeShaUrl = "$BaseUrl/aether-windows-x64.exe.sha256"
+            $ExeDest = "$BinDir\aether.exe"
+            $ExeShaPath = Join-Path $TempDir "aether-windows-x64.exe.sha256"
+            Invoke-WebRequest -Uri $ExeUrl -OutFile $ExeDest -UseBasicParsing
+            try {
+                Invoke-WebRequest -Uri $ExeShaUrl -OutFile $ExeShaPath -UseBasicParsing
+                $ExpectedHash = ((Get-Content $ExeShaPath -Raw) -split '\s+')[0].Trim().ToLowerInvariant()
+                $ActualHash = (Get-FileHash -Path $ExeDest -Algorithm SHA256).Hash.ToLowerInvariant()
+                if (-not $ExpectedHash -or $ExpectedHash -ne $ActualHash) {
+                    Remove-Item -Path $ExeDest -Force -ErrorAction SilentlyContinue
+                    throw "SHA-256 verification failed for aether-windows-x64.exe"
+                }
+                Write-Host "  [OK] Verified SHA-256 checksum for standalone binary." -ForegroundColor Green
+            } catch {
+                if ($_.Exception.Message -like "SHA-256 verification failed*") { throw }
+            }
+            Write-Host "  [OK] Downloaded standalone binary to: $ExeDest" -ForegroundColor Green
+            $Installed = $true
+        } catch {
+            Write-Host "  Could not download precompiled release: $_" -ForegroundColor Red
+        }
+    } finally {
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

@@ -19,11 +19,17 @@ impl TensorData {
         if expected_size != data.len() {
             return Err(format!(
                 "Shape {:?} requires {} elements, but provided data has {}",
-                shape, expected_size, data.len()
+                shape,
+                expected_size,
+                data.len()
             ));
         }
         let strides = compute_strides(&shape);
-        Ok(Self { shape, strides, data })
+        Ok(Self {
+            shape,
+            strides,
+            data,
+        })
     }
 
     pub fn zeros(shape: Vec<usize>) -> Self {
@@ -65,12 +71,18 @@ impl TensorData {
         let mut seed = 123456789u64.wrapping_add(size as u64 * 31);
         let mut data = Vec::with_capacity(size);
         for _ in 0..size {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((seed >> 32) as u32 as f64) / (u32::MAX as f64);
             let val = min + unit * (max - min);
             data.push(val);
         }
-        Self { shape, strides, data }
+        Self {
+            shape,
+            strides,
+            data,
+        }
     }
 
     pub fn matmul(&self, other: &Self) -> Result<Self, String> {
@@ -108,7 +120,10 @@ impl TensorData {
 
     pub fn transpose(&self) -> Result<Self, String> {
         if self.shape.len() != 2 {
-            return Err(format!("transpose requires 2D matrix, got shape {:?}", self.shape));
+            return Err(format!(
+                "transpose requires 2D matrix, got shape {:?}",
+                self.shape
+            ));
         }
         let (rows, cols) = (self.shape[0], self.shape[1]);
         let mut out = vec![0.0; rows * cols];
@@ -137,7 +152,11 @@ impl TensorData {
     }
 
     pub fn relu(&self) -> Self {
-        let data: Vec<f64> = self.data.iter().map(|&x| if x > 0.0 { x } else { 0.0 }).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .map(|&x| if x > 0.0 { x } else { 0.0 })
+            .collect();
         Self {
             shape: self.shape.clone(),
             strides: self.strides.clone(),
@@ -146,7 +165,11 @@ impl TensorData {
     }
 
     pub fn sigmoid(&self) -> Self {
-        let data: Vec<f64> = self.data.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .map(|&x| 1.0 / (1.0 + (-x).exp()))
+            .collect();
         Self {
             shape: self.shape.clone(),
             strides: self.strides.clone(),
@@ -202,7 +225,11 @@ impl TensorData {
     }
 
     pub fn gt_mask(&self, threshold: f64) -> Self {
-        let data: Vec<f64> = self.data.iter().map(|&x| if x > threshold { 1.0 } else { 0.0 }).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .map(|&x| if x > threshold { 1.0 } else { 0.0 })
+            .collect();
         Self {
             shape: self.shape.clone(),
             strides: self.strides.clone(),
@@ -256,7 +283,11 @@ impl TensorData {
 
             let mut target_idx = 0;
             for d in 0..ndim {
-                let c = if aligned_target_shape[d] == 1 { 0 } else { coords[d] };
+                let c = if aligned_target_shape[d] == 1 {
+                    0
+                } else {
+                    coords[d]
+                };
                 target_idx += c * aligned_strides[d];
             }
 
@@ -267,7 +298,11 @@ impl TensorData {
     }
 
     pub fn clip(&self, min_val: f64, max_val: f64) -> Self {
-        let data: Vec<f64> = self.data.iter().map(|&x| x.clamp(min_val, max_val)).collect();
+        let data: Vec<f64> = self
+            .data
+            .iter()
+            .map(|&x| x.clamp(min_val, max_val))
+            .collect();
         Self {
             shape: self.shape.clone(),
             strides: self.strides.clone(),
@@ -314,7 +349,8 @@ fn compute_strides(shape: &[usize]) -> Vec<usize> {
     strides
 }
 
-static TENSORS: std::sync::OnceLock<Mutex<HashMap<u64, Arc<Mutex<TensorData>>>>> = std::sync::OnceLock::new();
+static TENSORS: std::sync::OnceLock<Mutex<HashMap<u64, Arc<Mutex<TensorData>>>>> =
+    std::sync::OnceLock::new();
 
 fn get_tensors() -> &'static Mutex<HashMap<u64, Arc<Mutex<TensorData>>>> {
     TENSORS.get_or_init(|| Mutex::new(HashMap::new()))
@@ -357,7 +393,10 @@ pub fn get_tensor_data(val: &Value) -> Result<TensorData, String> {
         }
         Value::Int(i) => Ok(TensorData::new(vec![1], vec![*i as f64])?),
         Value::Float(f) => Ok(TensorData::new(vec![1], vec![*f])?),
-        other => Err(format!("Expected Tensor or numeric array, got '{}'", other.type_name())),
+        other => Err(format!(
+            "Expected Tensor or numeric array, got '{}'",
+            other.type_name()
+        )),
     }
 }
 
@@ -438,7 +477,10 @@ fn extract_shape(val: &Value) -> Result<Vec<usize>, String> {
             }
             Ok(vec![*i as usize])
         }
-        other => Err(format!("Expected shape array or integer, got '{}'", other.type_name())),
+        other => Err(format!(
+            "Expected shape array or integer, got '{}'",
+            other.type_name()
+        )),
     }
 }
 
@@ -549,27 +591,19 @@ pub fn register_tensor_module(globals: &mut HashMap<String, Value>) {
     // 7. Element-wise arithmetic: add, sub, mul, div
     tensor_module.insert(
         "add".to_string(),
-        Value::Native("Tensor.add".into(), |args| {
-            binary_op(args, |x, y| x + y)
-        }),
+        Value::Native("Tensor.add".into(), |args| binary_op(args, |x, y| x + y)),
     );
     tensor_module.insert(
         "sub".to_string(),
-        Value::Native("Tensor.sub".into(), |args| {
-            binary_op(args, |x, y| x - y)
-        }),
+        Value::Native("Tensor.sub".into(), |args| binary_op(args, |x, y| x - y)),
     );
     tensor_module.insert(
         "mul".to_string(),
-        Value::Native("Tensor.mul".into(), |args| {
-            binary_op(args, |x, y| x * y)
-        }),
+        Value::Native("Tensor.mul".into(), |args| binary_op(args, |x, y| x * y)),
     );
     tensor_module.insert(
         "div".to_string(),
-        Value::Native("Tensor.div".into(), |args| {
-            binary_op(args, |x, y| x / y)
-        }),
+        Value::Native("Tensor.div".into(), |args| binary_op(args, |x, y| x / y)),
     );
 
     // 8. Tensor.transpose(t)
@@ -720,7 +754,9 @@ pub fn register_tensor_module(globals: &mut HashMap<String, Value>) {
         "reduce_sum_to".to_string(),
         Value::Native("Tensor.reduce_sum_to".into(), |args| {
             if args.len() < 2 {
-                return Err("Tensor.reduce_sum_to(t, target_shape) requires tensor and target_shape".into());
+                return Err(
+                    "Tensor.reduce_sum_to(t, target_shape) requires tensor and target_shape".into(),
+                );
             }
             let t = get_tensor_data(&args[0])?;
             let target_shape = extract_shape(&args[1])?;
@@ -749,10 +785,18 @@ pub fn register_tensor_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
-    globals.entry("__native_tensor".to_string()).or_insert_with(|| Value::map(tensor_module.clone()));
-    globals.entry("__native_matrix".to_string()).or_insert_with(|| Value::map(tensor_module.clone()));
-    globals.entry("Matrix".to_string()).or_insert_with(|| Value::map(tensor_module.clone()));
-    globals.entry("matrix".to_string()).or_insert_with(|| Value::map(tensor_module));
+    globals
+        .entry("__native_tensor".to_string())
+        .or_insert_with(|| Value::map(tensor_module.clone()));
+    globals
+        .entry("__native_matrix".to_string())
+        .or_insert_with(|| Value::map(tensor_module.clone()));
+    globals
+        .entry("Matrix".to_string())
+        .or_insert_with(|| Value::map(tensor_module.clone()));
+    globals
+        .entry("matrix".to_string())
+        .or_insert_with(|| Value::map(tensor_module));
 }
 
 fn binary_op<F>(args: &[Value], op: F) -> Result<Value, String>
@@ -784,7 +828,12 @@ where
     let t2 = get_tensor_data(&args[1])?;
 
     if t1.shape == t2.shape {
-        let out: Vec<f64> = t1.data.iter().zip(t2.data.iter()).map(|(&x, &y)| op(x, y)).collect();
+        let out: Vec<f64> = t1
+            .data
+            .iter()
+            .zip(t2.data.iter())
+            .map(|(&x, &y)| op(x, y))
+            .collect();
         let res = TensorData::new(t1.shape.clone(), out)?;
         return Ok(wrap_tensor_handle(res));
     }

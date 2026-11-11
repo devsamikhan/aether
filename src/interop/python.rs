@@ -1,8 +1,12 @@
-#![allow(deprecated)]
+#![cfg_attr(feature = "python-interop", allow(deprecated))]
 
+#[cfg(feature = "python-interop")]
 use pyo3::prelude::*;
+#[cfg(feature = "python-interop")]
 use pyo3::types::{PyDict, PyList, PyTuple};
+#[cfg(feature = "python-interop")]
 use std::collections::HashMap;
+#[cfg(feature = "python-interop")]
 use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +19,7 @@ pub enum RuntimeValue {
     Null,
 }
 
+#[cfg(feature = "python-interop")]
 impl IntoPy<PyObject> for RuntimeValue {
     fn into_py(self, py: Python<'_>) -> PyObject {
         match self {
@@ -35,6 +40,7 @@ impl IntoPy<PyObject> for RuntimeValue {
     }
 }
 
+#[cfg(feature = "python-interop")]
 impl<'source> FromPyObject<'source> for RuntimeValue {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         if ob.is_none() {
@@ -69,12 +75,15 @@ impl<'source> FromPyObject<'source> for RuntimeValue {
     }
 }
 
+#[cfg(feature = "python-interop")]
 static MODULE_CACHE: OnceLock<Mutex<HashMap<String, PyObject>>> = OnceLock::new();
 
+#[cfg(feature = "python-interop")]
 fn get_module_cache() -> &'static Mutex<HashMap<String, PyObject>> {
     MODULE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[cfg(feature = "python-interop")]
 pub fn get_py_gil<F, R>(f: F) -> R
 where
     F: FnOnce(Python<'_>) -> R,
@@ -82,6 +91,7 @@ where
     Python::with_gil(f)
 }
 
+#[cfg(feature = "python-interop")]
 pub fn run_with_captured_output<F, R>(py: Python<'_>, f: F) -> Result<(R, String, String), String>
 where
     F: FnOnce(Python<'_>) -> PyResult<R>,
@@ -139,6 +149,7 @@ where
     Ok((res.unwrap(), stdout_str, stderr_str))
 }
 
+#[cfg(feature = "python-interop")]
 pub fn py_import(module_name: &str) -> Result<RuntimeValue, String> {
     let cache = get_module_cache();
     {
@@ -164,6 +175,7 @@ pub fn py_import(module_name: &str) -> Result<RuntimeValue, String> {
     }
 }
 
+#[cfg(feature = "python-interop")]
 pub fn py_eval(expr: &str) -> Result<RuntimeValue, String> {
     get_py_gil(|py| {
         let globals = PyDict::new(py);
@@ -197,6 +209,7 @@ pub fn py_eval(expr: &str) -> Result<RuntimeValue, String> {
     })
 }
 
+#[cfg(feature = "python-interop")]
 pub fn py_exec(code: &str) -> Result<RuntimeValue, String> {
     get_py_gil(|py| {
         let globals = PyDict::new(py);
@@ -241,6 +254,7 @@ pub fn py_exec(code: &str) -> Result<RuntimeValue, String> {
     })
 }
 
+#[cfg(feature = "python-interop")]
 pub fn py_call(func_name: &str, args: Vec<RuntimeValue>) -> Result<RuntimeValue, String> {
     get_py_gil(|py| {
         let run_res = run_with_captured_output(py, |py| {
@@ -300,4 +314,32 @@ pub fn py_call(func_name: &str, args: Vec<RuntimeValue>) -> Result<RuntimeValue,
             Err(e) => Err(format!("E0400: Python Interop Error during call: {}", e)),
         }
     })
+}
+
+#[cfg(not(feature = "python-interop"))]
+fn python_disabled_error(action: &str) -> Result<RuntimeValue, String> {
+    Err(format!(
+        "E0400: Python interop is disabled during {} (rebuild with `--features python-interop`)",
+        action
+    ))
+}
+
+#[cfg(not(feature = "python-interop"))]
+pub fn py_import(module_name: &str) -> Result<RuntimeValue, String> {
+    python_disabled_error(&format!("import of '{}'", module_name))
+}
+
+#[cfg(not(feature = "python-interop"))]
+pub fn py_eval(_expr: &str) -> Result<RuntimeValue, String> {
+    python_disabled_error("eval")
+}
+
+#[cfg(not(feature = "python-interop"))]
+pub fn py_exec(_code: &str) -> Result<RuntimeValue, String> {
+    python_disabled_error("exec")
+}
+
+#[cfg(not(feature = "python-interop"))]
+pub fn py_call(func_name: &str, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, String> {
+    python_disabled_error(&format!("call to '{}'", func_name))
 }

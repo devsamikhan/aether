@@ -3,11 +3,11 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
-use std::sync::Arc;
 use super::bytecode::Chunk;
 use super::crypto::sha256_bytes;
 use super::value::{CompiledFunction, Value};
 use crate::syntax::span::Span;
+use std::sync::Arc;
 
 const AEC_MAGIC: &[u8; 5] = b"AETH\x04";
 

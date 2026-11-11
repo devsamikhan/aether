@@ -43,12 +43,20 @@ impl Ansi {
 // ==============================================================================
 
 /// Reconstructs the exact state of all variables at any given step in time
-pub fn compute_state_at_step(session: &TimeTravelSession, target_step: u64) -> HashMap<String, Value> {
+pub fn compute_state_at_step(
+    session: &TimeTravelSession,
+    target_step: u64,
+) -> HashMap<String, Value> {
     let mut state = HashMap::new();
 
     for delta in &session.deltas {
         match delta {
-            StateDelta::VarMutation { step, var_name, new_val, .. } => {
+            StateDelta::VarMutation {
+                step,
+                var_name,
+                new_val,
+                ..
+            } => {
                 if *step <= target_step {
                     state.insert(var_name.clone(), new_val.clone());
                 }
@@ -104,12 +112,17 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
     let mut out = String::new();
 
     let max_step = session.current_step.max(
-        session.deltas.iter().map(|d| match d {
-            StateDelta::VarMutation { step, .. } => *step,
-            StateDelta::StepOp { step, .. } => *step,
-            StateDelta::Checkpoint { step, .. } => *step,
-            StateDelta::LogOutput { step, .. } => *step,
-        }).max().unwrap_or(0)
+        session
+            .deltas
+            .iter()
+            .map(|d| match d {
+                StateDelta::VarMutation { step, .. } => *step,
+                StateDelta::StepOp { step, .. } => *step,
+                StateDelta::Checkpoint { step, .. } => *step,
+                StateDelta::LogOutput { step, .. } => *step,
+            })
+            .max()
+            .unwrap_or(0),
     );
 
     let active_step = cursor_step.min(max_step);
@@ -117,7 +130,9 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
     // 1. Header Banner
     out.push_str(&format!(
         "{}{}+------------------------------------------------------------------------------+{}\n",
-        Ansi::CYAN, Ansi::BOLD, Ansi::RESET
+        Ansi::CYAN,
+        Ansi::BOLD,
+        Ansi::RESET
     ));
     out.push_str(&format!(
         "{}|{}  ⏳ {}AETHER TIME-TRAVEL OMNISCIENT DEBUGGER{}                                     {}|{}\n",
@@ -137,7 +152,11 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
     ));
 
     // 2. Timeline Track Ribbon
-    out.push_str(&format!("{}══ TIMELINE RIBBON ══════════════════════════════════════════════════════════{} \n", Ansi::BOLD, Ansi::RESET));
+    out.push_str(&format!(
+        "{}══ TIMELINE RIBBON ══════════════════════════════════════════════════════════{} \n",
+        Ansi::BOLD,
+        Ansi::RESET
+    ));
     let mut ribbon = String::new();
     let start_step = if active_step > 5 { active_step - 5 } else { 0 };
     let end_step = (start_step + 10).min(max_step);
@@ -174,52 +193,94 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
     out.push_str(&format!("  {}\n\n", ribbon));
 
     // 3. Event Delta at Cursor Step
-    out.push_str(&format!("{}══ EVENT AT STEP {} ═════════════════════════════════════════════════════════{} \n", Ansi::BOLD, active_step, Ansi::RESET));
-    let matching_deltas: Vec<&StateDelta> = session.deltas.iter().filter(|d| {
-        let st = match d {
-            StateDelta::VarMutation { step, .. } => *step,
-            StateDelta::StepOp { step, .. } => *step,
-            StateDelta::Checkpoint { step, .. } => *step,
-            StateDelta::LogOutput { step, .. } => *step,
-        };
-        st == active_step
-    }).collect();
+    out.push_str(&format!(
+        "{}══ EVENT AT STEP {} ═════════════════════════════════════════════════════════{} \n",
+        Ansi::BOLD,
+        active_step,
+        Ansi::RESET
+    ));
+    let matching_deltas: Vec<&StateDelta> = session
+        .deltas
+        .iter()
+        .filter(|d| {
+            let st = match d {
+                StateDelta::VarMutation { step, .. } => *step,
+                StateDelta::StepOp { step, .. } => *step,
+                StateDelta::Checkpoint { step, .. } => *step,
+                StateDelta::LogOutput { step, .. } => *step,
+            };
+            st == active_step
+        })
+        .collect();
 
     if matching_deltas.is_empty() {
         if active_step == 0 {
-            out.push_str(&format!("  {}• Baseline Initial State (Step 0){}\n", Ansi::DIM, Ansi::RESET));
+            out.push_str(&format!(
+                "  {}• Baseline Initial State (Step 0){}\n",
+                Ansi::DIM,
+                Ansi::RESET
+            ));
         } else {
-            out.push_str(&format!("  {}• (No mutation event at step {}){}\n", Ansi::DIM, active_step, Ansi::RESET));
+            out.push_str(&format!(
+                "  {}• (No mutation event at step {}){}\n",
+                Ansi::DIM,
+                active_step,
+                Ansi::RESET
+            ));
         }
     } else {
         for delta in matching_deltas {
             match delta {
-                StateDelta::VarMutation { var_name, old_val, new_val, .. } => {
-                    let old_str = old_val.as_ref().map(|v| v.to_string()).unwrap_or_else(|| "nil (undefined)".to_string());
+                StateDelta::VarMutation {
+                    var_name,
+                    old_val,
+                    new_val,
+                    ..
+                } => {
+                    let old_str = old_val
+                        .as_ref()
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "nil (undefined)".to_string());
                     out.push_str(&format!(
                         "  {}• MUTATION:{} {}{}{} = {}{}{}  (was: {}{}{})\n",
-                        Ansi::YELLOW, Ansi::RESET,
-                        Ansi::CYAN, var_name, Ansi::RESET,
-                        Ansi::GREEN, new_val, Ansi::RESET,
-                        Ansi::RED, old_str, Ansi::RESET
+                        Ansi::YELLOW,
+                        Ansi::RESET,
+                        Ansi::CYAN,
+                        var_name,
+                        Ansi::RESET,
+                        Ansi::GREEN,
+                        new_val,
+                        Ansi::RESET,
+                        Ansi::RED,
+                        old_str,
+                        Ansi::RESET
                     ));
                 }
                 StateDelta::Checkpoint { name, .. } => {
                     out.push_str(&format!(
                         "  {}• CHECKPOINT:{} '{}'\n",
-                        Ansi::MAGENTA, Ansi::RESET, name
+                        Ansi::MAGENTA,
+                        Ansi::RESET,
+                        name
                     ));
                 }
-                StateDelta::StepOp { op_name, details, .. } => {
+                StateDelta::StepOp {
+                    op_name, details, ..
+                } => {
                     out.push_str(&format!(
                         "  {}• OP:{} {} ({})\n",
-                        Ansi::BLUE, Ansi::RESET, op_name, details
+                        Ansi::BLUE,
+                        Ansi::RESET,
+                        op_name,
+                        details
                     ));
                 }
                 StateDelta::LogOutput { message, .. } => {
                     out.push_str(&format!(
                         "  {}• LOG:{} {}\n",
-                        Ansi::WHITE, Ansi::RESET, message
+                        Ansi::WHITE,
+                        Ansi::RESET,
+                        message
                     ));
                 }
             }
@@ -229,14 +290,25 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
 
     // 4. Variable Inspector Table
     let current_state = compute_state_at_step(session, active_step);
-    out.push_str(&format!("{}══ VARIABLE INSPECTOR (STATE AT STEP {}) ══════════════════════════════════{} \n", Ansi::BOLD, active_step, Ansi::RESET));
+    out.push_str(&format!(
+        "{}══ VARIABLE INSPECTOR (STATE AT STEP {}) ══════════════════════════════════{} \n",
+        Ansi::BOLD,
+        active_step,
+        Ansi::RESET
+    ));
 
     if current_state.is_empty() {
         out.push_str("  (No variables bound)\n");
     } else {
-        out.push_str("  +-----------------------+------------+--------------------------------------+\n");
-        out.push_str("  | Variable Name         | Type       | Value                                |\n");
-        out.push_str("  +-----------------------+------------+--------------------------------------+\n");
+        out.push_str(
+            "  +-----------------------+------------+--------------------------------------+\n",
+        );
+        out.push_str(
+            "  | Variable Name         | Type       | Value                                |\n",
+        );
+        out.push_str(
+            "  +-----------------------+------------+--------------------------------------+\n",
+        );
 
         let mut keys: Vec<&String> = current_state.keys().collect();
         keys.sort();
@@ -256,25 +328,43 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
                 key, type_str, truncated_val
             ));
         }
-        out.push_str("  +-----------------------+------------+--------------------------------------+\n");
+        out.push_str(
+            "  +-----------------------+------------+--------------------------------------+\n",
+        );
     }
     out.push('\n');
 
     // 5. Diff Inspector (Optional)
     if show_diff && active_step > 0 {
         let diff = compute_step_diff(session, active_step - 1, active_step);
-        out.push_str(&format!("{}══ STEP DELTA DIFF (STEP {} vs STEP {}) ═════════════════════════════════{} \n", Ansi::BOLD, active_step - 1, active_step, Ansi::RESET));
+        out.push_str(&format!(
+            "{}══ STEP DELTA DIFF (STEP {} vs STEP {}) ═════════════════════════════════{} \n",
+            Ansi::BOLD,
+            active_step - 1,
+            active_step,
+            Ansi::RESET
+        ));
         if diff.is_empty() {
             out.push_str("  (No variable changes between these two steps)\n");
         } else {
             for (k, (v_old, v_new)) in diff {
-                let old_str = v_old.map(|v| v.to_string()).unwrap_or_else(|| "none".to_string());
-                let new_str = v_new.map(|v| v.to_string()).unwrap_or_else(|| "none".to_string());
+                let old_str = v_old
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "none".to_string());
+                let new_str = v_new
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "none".to_string());
                 out.push_str(&format!(
                     "  {}var {}{}: {}{}{} -> {}{}{}\n",
-                    Ansi::BOLD, k, Ansi::RESET,
-                    Ansi::RED, old_str, Ansi::RESET,
-                    Ansi::GREEN, new_str, Ansi::RESET
+                    Ansi::BOLD,
+                    k,
+                    Ansi::RESET,
+                    Ansi::RED,
+                    old_str,
+                    Ansi::RESET,
+                    Ansi::GREEN,
+                    new_str,
+                    Ansi::RESET
                 ));
             }
         }
@@ -282,12 +372,20 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
     }
 
     // 6. Navigation Controls Footer
-    out.push_str(&format!("{}+------------------------------------------------------------------------------+{}\n", Ansi::CYAN, Ansi::RESET));
+    out.push_str(&format!(
+        "{}+------------------------------------------------------------------------------+{}\n",
+        Ansi::CYAN,
+        Ansi::RESET
+    ));
     out.push_str(&format!(
         "{}| CONTROLS: [H/P/<-] Rewind  [L/N/->] Forward  [B] Branch  [C] Save CP  [D] Diff  [Q] Exit |{}\n",
         Ansi::CYAN, Ansi::RESET
     ));
-    out.push_str(&format!("{}+------------------------------------------------------------------------------+{}\n", Ansi::CYAN, Ansi::RESET));
+    out.push_str(&format!(
+        "{}+------------------------------------------------------------------------------+{}\n",
+        Ansi::CYAN,
+        Ansi::RESET
+    ));
 
     out
 }
@@ -316,7 +414,8 @@ pub fn run_interactive_tui<R: BufRead, W: Write>(
 
         // Write clear screen + frame
         write!(writer, "{}{}", Ansi::CLEAR_SCREEN, frame).map_err(|e| e.to_string())?;
-        write!(writer, "\n{}TimeTravel >{} ", Ansi::BOLD, Ansi::RESET).map_err(|e| e.to_string())?;
+        write!(writer, "\n{}TimeTravel >{} ", Ansi::BOLD, Ansi::RESET)
+            .map_err(|e| e.to_string())?;
         writer.flush().map_err(|e| e.to_string())?;
 
         let mut line = String::new();
@@ -357,8 +456,13 @@ pub fn run_interactive_tui<R: BufRead, W: Write>(
                 let _ = s.branch_timeline(&branch_name);
             }
             "q" | "exit" | "quit" => {
-                writeln!(writer, "\n{}Exiting TimeTravel Debugger. Goodbye!{}", Ansi::YELLOW, Ansi::RESET)
-                    .map_err(|e| e.to_string())?;
+                writeln!(
+                    writer,
+                    "\n{}Exiting TimeTravel Debugger. Goodbye!{}",
+                    Ansi::YELLOW,
+                    Ansi::RESET
+                )
+                .map_err(|e| e.to_string())?;
                 break;
             }
             _ => {

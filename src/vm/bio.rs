@@ -148,9 +148,18 @@ impl Macromolecule {
         };
 
         let mut map = HashMap::new();
-        map.insert("mean".to_string(), Value::Float((mean * 10.0).round() / 10.0));
-        map.insert("min".to_string(), Value::Float((min_val * 10.0).round() / 10.0));
-        map.insert("max".to_string(), Value::Float((max_val * 10.0).round() / 10.0));
+        map.insert(
+            "mean".to_string(),
+            Value::Float((mean * 10.0).round() / 10.0),
+        );
+        map.insert(
+            "min".to_string(),
+            Value::Float((min_val * 10.0).round() / 10.0),
+        );
+        map.insert(
+            "max".to_string(),
+            Value::Float((max_val * 10.0).round() / 10.0),
+        );
         map.insert(
             "confident_percent".to_string(),
             Value::Float((conf_pct * 10.0).round() / 10.0),
@@ -195,7 +204,10 @@ impl Macromolecule {
             r.insert("chain".to_string(), Value::string(chain));
             r.insert("res_seq".to_string(), Value::Int(res_seq as i64));
             r.insert("res_name".to_string(), Value::string(res_name));
-            r.insert("distance".to_string(), Value::Float((min_dist * 100.0).round() / 100.0));
+            r.insert(
+                "distance".to_string(),
+                Value::Float((min_dist * 100.0).round() / 100.0),
+            );
             results.push(Value::map(r));
         }
         results.sort_by(|a, b| {
@@ -237,7 +249,8 @@ impl Macromolecule {
             if !a.is_hetero {
                 let mut min_dist = f64::MAX;
                 for la in &ref_atoms {
-                    let d = ((a.x - la.x).powi(2) + (a.y - la.y).powi(2) + (a.z - la.z).powi(2)).sqrt();
+                    let d =
+                        ((a.x - la.x).powi(2) + (a.y - la.y).powi(2) + (a.z - la.z).powi(2)).sqrt();
                     if d < min_dist {
                         min_dist = d;
                     }
@@ -257,7 +270,10 @@ impl Macromolecule {
             r.insert("chain".to_string(), Value::string(chain));
             r.insert("res_seq".to_string(), Value::Int(res_seq as i64));
             r.insert("res_name".to_string(), Value::string(res_name));
-            r.insert("distance".to_string(), Value::Float((min_dist * 100.0).round() / 100.0));
+            r.insert(
+                "distance".to_string(),
+                Value::Float((min_dist * 100.0).round() / 100.0),
+            );
             results.push(Value::map(r));
         }
         results.sort_by(|a, b| {
@@ -285,8 +301,12 @@ pub fn parse_pdb(content_or_path: &str) -> Result<Macromolecule, String> {
     let text = if (content_or_path.ends_with(".pdb") || content_or_path.ends_with(".cif"))
         && std::path::Path::new(content_or_path).exists()
     {
-        std::fs::read_to_string(content_or_path)
-            .map_err(|e| format!("BioError: Failed to read PDB file '{}': {}", content_or_path, e))?
+        std::fs::read_to_string(content_or_path).map_err(|e| {
+            format!(
+                "BioError: Failed to read PDB file '{}': {}",
+                content_or_path, e
+            )
+        })?
     } else {
         content_or_path.to_string()
     };
@@ -301,21 +321,54 @@ pub fn parse_pdb(content_or_path: &str) -> Result<Macromolecule, String> {
         } else if trimmed.starts_with("ATOM") || trimmed.starts_with("HETATM") {
             let is_hetero = trimmed.starts_with("HETATM");
             if line.len() >= 54 {
-                let serial = line.get(6..11).unwrap_or("0").trim().parse::<usize>().unwrap_or(0);
+                let serial = line
+                    .get(6..11)
+                    .unwrap_or("0")
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(0);
                 let name = line.get(12..16).unwrap_or("").trim().to_string();
                 let res_name = line.get(17..20).unwrap_or("").trim().to_string();
                 let chain_id = line.get(21..22).unwrap_or("A").trim().to_string();
-                let res_seq = line.get(22..26).unwrap_or("0").trim().parse::<i32>().unwrap_or(0);
-                let x = line.get(30..38).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
-                let y = line.get(38..46).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
-                let z = line.get(46..54).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0);
+                let res_seq = line
+                    .get(22..26)
+                    .unwrap_or("0")
+                    .trim()
+                    .parse::<i32>()
+                    .unwrap_or(0);
+                let x = line
+                    .get(30..38)
+                    .unwrap_or("0.0")
+                    .trim()
+                    .parse::<f64>()
+                    .unwrap_or(0.0);
+                let y = line
+                    .get(38..46)
+                    .unwrap_or("0.0")
+                    .trim()
+                    .parse::<f64>()
+                    .unwrap_or(0.0);
+                let z = line
+                    .get(46..54)
+                    .unwrap_or("0.0")
+                    .trim()
+                    .parse::<f64>()
+                    .unwrap_or(0.0);
                 let occupancy = if line.len() >= 60 {
-                    line.get(54..60).unwrap_or("1.0").trim().parse::<f64>().unwrap_or(1.0)
+                    line.get(54..60)
+                        .unwrap_or("1.0")
+                        .trim()
+                        .parse::<f64>()
+                        .unwrap_or(1.0)
                 } else {
                     1.0
                 };
                 let b_factor = if line.len() >= 66 {
-                    line.get(60..66).unwrap_or("0.0").trim().parse::<f64>().unwrap_or(0.0)
+                    line.get(60..66)
+                        .unwrap_or("0.0")
+                        .trim()
+                        .parse::<f64>()
+                        .unwrap_or(0.0)
                 } else {
                     0.0
                 };
@@ -331,7 +384,11 @@ pub fn parse_pdb(content_or_path: &str) -> Result<Macromolecule, String> {
                     serial,
                     name,
                     res_name,
-                    chain_id: if chain_id.is_empty() { "A".to_string() } else { chain_id },
+                    chain_id: if chain_id.is_empty() {
+                        "A".to_string()
+                    } else {
+                        chain_id
+                    },
                     res_seq,
                     x,
                     y,
@@ -347,15 +404,35 @@ pub fn parse_pdb(content_or_path: &str) -> Result<Macromolecule, String> {
                     let serial = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
                     let name = parts.get(2).unwrap_or(&"CA").to_string();
                     let res_name = parts.get(3).unwrap_or(&"ALA").to_string();
-                    let (chain_id, res_seq, x_idx) = if parts.len() >= 10 && parts[4].len() == 1 && parts[4].chars().all(|c| c.is_alphabetic()) {
-                        (parts[4].to_string(), parts[5].parse::<i32>().unwrap_or(0), 6)
+                    let (chain_id, res_seq, x_idx) = if parts.len() >= 10
+                        && parts[4].len() == 1
+                        && parts[4].chars().all(|c| c.is_alphabetic())
+                    {
+                        (
+                            parts[4].to_string(),
+                            parts[5].parse::<i32>().unwrap_or(0),
+                            6,
+                        )
                     } else {
-                        ("A".to_string(), parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0), 5)
+                        (
+                            "A".to_string(),
+                            parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
+                            5,
+                        )
                     };
                     let x = parts.get(x_idx).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                    let y = parts.get(x_idx + 1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                    let z = parts.get(x_idx + 2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                    let b_factor = parts.get(x_idx + 4).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                    let y = parts
+                        .get(x_idx + 1)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.0);
+                    let z = parts
+                        .get(x_idx + 2)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.0);
+                    let b_factor = parts
+                        .get(x_idx + 4)
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0.0);
 
                     atoms.push(PdbAtom {
                         serial,
@@ -402,9 +479,12 @@ pub fn extract_structure(val: &Value) -> Result<Arc<Macromolecule>, String> {
             let map = m.lock();
             if let Some(Value::Int(id)) = map.get("_bio_struct") {
                 let reg = get_struct_registry().lock();
-                reg.get(&(*id as u64))
-                    .cloned()
-                    .ok_or_else(|| format!("BioError: Structure handle #{} not found or deallocated", id))
+                reg.get(&(*id as u64)).cloned().ok_or_else(|| {
+                    format!(
+                        "BioError: Structure handle #{} not found or deallocated",
+                        id
+                    )
+                })
             } else {
                 Err("BioError: Expected a Bio.Structure object".into())
             }
@@ -445,7 +525,9 @@ pub fn iupac_match(pat_char: char, seq_char: char) -> bool {
 }
 
 pub fn calculate_gc_content(s: &str) -> f64 {
-    if s.is_empty() { return 0.0; }
+    if s.is_empty() {
+        return 0.0;
+    }
     let gc = s.chars().filter(|c| *c == 'G' || *c == 'C').count();
     (gc as f64 / s.len() as f64) * 100.0
 }
@@ -481,7 +563,11 @@ pub fn calculate_on_target_score(spacer: &str) -> (f64, bool) {
     ((clamped * 100.0).round() / 100.0, has_poly_t)
 }
 
-pub fn find_crispr_targets(dna: &str, pam_pattern: &str, target_len: usize) -> Vec<HashMap<String, Value>> {
+pub fn find_crispr_targets(
+    dna: &str,
+    pam_pattern: &str,
+    target_len: usize,
+) -> Vec<HashMap<String, Value>> {
     let clean = dna.trim().to_ascii_uppercase().replace('U', "T");
     let pam = pam_pattern.trim().to_ascii_uppercase().replace('U', "T");
     let pam_len = pam.len();
@@ -636,7 +722,12 @@ impl PackedDna {
                 'C' => 0b01u8,
                 'G' => 0b10u8,
                 'T' | 'U' => 0b11u8,
-                other => return Err(format!("BioError: Invalid nucleotide '{}' at index {}. Allowed: A, C, G, T, U", other, i)),
+                other => {
+                    return Err(format!(
+                        "BioError: Invalid nucleotide '{}' at index {}. Allowed: A, C, G, T, U",
+                        other, i
+                    ))
+                }
             };
             let byte_idx = i / 4;
             let bit_shift = (3 - (i % 4)) * 2;
@@ -744,7 +835,10 @@ impl PackedDna {
 
     pub fn kmers(&self, k: usize) -> Result<Vec<String>, String> {
         if k == 0 || k > self.len {
-            return Err(format!("BioError: Invalid k-mer size {} for sequence length {}", k, self.len));
+            return Err(format!(
+                "BioError: Invalid k-mer size {} for sequence length {}",
+                k, self.len
+            ));
         }
         let count = self.len - k + 1;
         let mut res = Vec::with_capacity(count);
@@ -811,8 +905,14 @@ impl PackedDna {
                             record.insert("frame".to_string(), Value::Int(frame as i64));
                             record.insert("start".to_string(), Value::Int(start_pos as i64));
                             record.insert("end".to_string(), Value::Int((i + 3) as i64));
-                            record.insert("codons".to_string(), Value::Int(current_protein.len() as i64));
-                            record.insert("protein".to_string(), Value::string(current_protein.clone()));
+                            record.insert(
+                                "codons".to_string(),
+                                Value::Int(current_protein.len() as i64),
+                            );
+                            record.insert(
+                                "protein".to_string(),
+                                Value::string(current_protein.clone()),
+                            );
                             orfs.push(record);
                         }
                         in_orf = false;
@@ -832,42 +932,24 @@ impl PackedDna {
 const CODON_TABLE: [char; 64] = [
     // c0 = 0 (A)
     // c1=0 (A): AAA(K), AAC(N), AAG(K), AAT(N)
-    'K', 'N', 'K', 'N',
-    // c1=1 (C): ACA(T), ACC(T), ACG(T), ACT(T)
-    'T', 'T', 'T', 'T',
-    // c1=2 (G): AGA(R), AGC(S), AGG(R), AGT(S)
-    'R', 'S', 'R', 'S',
-    // c1=3 (T): ATA(I), ATC(I), ATG(M), ATT(I)
-    'I', 'I', 'M', 'I',
-
-    // c0 = 1 (C)
+    'K', 'N', 'K', 'N', // c1=1 (C): ACA(T), ACC(T), ACG(T), ACT(T)
+    'T', 'T', 'T', 'T', // c1=2 (G): AGA(R), AGC(S), AGG(R), AGT(S)
+    'R', 'S', 'R', 'S', // c1=3 (T): ATA(I), ATC(I), ATG(M), ATT(I)
+    'I', 'I', 'M', 'I', // c0 = 1 (C)
     // c1=0 (A): CAA(Q), CAC(H), CAG(Q), CAT(H)
-    'Q', 'H', 'Q', 'H',
-    // c1=1 (C): CCA(P), CCC(P), CCG(P), CCT(P)
-    'P', 'P', 'P', 'P',
-    // c1=2 (G): CGA(R), CGC(R), CGG(R), CGT(R)
-    'R', 'R', 'R', 'R',
-    // c1=3 (T): CTA(L), CTC(L), CTG(L), CTT(L)
-    'L', 'L', 'L', 'L',
-
-    // c0 = 2 (G)
+    'Q', 'H', 'Q', 'H', // c1=1 (C): CCA(P), CCC(P), CCG(P), CCT(P)
+    'P', 'P', 'P', 'P', // c1=2 (G): CGA(R), CGC(R), CGG(R), CGT(R)
+    'R', 'R', 'R', 'R', // c1=3 (T): CTA(L), CTC(L), CTG(L), CTT(L)
+    'L', 'L', 'L', 'L', // c0 = 2 (G)
     // c1=0 (A): GAA(E), GAC(D), GAG(E), GAT(D)
-    'E', 'D', 'E', 'D',
-    // c1=1 (C): GCA(A), GCC(A), GCG(A), GCT(A)
-    'A', 'A', 'A', 'A',
-    // c1=2 (G): GGA(G), GGC(G), GGG(G), GGT(G)
-    'G', 'G', 'G', 'G',
-    // c1=3 (T): GTA(V), GTC(V), GTG(V), GTT(V)
-    'V', 'V', 'V', 'V',
-
-    // c0 = 3 (T)
+    'E', 'D', 'E', 'D', // c1=1 (C): GCA(A), GCC(A), GCG(A), GCT(A)
+    'A', 'A', 'A', 'A', // c1=2 (G): GGA(G), GGC(G), GGG(G), GGT(G)
+    'G', 'G', 'G', 'G', // c1=3 (T): GTA(V), GTC(V), GTG(V), GTT(V)
+    'V', 'V', 'V', 'V', // c0 = 3 (T)
     // c1=0 (A): TAA(*), TAC(Y), TAG(*), TAT(Y)
-    '*', 'Y', '*', 'Y',
-    // c1=1 (C): TCA(S), TCC(S), TCG(S), TCT(S)
-    'S', 'S', 'S', 'S',
-    // c1=2 (G): TGA(*), TGC(C), TGG(W), TGT(C)
-    '*', 'C', 'W', 'C',
-    // c1=3 (T): TTA(L), TTC(F), TTG(L), TTT(F)
+    '*', 'Y', '*', 'Y', // c1=1 (C): TCA(S), TCC(S), TCG(S), TCT(S)
+    'S', 'S', 'S', 'S', // c1=2 (G): TGA(*), TGC(C), TGG(W), TGT(C)
+    '*', 'C', 'W', 'C', // c1=3 (T): TTA(L), TTC(F), TTG(L), TTT(F)
     'L', 'F', 'L', 'F',
 ];
 
@@ -1168,21 +1250,40 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         "align".to_string(),
         Value::Native("Bio.align".into(), |args| {
             if args.len() < 2 {
-                return Err("Bio.align(seq1, seq2, [match, mismatch, gap]) requires at least 2 arguments".into());
+                return Err(
+                    "Bio.align(seq1, seq2, [match, mismatch, gap]) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let s1 = format!("{}", args[0]);
             let s2 = format!("{}", args[1]);
             let match_score = if args.len() > 2 {
-                match &args[2] { Value::Int(s) => *s as i32, _ => 2 }
-            } else { 2 };
+                match &args[2] {
+                    Value::Int(s) => *s as i32,
+                    _ => 2,
+                }
+            } else {
+                2
+            };
             let mismatch_pen = if args.len() > 3 {
-                match &args[3] { Value::Int(s) => *s as i32, _ => -1 }
-            } else { -1 };
+                match &args[3] {
+                    Value::Int(s) => *s as i32,
+                    _ => -1,
+                }
+            } else {
+                -1
+            };
             let gap_pen = if args.len() > 4 {
-                match &args[4] { Value::Int(s) => *s as i32, _ => -2 }
-            } else { -2 };
+                match &args[4] {
+                    Value::Int(s) => *s as i32,
+                    _ => -2,
+                }
+            } else {
+                -2
+            };
 
-            let (score, al1, al2, identity) = needleman_wunsch(&s1, &s2, match_score, mismatch_pen, gap_pen);
+            let (score, al1, al2, identity) =
+                needleman_wunsch(&s1, &s2, match_score, mismatch_pen, gap_pen);
             let mut res = HashMap::new();
             res.insert("score".to_string(), Value::Int(score as i64));
             res.insert("aligned1".to_string(), Value::string(al1));
@@ -1237,7 +1338,10 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
                         if let Ok(dna) = PackedDna::from_str(&current_seq) {
                             let mut rec = HashMap::new();
                             rec.insert("id".to_string(), Value::string(current_id.clone()));
-                            rec.insert("description".to_string(), Value::string(current_desc.clone()));
+                            rec.insert(
+                                "description".to_string(),
+                                Value::string(current_desc.clone()),
+                            );
                             rec.insert("sequence".to_string(), wrap_dna_handle(dna));
                             records.push(Value::map(rec));
                         }
@@ -1283,11 +1387,11 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
             let mut out = String::with_capacity(s.len() * 12);
             for ch in s.chars() {
                 match ch.to_ascii_uppercase() {
-                    'A' => out.push_str("\x1b[1;32mA\x1b[0m"), // Green
+                    'A' => out.push_str("\x1b[1;32mA\x1b[0m"),       // Green
                     'T' | 'U' => out.push_str("\x1b[1;31mT\x1b[0m"), // Red
-                    'C' => out.push_str("\x1b[1;34mC\x1b[0m"), // Blue
-                    'G' => out.push_str("\x1b[1;33mG\x1b[0m"), // Yellow
-                    '-' => out.push_str("\x1b[90m-\x1b[0m"),   // Grey
+                    'C' => out.push_str("\x1b[1;34mC\x1b[0m"),       // Blue
+                    'G' => out.push_str("\x1b[1;33mG\x1b[0m"),       // Yellow
+                    '-' => out.push_str("\x1b[90m-\x1b[0m"),         // Grey
                     other => out.push(other),
                 }
             }
@@ -1304,11 +1408,33 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
             }
             let s1 = format!("{}", args[0]);
             let s2 = format!("{}", args[1]);
-            let match_score = if args.len() > 2 { match &args[2] { Value::Int(s) => *s as i32, _ => 2 } } else { 2 };
-            let mismatch_pen = if args.len() > 3 { match &args[3] { Value::Int(s) => *s as i32, _ => -1 } } else { -1 };
-            let gap_pen = if args.len() > 4 { match &args[4] { Value::Int(s) => *s as i32, _ => -2 } } else { -2 };
+            let match_score = if args.len() > 2 {
+                match &args[2] {
+                    Value::Int(s) => *s as i32,
+                    _ => 2,
+                }
+            } else {
+                2
+            };
+            let mismatch_pen = if args.len() > 3 {
+                match &args[3] {
+                    Value::Int(s) => *s as i32,
+                    _ => -1,
+                }
+            } else {
+                -1
+            };
+            let gap_pen = if args.len() > 4 {
+                match &args[4] {
+                    Value::Int(s) => *s as i32,
+                    _ => -2,
+                }
+            } else {
+                -2
+            };
 
-            let (score, al1, al2, identity) = needleman_wunsch(&s1, &s2, match_score, mismatch_pen, gap_pen);
+            let (score, al1, al2, identity) =
+                needleman_wunsch(&s1, &s2, match_score, mismatch_pen, gap_pen);
             let mut connectors = String::with_capacity(al1.len());
             let c1: Vec<char> = al1.chars().collect();
             let c2: Vec<char> = al2.chars().collect();
@@ -1388,7 +1514,9 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
             }
             let s = extract_structure(&args[0])?;
             let chains = s.chains();
-            Ok(Value::array(chains.into_iter().map(Value::string).collect()))
+            Ok(Value::array(
+                chains.into_iter().map(Value::string).collect(),
+            ))
         }),
     );
 
@@ -1452,7 +1580,9 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         "binding_pocket".to_string(),
         Value::Native("Bio.binding_pocket".into(), |args| {
             if args.len() < 5 {
-                return Err("binding_pocket(struct, cx, cy, cz, radius) requires 5 arguments".into());
+                return Err(
+                    "binding_pocket(struct, cx, cy, cz, radius) requires 5 arguments".into(),
+                );
             }
             let s = extract_structure(&args[0])?;
             let cx = match &args[1] {
@@ -1511,7 +1641,8 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         Value::Native("Bio.crispr_find_targets".into(), |args| {
             if args.is_empty() {
                 return Err(
-                    "Bio.crispr_find_targets(dna, [pam, target_len]) requires at least 1 argument".into(),
+                    "Bio.crispr_find_targets(dna, [pam, target_len]) requires at least 1 argument"
+                        .into(),
                 );
             }
             let dna_seq = match &args[0] {
@@ -1544,7 +1675,9 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         "crispr_targets".to_string(),
         Value::Native("Bio.crispr_targets".into(), |args| {
             if args.is_empty() {
-                return Err("crispr_targets(dna, [pam, target_len]) requires at least 1 argument".into());
+                return Err(
+                    "crispr_targets(dna, [pam, target_len]) requires at least 1 argument".into(),
+                );
             }
             let dna_seq = match &args[0] {
                 Value::Map(m) if m.lock().contains_key("_bio_dna") => {
@@ -1577,7 +1710,8 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         Value::Native("Bio.crispr_off_target_score".into(), |args| {
             if args.len() < 2 {
                 return Err(
-                    "Bio.crispr_off_target_score(spacer, genomic_dna, [pam]) requires 2 arguments".into(),
+                    "Bio.crispr_off_target_score(spacer, genomic_dna, [pam]) requires 2 arguments"
+                        .into(),
                 );
             }
             let spacer = format!("{}", args[0]);

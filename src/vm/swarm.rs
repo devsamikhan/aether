@@ -35,7 +35,10 @@ pub struct SwarmConfig {
 
 impl Default for SwarmConfig {
     fn default() -> Self {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         let rand_id = format!("{:x}", now & 0xFFFFFFFF);
         Self {
             node_id: format!("node_{}", rand_id),
@@ -71,7 +74,9 @@ impl SwarmNode {
             .map_err(|e| format!("Failed to bind UDP socket: {}", e))?;
 
         socket.set_broadcast(true).map_err(|e| e.to_string())?;
-        socket.set_read_timeout(Some(Duration::from_millis(500))).map_err(|e| e.to_string())?;
+        socket
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .map_err(|e| e.to_string())?;
 
         let send_socket = socket.try_clone().map_err(|e| e.to_string())?;
         let recv_socket = socket;
@@ -151,13 +156,17 @@ impl SwarmNode {
 
     /// Run the interactive Terminal UI monitor for the Swarm
     pub fn run_cli_monitor(&self, duration_secs: u64) {
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("🌐 AETHER 2.0 ZERO-CONFIG DISTRIBUTED SWARM MESH");
         println!("Node ID:   {}", self.config.node_id);
         println!("Node Name: {}", self.config.node_name);
         println!("Channel:   UDP Broadcast :{}", self.config.swarm_port);
         println!("Status:    Active & Listening for Local Peer Beacons...");
-        println!("================================================================================\n");
+        println!(
+            "================================================================================\n"
+        );
 
         let start = Instant::now();
         let mut tick = 0;
@@ -167,25 +176,41 @@ impl SwarmNode {
             let peers = self.get_active_peers();
 
             print!("\x1B[2J\x1B[1;1H"); // Clear screen
-            println!("================================================================================");
+            println!(
+                "================================================================================"
+            );
             println!("🌐 AETHER P2P SWARM MESH STATUS [Scan tick: #{}]", tick);
-            println!("Local Node: {} ({}:{})", self.config.node_name, self.config.node_id, self.config.rpc_port);
+            println!(
+                "Local Node: {} ({}:{})",
+                self.config.node_name, self.config.node_id, self.config.rpc_port
+            );
             println!("Connected Mesh Peers: {}", peers.len());
-            println!("--------------------------------------------------------------------------------");
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
 
             if peers.is_empty() {
-                println!("  [Scanning LAN for other AETHER instances...] (Beacon broadcasting active)");
+                println!(
+                    "  [Scanning LAN for other AETHER instances...] (Beacon broadcasting active)"
+                );
             } else {
                 for (i, p) in peers.iter().enumerate() {
                     let age = p.last_seen.elapsed().as_millis();
                     println!(
                         "  [{}] {} | IP: {} | RPC: {} | Load: {:.1}% | Latency: {}ms ✅",
-                        i + 1, p.name, p.addr, p.rpc_port, p.load * 100.0, age
+                        i + 1,
+                        p.name,
+                        p.addr,
+                        p.rpc_port,
+                        p.load * 100.0,
+                        age
                     );
                 }
             }
 
-            println!("================================================================================");
+            println!(
+                "================================================================================"
+            );
             println!("Press Ctrl+C to return to CLI\n");
 
             thread::sleep(Duration::from_millis(1500));

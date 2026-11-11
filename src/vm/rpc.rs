@@ -145,7 +145,10 @@ impl AetherPack {
             return Err("Invalid AetherPack magic header".to_string());
         }
         if bytes[4] != AETHERPACK_VERSION {
-            return Err(format!("Unsupported AetherPack version: 0x{:02X}", bytes[4]));
+            return Err(format!(
+                "Unsupported AetherPack version: 0x{:02X}",
+                bytes[4]
+            ));
         }
 
         let mut offset = 5;
@@ -284,7 +287,11 @@ impl AetherPack {
                 }
                 Ok(Value::map(map))
             }
-            _ => Err(format!("Unknown AetherPack tag: 0x{:02X} at offset {}", tag, *offset - 1)),
+            _ => Err(format!(
+                "Unknown AetherPack tag: 0x{:02X} at offset {}",
+                tag,
+                *offset - 1
+            )),
         }
     }
 }
@@ -321,7 +328,9 @@ pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
 
 pub fn write_framed(stream: &mut TcpStream, payload: &[u8]) -> Result<(), String> {
     let len = payload.len() as u32;
-    stream.write_all(&len.to_le_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(&len.to_le_bytes())
+        .map_err(|e| e.to_string())?;
     stream.write_all(payload).map_err(|e| e.to_string())?;
     stream.flush().map_err(|e| e.to_string())?;
     Ok(())
@@ -503,7 +512,10 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                 0.0
             };
             map.insert("savings_pct".to_string(), Value::Float(savings));
-            map.insert("wire_tag".to_string(), Value::string(format!("0x{:02X}", bytes[5])));
+            map.insert(
+                "wire_tag".to_string(),
+                Value::string(format!("0x{:02X}", bytes[5])),
+            );
             Ok(Value::map(map))
         }),
     );
@@ -536,7 +548,10 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                 clients: Vec::new(),
             };
 
-            get_servers().lock().unwrap().insert(id, Arc::new(Mutex::new(state)));
+            get_servers()
+                .lock()
+                .unwrap()
+                .insert(id, Arc::new(Mutex::new(state)));
             Ok(Value::Int(id as i64))
         }),
     );
@@ -546,7 +561,9 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
         "server_poll".to_string(),
         Value::Native("Rpc.server_poll".into(), |args| {
             if args.is_empty() {
-                return Err("Rpc.server_poll(server_id, [timeout_ms]) expects server_id".to_string());
+                return Err(
+                    "Rpc.server_poll(server_id, [timeout_ms]) expects server_id".to_string()
+                );
             }
             let server_id = match args[0] {
                 Value::Int(id) => id as u64,
@@ -563,7 +580,10 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
 
             let server_arc = {
                 let servers = get_servers().lock().unwrap();
-                servers.get(&server_id).cloned().ok_or_else(|| format!("Server {} not found", server_id))?
+                servers
+                    .get(&server_id)
+                    .cloned()
+                    .ok_or_else(|| format!("Server {} not found", server_id))?
             };
 
             let start = Instant::now();
@@ -622,8 +642,14 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                                         );
 
                                         let mut res_map = HashMap::new();
-                                        res_map.insert("call_id".to_string(), Value::Int(call_id as i64));
-                                        res_map.insert("client_id".to_string(), Value::Int(client_req_id as i64));
+                                        res_map.insert(
+                                            "call_id".to_string(),
+                                            Value::Int(call_id as i64),
+                                        );
+                                        res_map.insert(
+                                            "client_id".to_string(),
+                                            Value::Int(client_req_id as i64),
+                                        );
                                         res_map.insert("method".to_string(), Value::string(method));
                                         res_map.insert("args".to_string(), call_args);
                                         return Ok(Value::map(res_map));
@@ -653,7 +679,9 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
         "server_respond".to_string(),
         Value::Native("Rpc.server_respond".into(), |args| {
             if args.len() < 3 {
-                return Err("Rpc.server_respond(call_id, status, result) requires 3 arguments".to_string());
+                return Err(
+                    "Rpc.server_respond(call_id, status, result) requires 3 arguments".to_string(),
+                );
             }
             let call_id = match args[0] {
                 Value::Int(i) => i as u64,
@@ -714,8 +742,12 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                 "127.0.0.1".to_string()
             };
 
-            let stream = TcpStream::connect((host.as_str(), port))
-                .map_err(|e| format!("Failed to connect to RPC server at {}:{}: {}", host, port, e))?;
+            let stream = TcpStream::connect((host.as_str(), port)).map_err(|e| {
+                format!(
+                    "Failed to connect to RPC server at {}:{}: {}",
+                    host, port, e
+                )
+            })?;
             stream.set_nodelay(true).map_err(|e| e.to_string())?;
 
             let id = NEXT_CLIENT_ID.fetch_add(1, Ordering::SeqCst);
@@ -725,7 +757,10 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                 next_req_id: AtomicU64::new(1),
             };
 
-            get_clients().lock().unwrap().insert(id, Arc::new(Mutex::new(state)));
+            get_clients()
+                .lock()
+                .unwrap()
+                .insert(id, Arc::new(Mutex::new(state)));
             Ok(Value::Int(id as i64))
         }),
     );

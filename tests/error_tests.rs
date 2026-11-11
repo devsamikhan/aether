@@ -77,3 +77,69 @@ fn test_reporter_limit() {
     assert!(!reporter.report(d3)); // Suppressed by limit
     assert_eq!(reporter.diagnostics.len(), 2);
 }
+
+#[test]
+fn test_vm_runtime_error_includes_line_and_stack_trace() {
+    let source = r#"
+fn inner() {
+    let x = 1 / 0
+    return x
+}
+
+fn outer() {
+    return inner()
+}
+
+outer()
+"#;
+    let err = aether::vm::run_source(source).expect_err("Expected division by zero runtime error");
+    assert!(
+        err.contains("ZeroDivisionError"),
+        "Missing error kind: {}",
+        err
+    );
+    assert!(
+        err.contains("[line 3:"),
+        "Expected line 3 in headline, got: {}",
+        err
+    );
+    assert!(
+        err.contains("Stack trace:"),
+        "Expected Stack trace section, got: {}",
+        err
+    );
+    assert!(
+        err.contains("at inner (line 3:"),
+        "Expected inner frame on line 3: {}",
+        err
+    );
+    assert!(
+        err.contains("at outer (line 8:"),
+        "Expected outer frame on line 8: {}",
+        err
+    );
+    assert!(
+        err.contains("at <main> (line 11:"),
+        "Expected main frame on line 11: {}",
+        err
+    );
+}
+
+#[test]
+fn test_vm_try_catch_still_recovers_without_aborting() {
+    let source = r#"
+let caught = ""
+try {
+    let x = 1 / 0
+} catch as err {
+    caught = str(err)
+}
+caught
+"#;
+    let val = aether::vm::run_source(source).expect("try/catch should recover cleanly");
+    assert!(
+        val.to_string().contains("ZeroDivisionError"),
+        "Expected caught ZeroDivisionError, got: {}",
+        val
+    );
+}

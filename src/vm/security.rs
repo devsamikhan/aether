@@ -4,8 +4,8 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
-use std::path::{Path, PathBuf};
 use crate::syntax::ast::*;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct SecurityPolicy {
@@ -89,7 +89,10 @@ impl SecurityPolicy {
         }
         if !self.allowed_read_roots.is_empty() {
             let target = Path::new(path);
-            let allowed = self.allowed_read_roots.iter().any(|root| target.starts_with(root));
+            let allowed = self
+                .allowed_read_roots
+                .iter()
+                .any(|root| target.starts_with(root));
             if !allowed {
                 return Err(format!(
                     "PermissionDeniedError: Read path '{}' is outside allowed sandbox roots",
@@ -109,7 +112,10 @@ impl SecurityPolicy {
         }
         if !self.allowed_write_roots.is_empty() {
             let target = Path::new(path);
-            let allowed = self.allowed_write_roots.iter().any(|root| target.starts_with(root));
+            let allowed = self
+                .allowed_write_roots
+                .iter()
+                .any(|root| target.starts_with(root));
             if !allowed {
                 return Err(format!(
                     "PermissionDeniedError: Write path '{}' is outside allowed sandbox roots",
@@ -252,7 +258,9 @@ fn scan_statement(
                     findings.push(SecurityFinding {
                         severity: "MEDIUM".to_string(),
                         category: "UnboundedLoop".to_string(),
-                        message: "Potential infinite 'while true' loop without direct break/return/yield".to_string(),
+                        message:
+                            "Potential infinite 'while true' loop without direct break/return/yield"
+                                .to_string(),
                         line: span.line,
                     });
                 }
@@ -266,10 +274,7 @@ fn scan_statement(
     }
 }
 
-fn expr_is_untrusted_input(
-    expr: &Expr,
-    tainted_vars: &std::collections::HashSet<String>,
-) -> bool {
+fn expr_is_untrusted_input(expr: &Expr, tainted_vars: &std::collections::HashSet<String>) -> bool {
     match expr {
         Expr::Ident(name, _) => {
             tainted_vars.contains(name)
@@ -284,12 +289,15 @@ fn expr_is_untrusted_input(
                     return true;
                 }
             }
-            args.iter().any(|a| expr_is_untrusted_input(a, tainted_vars))
+            args.iter()
+                .any(|a| expr_is_untrusted_input(a, tainted_vars))
         }
         Expr::Binary(l, _, r, _) => {
             expr_is_untrusted_input(l, tainted_vars) || expr_is_untrusted_input(r, tainted_vars)
         }
-        Expr::FString(parts, _) => parts.iter().any(|p| expr_is_untrusted_input(p, tainted_vars)),
+        Expr::FString(parts, _) => parts
+            .iter()
+            .any(|p| expr_is_untrusted_input(p, tainted_vars)),
         _ => false,
     }
 }

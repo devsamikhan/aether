@@ -18,7 +18,8 @@ struct DbInstance {
     wal_file: Option<File>,
 }
 
-static DATABASES: std::sync::OnceLock<Mutex<HashMap<u64, Arc<Mutex<DbInstance>>>>> = std::sync::OnceLock::new();
+static DATABASES: std::sync::OnceLock<Mutex<HashMap<u64, Arc<Mutex<DbInstance>>>>> =
+    std::sync::OnceLock::new();
 
 fn get_databases() -> &'static Mutex<HashMap<u64, Arc<Mutex<DbInstance>>>> {
     DATABASES.get_or_init(|| Mutex::new(HashMap::new()))
@@ -63,7 +64,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
                 instance.wal_file = Some(wal);
             }
 
-            get_databases().lock().insert(handle_id, Arc::new(Mutex::new(instance)));
+            get_databases()
+                .lock()
+                .insert(handle_id, Arc::new(Mutex::new(instance)));
 
             let mut handle_map = HashMap::new();
             handle_map.insert("_db_id".to_string(), Value::Int(handle_id as i64));
@@ -93,18 +96,27 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "insert".to_string(),
         Value::Native("Database.insert".into(), |args| {
             if args.len() < 3 {
-                return Err("Database.insert(handle, collection, document) requires 3 arguments".into());
+                return Err(
+                    "Database.insert(handle, collection, document) requires 3 arguments".into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let col_name = format!("{}", args[1]);
 
             let doc_map = match &args[2] {
                 Value::Map(m) => m.lock().clone(),
-                other => return Err(format!("Document must be a map, got '{}'", other.type_name())),
+                other => {
+                    return Err(format!(
+                        "Document must be a map, got '{}'",
+                        other.type_name()
+                    ))
+                }
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let mut db = db_arc.lock();
 
             let mut final_doc = doc_map.clone();
@@ -133,7 +145,10 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "find".to_string(),
         Value::Native("Database.find".into(), |args| {
             if args.len() < 2 {
-                return Err("Database.find(handle, collection, query?) requires at least 2 arguments".into());
+                return Err(
+                    "Database.find(handle, collection, query?) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let col_name = format!("{}", args[1]);
@@ -147,7 +162,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let db = db_arc.lock();
 
             let mut results = Vec::new();
@@ -168,7 +185,10 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "find_one".to_string(),
         Value::Native("Database.find_one".into(), |args| {
             if args.len() < 2 {
-                return Err("Database.find_one(handle, collection, query?) requires at least 2 arguments".into());
+                return Err(
+                    "Database.find_one(handle, collection, query?) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let col_name = format!("{}", args[1]);
@@ -182,7 +202,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let db = db_arc.lock();
 
             if let Some(col) = db.collections.get(&col_name) {
@@ -270,7 +292,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "delete".to_string(),
         Value::Native("Database.delete".into(), |args| {
             if args.len() < 3 {
-                return Err("Database.delete(handle, collection, query) requires 3 arguments".into());
+                return Err(
+                    "Database.delete(handle, collection, query) requires 3 arguments".into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let col_name = format!("{}", args[1]);
@@ -280,7 +304,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let mut db = db_arc.lock();
 
             let mut count = 0;
@@ -309,7 +335,10 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "count".to_string(),
         Value::Native("Database.count".into(), |args| {
             if args.len() < 2 {
-                return Err("Database.count(handle, collection, query?) requires at least 2 arguments".into());
+                return Err(
+                    "Database.count(handle, collection, query?) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let col_name = format!("{}", args[1]);
@@ -323,7 +352,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let db = db_arc.lock();
 
             let mut count = 0;
@@ -345,7 +376,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         Value::Native("Database.compact".into(), |args| {
             let handle_id = get_handle_id(args)?;
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let mut db = db_arc.lock();
             compact_database(&mut db)?;
             Ok(Value::Bool(true))
@@ -357,13 +390,17 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "execute".to_string(),
         Value::Native("Database.execute".into(), |args| {
             if args.len() < 2 {
-                return Err("Database.execute(handle, sql_statement) requires at least 2 arguments".into());
+                return Err(
+                    "Database.execute(handle, sql_statement) requires at least 2 arguments".into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let sql_str = format!("{}", args[1]);
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let mut db = db_arc.lock();
 
             execute_sql(&mut db, &sql_str)
@@ -375,7 +412,10 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         "query".to_string(),
         Value::Native("Database.query".into(), |args| {
             if args.len() < 2 {
-                return Err("Database.query(handle, sql_query, [params]) requires at least 2 arguments".into());
+                return Err(
+                    "Database.query(handle, sql_query, [params]) requires at least 2 arguments"
+                        .into(),
+                );
             }
             let handle_id = get_handle_id(args)?;
             let sql_str = format!("{}", args[1]);
@@ -391,7 +431,9 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
             };
 
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let db = db_arc.lock();
 
             let rows = query_sql(&db, &sql_str, &params)?;
@@ -406,19 +448,33 @@ pub fn register_db_module(globals: &mut HashMap<String, Value>) {
         Value::Native("Database.tables".into(), |args| {
             let handle_id = get_handle_id(args)?;
             let dbs = get_databases().lock();
-            let db_arc = dbs.get(&handle_id).ok_or_else(|| "Invalid database handle".to_string())?;
+            let db_arc = dbs
+                .get(&handle_id)
+                .ok_or_else(|| "Invalid database handle".to_string())?;
             let db = db_arc.lock();
 
-            let mut names: Vec<Value> = db.collections.keys().map(|k| Value::string(k.clone())).collect();
+            let mut names: Vec<Value> = db
+                .collections
+                .keys()
+                .map(|k| Value::string(k.clone()))
+                .collect();
             names.sort_by_key(|a| format!("{}", a));
             Ok(Value::array(names))
         }),
     );
 
-    globals.entry("__native_db".to_string()).or_insert_with(|| Value::map(db_module.clone()));
-    globals.entry("Database".to_string()).or_insert_with(|| Value::map(db_module.clone()));
-    globals.entry("DB".to_string()).or_insert_with(|| Value::map(db_module.clone()));
-    globals.entry("db".to_string()).or_insert_with(|| Value::map(db_module));
+    globals
+        .entry("__native_db".to_string())
+        .or_insert_with(|| Value::map(db_module.clone()));
+    globals
+        .entry("Database".to_string())
+        .or_insert_with(|| Value::map(db_module.clone()));
+    globals
+        .entry("DB".to_string())
+        .or_insert_with(|| Value::map(db_module.clone()));
+    globals
+        .entry("db".to_string())
+        .or_insert_with(|| Value::map(db_module));
 }
 
 // -----------------------------------------------------------------------------
@@ -439,7 +495,10 @@ fn get_handle_id(args: &[Value]) -> Result<u64, String> {
             }
         }
         Value::Int(id) => Ok(*id as u64),
-        other => Err(format!("Expected database handle, got '{}'", other.type_name())),
+        other => Err(format!(
+            "Expected database handle, got '{}'",
+            other.type_name()
+        )),
     }
 }
 
@@ -581,7 +640,8 @@ fn compact_database(db: &mut DbInstance) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    std::fs::write(&db.path, full_json).map_err(|e| format!("Failed to write database snapshot: {}", e))?;
+    std::fs::write(&db.path, full_json)
+        .map_err(|e| format!("Failed to write database snapshot: {}", e))?;
 
     // 2. Truncate WAL file
     let wal_path = format!("{}.wal", db.path);
@@ -650,7 +710,10 @@ fn apply_wal_entry(db: &mut DbInstance, entry: &serde_json::Value) {
 
     match op {
         "insert" => {
-            let col = db.collections.entry(col_name.to_string()).or_insert_with(Vec::new);
+            let col = db
+                .collections
+                .entry(col_name.to_string())
+                .or_insert_with(Vec::new);
             col.push(data_map);
         }
         "update" => {
@@ -714,7 +777,9 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
         if table_name.is_empty() {
             return Err("Invalid CREATE TABLE syntax: missing table name".into());
         }
-        db.collections.entry(table_name.to_string()).or_insert_with(Vec::new);
+        db.collections
+            .entry(table_name.to_string())
+            .or_insert_with(Vec::new);
         Ok(Value::Bool(true))
     } else if upper.starts_with("DROP TABLE") {
         let rest = trimmed["DROP TABLE".len()..].trim();
@@ -723,7 +788,9 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
         } else {
             rest
         };
-        let table_name = rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        let table_name = rest
+            .trim()
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
         db.collections.remove(table_name);
         Ok(Value::Bool(true))
     } else if upper.starts_with("INSERT INTO") {
@@ -734,16 +801,27 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
         };
 
         let (table_name, cols) = if let Some(open_paren) = table_part.find('(') {
-            let tname = table_part[..open_paren].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+            let tname = table_part[..open_paren]
+                .trim()
+                .trim_matches(|c| c == '`' || c == '"' || c == '\'');
             let end_paren = table_part.rfind(')').unwrap_or(table_part.len());
             let cols_str = &table_part[open_paren + 1..end_paren];
             let cols: Vec<String> = cols_str
                 .split(',')
-                .map(|s| s.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string())
+                .map(|s| {
+                    s.trim()
+                        .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+                        .to_string()
+                })
                 .collect();
             (tname, Some(cols))
         } else {
-            (table_part.trim().trim_matches(|c| c == '`' || c == '"' || c == '\''), None)
+            (
+                table_part
+                    .trim()
+                    .trim_matches(|c| c == '`' || c == '"' || c == '\''),
+                None,
+            )
         };
 
         let val_trimmed = values_part.trim();
@@ -784,16 +862,25 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
             }
         }
 
-        db.collections.entry(table_name.to_string()).or_insert_with(Vec::new).push(row_map);
+        db.collections
+            .entry(table_name.to_string())
+            .or_insert_with(Vec::new)
+            .push(row_map);
         Ok(Value::Int(1))
     } else if upper.starts_with("DELETE FROM") {
         let rest = trimmed["DELETE FROM".len()..].trim();
         let (table_name, where_clause) = match rest.to_uppercase().find("WHERE") {
             Some(idx) => (
-                rest[..idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\''),
+                rest[..idx]
+                    .trim()
+                    .trim_matches(|c| c == '`' || c == '"' || c == '\''),
                 Some(rest[idx + "WHERE".len()..].trim()),
             ),
-            None => (rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\''), None),
+            None => (
+                rest.trim()
+                    .trim_matches(|c| c == '`' || c == '"' || c == '\''),
+                None,
+            ),
         };
 
         let mut deleted = 0;
@@ -809,12 +896,20 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
         Ok(Value::Int(deleted))
     } else if upper.starts_with("UPDATE") {
         let rest = trimmed["UPDATE".len()..].trim();
-        let set_idx = rest.to_uppercase().find("SET").ok_or_else(|| "UPDATE missing SET clause".to_string())?;
-        let table_name = rest[..set_idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+        let set_idx = rest
+            .to_uppercase()
+            .find("SET")
+            .ok_or_else(|| "UPDATE missing SET clause".to_string())?;
+        let table_name = rest[..set_idx]
+            .trim()
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'');
         let after_set = rest[set_idx + "SET".len()..].trim();
 
         let (set_part, where_clause) = match after_set.to_uppercase().find("WHERE") {
-            Some(idx) => (&after_set[..idx].trim(), Some(after_set[idx + "WHERE".len()..].trim())),
+            Some(idx) => (
+                &after_set[..idx].trim(),
+                Some(after_set[idx + "WHERE".len()..].trim()),
+            ),
             None => (&after_set, None),
         };
 
@@ -822,7 +917,9 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
         let mut updates = HashMap::new();
         for assign in assignments {
             if let Some(eq_idx) = assign.find('=') {
-                let k = assign[..eq_idx].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+                let k = assign[..eq_idx]
+                    .trim()
+                    .trim_matches(|c| c == '`' || c == '"' || c == '\'');
                 let v = parse_sql_value(assign[eq_idx + 1..].trim());
                 updates.insert(k.to_string(), v);
             }
@@ -850,7 +947,11 @@ fn execute_sql(db: &mut DbInstance, sql: &str) -> Result<Value, String> {
     }
 }
 
-fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap<String, Value>>, String> {
+fn query_sql(
+    db: &DbInstance,
+    sql: &str,
+    params: &[Value],
+) -> Result<Vec<HashMap<String, Value>>, String> {
     let mut resolved_sql = sql.to_string();
     for param in params {
         if let Some(pos) = resolved_sql.find('?') {
@@ -872,7 +973,9 @@ fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap
         return Err(format!("query() expects SELECT statement, got: {}", sql));
     }
 
-    let from_idx = upper.find("FROM").ok_or_else(|| "SELECT missing FROM clause".to_string())?;
+    let from_idx = upper
+        .find("FROM")
+        .ok_or_else(|| "SELECT missing FROM clause".to_string())?;
     let select_part = trimmed["SELECT".len()..from_idx].trim();
     let after_from = trimmed[from_idx + "FROM".len()..].trim();
 
@@ -891,7 +994,9 @@ fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap
         let order_str = rest[order_idx + "ORDER BY".len()..].trim();
         let parts: Vec<&str> = order_str.split_whitespace().collect();
         if !parts.is_empty() {
-            let col = parts[0].trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string();
+            let col = parts[0]
+                .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+                .to_string();
             let desc = parts.len() > 1 && parts[1].eq_ignore_ascii_case("DESC");
             order_by = Some((col, desc));
         }
@@ -904,7 +1009,9 @@ fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap
         rest = rest[..where_idx].trim();
     }
 
-    let table_name = rest.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+    let table_name = rest
+        .trim()
+        .trim_matches(|c| c == '`' || c == '"' || c == '\'');
     let rows = match db.collections.get(table_name) {
         Some(list) => list,
         None => return Ok(Vec::new()),
@@ -942,7 +1049,11 @@ fn query_sql(db: &DbInstance, sql: &str, params: &[Value]) -> Result<Vec<HashMap
     } else {
         select_part
             .split(',')
-            .map(|s| s.trim().trim_matches(|c| c == '`' || c == '"' || c == '\'').to_string())
+            .map(|s| {
+                s.trim()
+                    .trim_matches(|c| c == '`' || c == '"' || c == '\'')
+                    .to_string()
+            })
             .collect()
     };
 
@@ -1039,7 +1150,9 @@ fn eval_single_cond(row: &HashMap<String, Value>, cond: &str) -> bool {
     let ops = [">=", "<=", "!=", "<>", ">", "<", " LIKE ", " like ", "="];
     for op in ops {
         if let Some(pos) = cond.to_uppercase().find(&op.to_uppercase()) {
-            let col_name = cond[..pos].trim().trim_matches(|c| c == '`' || c == '"' || c == '\'');
+            let col_name = cond[..pos]
+                .trim()
+                .trim_matches(|c| c == '`' || c == '"' || c == '\'');
             let val_str = cond[pos + op.len()..].trim();
             let row_val = row.get(col_name).unwrap_or(&Value::Nil);
             let target_val = parse_sql_value(val_str);
@@ -1067,8 +1180,12 @@ fn compare_values_ord(a: &Value, b: &Value) -> std::cmp::Ordering {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x.cmp(y),
         (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-        (Value::Int(x), Value::Float(y)) => (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-        (Value::Float(x), Value::Int(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Int(x), Value::Float(y)) => (*x as f64)
+            .partial_cmp(y)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Value::Float(x), Value::Int(y)) => x
+            .partial_cmp(&(*y as f64))
+            .unwrap_or(std::cmp::Ordering::Equal),
         (Value::String(x), Value::String(y)) => x.cmp(y),
         _ => std::cmp::Ordering::Equal,
     }
