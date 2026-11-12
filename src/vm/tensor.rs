@@ -102,15 +102,46 @@ impl TensorData {
         }
 
         let mut out_data = vec![0.0; m * n];
-        // Cache-friendly matrix multiplication (IKJ loop order)
-        for i in 0..m {
-            let a_row_offset = i * k1;
-            let c_row_offset = i * n;
-            for k in 0..k1 {
-                let a_val = self.data[a_row_offset + k];
-                let b_row_offset = k * n;
-                for j in 0..n {
-                    out_data[c_row_offset + j] += a_val * other.data[b_row_offset + j];
+        // Parallel multi-core IKJ matrix multiplication for medium/large matrices
+        let work = m.saturating_mul(k1).saturating_mul(n);
+        let workers = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(1);
+
+        if work >= 65_536 && m >= 8 && workers > 1 && n > 0 {
+            let chunk_rows = m.div_ceil(workers);
+            let a_data = &self.data;
+            let b_data = &other.data;
+            std::thread::scope(|s| {
+                for (chunk_idx, out_chunk) in out_data.chunks_mut(chunk_rows * n).enumerate() {
+                    let row_start = chunk_idx * chunk_rows;
+                    let rows_in_chunk = out_chunk.len() / n;
+                    s.spawn(move || {
+                        for local_i in 0..rows_in_chunk {
+                            let a_row_offset = (row_start + local_i) * k1;
+                            let c_row_offset = local_i * n;
+                            for k in 0..k1 {
+                                let a_val = a_data[a_row_offset + k];
+                                let b_row_offset = k * n;
+                                for j in 0..n {
+                                    out_chunk[c_row_offset + j] += a_val * b_data[b_row_offset + j];
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        } else {
+            // Cache-friendly IKJ loop order for compact tensors
+            for i in 0..m {
+                let a_row_offset = i * k1;
+                let c_row_offset = i * n;
+                for k in 0..k1 {
+                    let a_val = self.data[a_row_offset + k];
+                    let b_row_offset = k * n;
+                    for j in 0..n {
+                        out_data[c_row_offset + j] += a_val * other.data[b_row_offset + j];
+                    }
                 }
             }
         }
@@ -151,12 +182,138 @@ impl TensorData {
         }
     }
 
-    pub fn relu(&self) -> Self {
-        let data: Vec<f64> = self
-            .data
+    pub fn min_val(&self) -> f64 {
+        self.data.iter().copied().fold(f64::INFINITY, f64::min)
+    }
+
+    pub fn max_val(&self) -> f64 {
+        self.data.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    pub fn variance(&self) -> f64 {
+        if self.data.is_empty() {
+            return 0.0;
+        }
+        let m = self.mean();
+        self.data.iter().map(|&x| (x - m) * (x - m)).sum::<f64>() / (self.data.len() as f64)
+    }
+
+    pub fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    pub fn argmax(&self) -> usize {
+        self.data
             .iter()
-            .map(|&x| if x > 0.0 { x } else { 0.0 })
-            .collect();
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(idx, _)| idx)
+            .unwrap_or(0)
+    }
+
+    pub fn argmin(&self) -> usize {
+        self.data
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(idx, _)| idx)
+            .unwrap_or(0)
+    }
+
+    pub fn sum_axis(&self, axis: usize) -> Result<Self, String> {
+        if self.shape.len() != 2 {
+            if axis == 0 && self.shape.len() == 1 {
+                return Self::new(vec![1], vec![self.sum()]);
+            }
+            return Err(format!(
+                "sum_axis requires 1D or 2D tensor, got shape {:?}",
+                self.shape
+            ));
+        }
+        let (rows, cols) = (self.shape[0], self.shape[1]);
+        match axis {
+            0 => {
+                let mut out = vec![0.0; cols];
+                for r in 0..rows {
+                    for (c, slot) in out.iter_mut().enumerate() {
+                        *slot += self.data[r * cols + c];
+                    }
+                }
+                Self::new(vec![1, cols], out)
+            }
+            1 => {
+                let out: Vec<f64> = (0..rows)
+                    .map(|r| self.data[r * cols..(r + 1) * cols].iter().sum())
+                    .collect();
+                Self::new(vec![rows, 1], out)
+            }
+            _ => Err(format!("Invalid axis {} for 2D tensor", axis)),
+        }
+    }
+
+    pub fn mean_axis(&self, axis: usize) -> Result<Self, String> {
+        let summed = self.sum_axis(axis)?;
+        let denom = *self
+            .shape
+            .get(axis)
+            .ok_or_else(|| format!("Invalid axis {} for shape {:?}", axis, self.shape))?;
+        let denom_f = (denom.max(1)) as f64;
+        Ok(summed.map_unary(|x| x / denom_f))
+    }
+
+    pub fn argmax_axis(&self, axis: usize) -> Result<Self, String> {
+        if self.shape.len() != 2 {
+            if axis == 0 && self.shape.len() == 1 {
+                return Self::new(vec![1], vec![self.argmax() as f64]);
+            }
+            return Err(format!(
+                "argmax_axis requires 1D or 2D tensor, got shape {:?}",
+                self.shape
+            ));
+        }
+        let (rows, cols) = (self.shape[0], self.shape[1]);
+        match axis {
+            0 => {
+                let mut out = Vec::with_capacity(cols);
+                for c in 0..cols {
+                    let mut best_r = 0;
+                    let mut best_v = f64::NEG_INFINITY;
+                    for r in 0..rows {
+                        let v = self.data[r * cols + c];
+                        if v > best_v {
+                            best_v = v;
+                            best_r = r;
+                        }
+                    }
+                    out.push(best_r as f64);
+                }
+                Self::new(vec![cols], out)
+            }
+            1 => {
+                let mut out = Vec::with_capacity(rows);
+                for r in 0..rows {
+                    let mut best_c = 0;
+                    let mut best_v = f64::NEG_INFINITY;
+                    for c in 0..cols {
+                        let v = self.data[r * cols + c];
+                        if v > best_v {
+                            best_v = v;
+                            best_c = c;
+                        }
+                    }
+                    out.push(best_c as f64);
+                }
+                Self::new(vec![rows], out)
+            }
+            _ => Err(format!("Invalid axis {} for 2D tensor", axis)),
+        }
+    }
+
+    pub fn map_unary<F>(&self, f: F) -> Self
+    where
+        F: Fn(f64) -> f64,
+    {
+        let data: Vec<f64> = self.data.iter().copied().map(f).collect();
         Self {
             shape: self.shape.clone(),
             strides: self.strides.clone(),
@@ -164,17 +321,100 @@ impl TensorData {
         }
     }
 
+    pub fn relu(&self) -> Self {
+        self.map_unary(|x| if x > 0.0 { x } else { 0.0 })
+    }
+
     pub fn sigmoid(&self) -> Self {
-        let data: Vec<f64> = self
-            .data
-            .iter()
-            .map(|&x| 1.0 / (1.0 + (-x).exp()))
-            .collect();
-        Self {
-            shape: self.shape.clone(),
-            strides: self.strides.clone(),
-            data,
+        self.map_unary(|x| 1.0 / (1.0 + (-x).exp()))
+    }
+
+    pub fn exp(&self) -> Self {
+        self.map_unary(f64::exp)
+    }
+
+    pub fn log(&self) -> Self {
+        self.map_unary(|x| x.max(1e-15).ln())
+    }
+
+    pub fn sqrt(&self) -> Self {
+        self.map_unary(|x| x.max(0.0).sqrt())
+    }
+
+    pub fn abs(&self) -> Self {
+        self.map_unary(f64::abs)
+    }
+
+    pub fn tanh(&self) -> Self {
+        self.map_unary(f64::tanh)
+    }
+
+    pub fn gelu(&self) -> Self {
+        let sqrt_2_over_pi = (2.0 / std::f64::consts::PI).sqrt();
+        self.map_unary(|x| {
+            let inner = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
+            0.5 * x * (1.0 + inner.tanh())
+        })
+    }
+
+    pub fn silu(&self) -> Self {
+        self.map_unary(|x| x / (1.0 + (-x).exp()))
+    }
+
+    pub fn pow_scalar(&self, p: f64) -> Self {
+        self.map_unary(|x| x.powf(p))
+    }
+
+    pub fn arange(start: f64, stop: f64, step: f64) -> Result<Self, String> {
+        if step == 0.0 {
+            return Err("Tensor.arange step cannot be zero".into());
         }
+        let mut data = Vec::new();
+        let mut cur = start;
+        if step > 0.0 {
+            while cur < stop - 1e-12 {
+                data.push(cur);
+                cur += step;
+            }
+        } else {
+            while cur > stop + 1e-12 {
+                data.push(cur);
+                cur += step;
+            }
+        }
+        let n = data.len();
+        Self::new(vec![n], data)
+    }
+
+    pub fn linspace(start: f64, stop: f64, num: usize) -> Result<Self, String> {
+        if num == 0 {
+            return Self::new(vec![0], Vec::new());
+        }
+        if num == 1 {
+            return Self::new(vec![1], vec![start]);
+        }
+        let step = (stop - start) / ((num - 1) as f64);
+        let data: Vec<f64> = (0..num).map(|i| start + (i as f64) * step).collect();
+        Self::new(vec![num], data)
+    }
+
+    pub fn slice_rows(&self, start: usize, end: usize) -> Result<Self, String> {
+        if self.shape.is_empty() {
+            return Err("Cannot slice empty tensor".into());
+        }
+        let rows = self.shape[0];
+        let end_clamped = end.min(rows);
+        if start > end_clamped {
+            return Err(format!(
+                "Invalid row slice {}..{} for tensor of {} rows",
+                start, end, rows
+            ));
+        }
+        let row_stride: usize = self.shape[1..].iter().product::<usize>().max(1);
+        let mut new_shape = self.shape.clone();
+        new_shape[0] = end_clamped - start;
+        let sliced = self.data[start * row_stride..end_clamped * row_stride].to_vec();
+        Self::new(new_shape, sliced)
     }
 
     pub fn softmax(&self) -> Result<Self, String> {
@@ -360,7 +600,7 @@ fn get_tensors() -> &'static Mutex<HashMap<u64, Arc<Mutex<TensorData>>>> {
     TENSORS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn wrap_tensor_handle(data: TensorData) -> Value {
+pub fn wrap_tensor_handle(data: TensorData) -> Value {
     let id = NEXT_TENSOR_ID.fetch_add(1, Ordering::SeqCst);
     let shape_vals: Vec<Value> = data.shape.iter().map(|&s| Value::Int(s as i64)).collect();
     let size = data.data.len() as i64;
@@ -789,6 +1029,174 @@ pub fn register_tensor_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // 14. Extended NumPy / Deep-Learning Math Ops
+    tensor_module.insert(
+        "exp".to_string(),
+        Value::Native("Tensor.exp".into(), |a| {
+            unary_op(a, "Tensor.exp", TensorData::exp)
+        }),
+    );
+    tensor_module.insert(
+        "log".to_string(),
+        Value::Native("Tensor.log".into(), |a| {
+            unary_op(a, "Tensor.log", TensorData::log)
+        }),
+    );
+    tensor_module.insert(
+        "sqrt".to_string(),
+        Value::Native("Tensor.sqrt".into(), |a| {
+            unary_op(a, "Tensor.sqrt", TensorData::sqrt)
+        }),
+    );
+    tensor_module.insert(
+        "abs".to_string(),
+        Value::Native("Tensor.abs".into(), |a| {
+            unary_op(a, "Tensor.abs", TensorData::abs)
+        }),
+    );
+    tensor_module.insert(
+        "tanh".to_string(),
+        Value::Native("Tensor.tanh".into(), |a| {
+            unary_op(a, "Tensor.tanh", TensorData::tanh)
+        }),
+    );
+    tensor_module.insert(
+        "gelu".to_string(),
+        Value::Native("Tensor.gelu".into(), |a| {
+            unary_op(a, "Tensor.gelu", TensorData::gelu)
+        }),
+    );
+    tensor_module.insert(
+        "silu".to_string(),
+        Value::Native("Tensor.silu".into(), |a| {
+            unary_op(a, "Tensor.silu", TensorData::silu)
+        }),
+    );
+    tensor_module.insert(
+        "pow".to_string(),
+        Value::Native("Tensor.pow".into(), |args| {
+            if args.len() < 2 {
+                return Err("Tensor.pow(t, exponent) requires 2 arguments".into());
+            }
+            let t = get_tensor_data(&args[0])?;
+            let p = arg_f64(&args[1], "exponent")?;
+            Ok(wrap_tensor_handle(t.pow_scalar(p)))
+        }),
+    );
+
+    // 15. Statistical & Index Reductions
+    tensor_module.insert(
+        "min".to_string(),
+        Value::Native("Tensor.min".into(), |a| {
+            scalar_op(a, "Tensor.min", TensorData::min_val)
+        }),
+    );
+    tensor_module.insert(
+        "max".to_string(),
+        Value::Native("Tensor.max".into(), |a| {
+            scalar_op(a, "Tensor.max", TensorData::max_val)
+        }),
+    );
+    tensor_module.insert(
+        "var".to_string(),
+        Value::Native("Tensor.var".into(), |a| {
+            scalar_op(a, "Tensor.var", TensorData::variance)
+        }),
+    );
+    tensor_module.insert(
+        "std".to_string(),
+        Value::Native("Tensor.std".into(), |a| {
+            scalar_op(a, "Tensor.std", TensorData::std_dev)
+        }),
+    );
+    tensor_module.insert(
+        "argmax".to_string(),
+        Value::Native("Tensor.argmax".into(), |args| {
+            if args.is_empty() {
+                return Err("Tensor.argmax(t, [axis]) requires tensor".into());
+            }
+            let t = get_tensor_data(&args[0])?;
+            if args.len() > 1 && args[1] != Value::Nil {
+                let axis = arg_usize(&args[1], "axis")?;
+                return Ok(wrap_tensor_handle(t.argmax_axis(axis)?));
+            }
+            Ok(Value::Int(t.argmax() as i64))
+        }),
+    );
+    tensor_module.insert(
+        "argmin".to_string(),
+        Value::Native("Tensor.argmin".into(), |args| {
+            if args.is_empty() {
+                return Err("Tensor.argmin(t) requires tensor".into());
+            }
+            let t = get_tensor_data(&args[0])?;
+            Ok(Value::Int(t.argmin() as i64))
+        }),
+    );
+    tensor_module.insert(
+        "sum_axis".to_string(),
+        Value::Native("Tensor.sum_axis".into(), |a| {
+            axis_op(a, "Tensor.sum_axis", TensorData::sum_axis)
+        }),
+    );
+    tensor_module.insert(
+        "mean_axis".to_string(),
+        Value::Native("Tensor.mean_axis".into(), |a| {
+            axis_op(a, "Tensor.mean_axis", TensorData::mean_axis)
+        }),
+    );
+
+    // 16. Creation & Slicing Utilities (NumPy parity)
+    tensor_module.insert(
+        "arange".to_string(),
+        Value::Native("Tensor.arange".into(), |args| {
+            if args.is_empty() {
+                return Err(
+                    "Tensor.arange(stop) or Tensor.arange(start, stop, [step]) required".into(),
+                );
+            }
+            let (start, stop, step) = if args.len() == 1 {
+                (0.0, arg_f64(&args[0], "stop")?, 1.0)
+            } else {
+                let st = arg_f64(&args[0], "start")?;
+                let sp = arg_f64(&args[1], "stop")?;
+                let step = if args.len() > 2 && args[2] != Value::Nil {
+                    arg_f64(&args[2], "step")?
+                } else if sp >= st {
+                    1.0
+                } else {
+                    -1.0
+                };
+                (st, sp, step)
+            };
+            Ok(wrap_tensor_handle(TensorData::arange(start, stop, step)?))
+        }),
+    );
+    tensor_module.insert(
+        "linspace".to_string(),
+        Value::Native("Tensor.linspace".into(), |args| {
+            if args.len() < 3 {
+                return Err("Tensor.linspace(start, stop, num) requires 3 arguments".into());
+            }
+            let start = arg_f64(&args[0], "start")?;
+            let stop = arg_f64(&args[1], "stop")?;
+            let num = arg_usize(&args[2], "num")?;
+            Ok(wrap_tensor_handle(TensorData::linspace(start, stop, num)?))
+        }),
+    );
+    tensor_module.insert(
+        "slice_rows".to_string(),
+        Value::Native("Tensor.slice_rows".into(), |args| {
+            if args.len() < 3 {
+                return Err("Tensor.slice_rows(t, start, end) requires 3 arguments".into());
+            }
+            let t = get_tensor_data(&args[0])?;
+            let start = arg_usize(&args[1], "start")?;
+            let end = arg_usize(&args[2], "end")?;
+            Ok(wrap_tensor_handle(t.slice_rows(start, end)?))
+        }),
+    );
+
     globals
         .entry("__native_tensor".to_string())
         .or_insert_with(|| Value::map(tensor_module.clone()));
@@ -801,6 +1209,54 @@ pub fn register_tensor_module(globals: &mut HashMap<String, Value>) {
     globals
         .entry("matrix".to_string())
         .or_insert_with(|| Value::map(tensor_module));
+}
+
+fn arg_f64(val: &Value, name: &str) -> Result<f64, String> {
+    match val {
+        Value::Float(f) => Ok(*f),
+        Value::Int(i) => Ok(*i as f64),
+        _ => Err(format!("{} must be a number", name)),
+    }
+}
+
+fn arg_usize(val: &Value, name: &str) -> Result<usize, String> {
+    match val {
+        Value::Int(i) if *i >= 0 => Ok(*i as usize),
+        _ => Err(format!("{} must be a non-negative integer", name)),
+    }
+}
+
+fn unary_op(
+    args: &[Value],
+    fn_name: &str,
+    op: fn(&TensorData) -> TensorData,
+) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err(format!("{}(t) requires tensor", fn_name));
+    }
+    let t = get_tensor_data(&args[0])?;
+    Ok(wrap_tensor_handle(op(&t)))
+}
+
+fn scalar_op(args: &[Value], fn_name: &str, op: fn(&TensorData) -> f64) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err(format!("{}(t) requires tensor", fn_name));
+    }
+    let t = get_tensor_data(&args[0])?;
+    Ok(Value::Float(op(&t)))
+}
+
+fn axis_op(
+    args: &[Value],
+    fn_name: &str,
+    op: fn(&TensorData, usize) -> Result<TensorData, String>,
+) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err(format!("{}(t, axis) requires 2 arguments", fn_name));
+    }
+    let t = get_tensor_data(&args[0])?;
+    let axis = arg_usize(&args[1], "axis")?;
+    Ok(wrap_tensor_handle(op(&t, axis)?))
 }
 
 fn binary_op<F>(args: &[Value], op: F) -> Result<Value, String>

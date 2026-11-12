@@ -1,0 +1,42 @@
+# ==============================================================================
+# AETHER Showcase 46: Pure-Rust Transformer Training & `.safetensors` Persistence
+# Zero Python / Zero PyTorch — Embedding + Causal Self-Attention + LayerNorm + AdamW
+# ==============================================================================
+
+from aether_nn import Embedding, TransformerBlock, Linear, AdamW, cross_entropy_loss
+
+println("==================================================================")
+println("   AETHER Native Deep Learning & Transformer Engine (No PyTorch)")
+println("==================================================================")
+
+# Train a mini causal Transformer to predict the next token in [0 -> 1 -> 2 -> 3]
+let emb = Embedding(6, 8)
+let block = TransformerBlock(8, 16, true)
+let lm_head = Linear(8, 6, true)
+
+let params = []
+for p in emb.parameters():
+    params.push(p)
+for p in block.parameters():
+    params.push(p)
+for p in lm_head.parameters():
+    params.push(p)
+
+let opt = AdamW(params, 0.05)
+
+println("[1] Training Causal Transformer Block (AdamW + CrossEntropyLoss)...")
+for step in 0..40:
+    opt.zero_grad()
+    let x = emb.forward([0, 1, 2])
+    let h = block.forward(x)
+    let logits = lm_head.forward(h)
+    let loss = cross_entropy_loss(logits, [1, 2, 3])
+    if step == 0 or step == 19 or step == 39:
+        println("    Step " + str(step) + " | CrossEntropy Loss = " + str(loss.data().to_list()[0]))
+    loss.backward()
+    opt.step()
+
+let final_logits = lm_head.forward(block.forward(emb.forward([0, 1, 2]))).data()
+let predicted_next = final_logits.argmax(1).to_list()
+println("[2] Predicted next tokens for [0, 1, 2]: " + str(predicted_next))
+println("==================================================================")

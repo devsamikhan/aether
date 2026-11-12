@@ -97,6 +97,25 @@ impl AetherLanguageServer {
                 * `Bio.orf_finder(dna, min_aa_len)`"
                     .to_string(),
             ),
+            "ML" => Some(
+                "### AETHER Native Machine Learning Engine (Zero Python)\n\
+                Pure-Rust supervised & unsupervised algorithms, preprocessing, metrics, and edge model persistence.\n\
+                * `ML.train_test_split(X, y, [test_ratio, seed])`\n\
+                * `ML.standard_scaler_fit(X)` / `ML.minmax_scaler_fit(X)`\n\
+                * `ML.linear_regression_fit(X, y)` / `ML.logistic_regression_fit(X, y)`\n\
+                * `ML.decision_tree_fit(X, y)` / `ML.random_forest_fit(X, y)` / `ML.knn_fit(X, y)`\n\
+                * `ML.kmeans_fit(X, k)` / `ML.pca_fit(X, n_components)`\n\
+                * `ML.predict(id, X)` / `ML.transform(id, X)` / `ML.save_model(id, path)` / `ML.load_model(path)`"
+                    .to_string(),
+            ),
+            "NN" => Some(
+                "### AETHER Pure-Rust Deep Learning & Transformer Autograd Engine\n\
+                Native reverse-mode autograd tape, CrossEntropy, LayerNorm, Embedding, Causal Self-Attention, AdamW, and HuggingFace `.safetensors` weights.\n\
+                * `NN.var(data, [requires_grad])` / `NN.matmul(a, b)` / `NN.backward(loss)`\n\
+                * `NN.cross_entropy(logits, targets)` / `NN.layer_norm(x, g, b)` / `NN.attention(q, k, v, causal)`\n\
+                * `NN.adamw_create(params, lr, ...)` / `NN.save_safetensors(map, path)` / `NN.load_safetensors(path)`"
+                    .to_string(),
+            ),
             "Chem" => Some(
                 "### AETHER Cheminformatics Engine\n\
                 SMILES/SDF molecule parsing, physicochemical descriptors, Lipinski Ro5, Morgan fingerprints, Tanimoto, and affinity prediction.\n\
@@ -551,6 +570,21 @@ impl AetherLanguageServer {
             ("AI", 9, "Native On-Device AI & Embeddings Module"),
             ("AetherBridge", 9, "Hardware Bridge & Native Mobile API"),
             ("DB", 9, "Embedded Relational SQL & DataFrame Engine"),
+            (
+                "ML",
+                9,
+                "Pure-Rust Classical Machine Learning & Metrics Module",
+            ),
+            (
+                "NN",
+                9,
+                "Pure-Rust Deep Learning Autograd, Attention & Safetensors Module",
+            ),
+            (
+                "Matrix",
+                9,
+                "Native Multi-Core Tensor & Linear Algebra Module",
+            ),
             ("Tensor", 9, "Native Tensor & Autograd Engine"),
             ("Graph", 9, "Knowledge Graph Traversal Engine"),
             ("M3", 9, "Material 3 Dynamic UI Engine"),
@@ -624,6 +658,9 @@ fn detect_member_prefix_fallback(raw_payload: &str) -> Option<String> {
         "Json",
         "File",
         "AI",
+        "ML",
+        "NN",
+        "Matrix",
         "AetherBridge",
         "DB",
     ] {
@@ -756,6 +793,144 @@ fn member_completions(ns: &str) -> Vec<JsonValue> {
             ("open", 2, "DB.open(path) -> DatabaseHandle"),
             ("execute", 2, "db.execute(sql) -> Result"),
             ("query", 2, "db.query(sql) -> Array<Map>"),
+        ],
+        "ML" => &[
+            (
+                "train_test_split",
+                2,
+                "ML.train_test_split(X, y, [test_ratio, seed]) -> SplitMap",
+            ),
+            (
+                "standard_scaler_fit",
+                2,
+                "ML.standard_scaler_fit(X) -> scaler_id",
+            ),
+            (
+                "minmax_scaler_fit",
+                2,
+                "ML.minmax_scaler_fit(X) -> scaler_id",
+            ),
+            (
+                "linear_regression_fit",
+                2,
+                "ML.linear_regression_fit(X, y, [l2]) -> model_id",
+            ),
+            (
+                "logistic_regression_fit",
+                2,
+                "ML.logistic_regression_fit(X, y, [lr, epochs, l2]) -> model_id",
+            ),
+            (
+                "decision_tree_fit",
+                2,
+                "ML.decision_tree_fit(X, y, [max_depth, min_samples_split]) -> model_id",
+            ),
+            (
+                "random_forest_fit",
+                2,
+                "ML.random_forest_fit(X, y, [n_estimators, max_depth, seed]) -> model_id",
+            ),
+            ("knn_fit", 2, "ML.knn_fit(X, y, [k]) -> model_id"),
+            (
+                "kmeans_fit",
+                2,
+                "ML.kmeans_fit(X, k, [max_iter, seed]) -> model_id",
+            ),
+            ("pca_fit", 2, "ML.pca_fit(X, n_components) -> model_id"),
+            ("predict", 2, "ML.predict(model_id, X) -> Array"),
+            (
+                "predict_proba",
+                2,
+                "ML.predict_proba(model_id, X) -> Array<Array<Float>>",
+            ),
+            (
+                "transform",
+                2,
+                "ML.transform(model_id, X) -> Array<Array<Float>>",
+            ),
+            ("accuracy", 2, "ML.accuracy(y_true, y_pred) -> Float"),
+            (
+                "precision_recall_f1",
+                2,
+                "ML.precision_recall_f1(y_true, y_pred, [pos_label]) -> MetricsMap",
+            ),
+            (
+                "confusion_matrix",
+                2,
+                "ML.confusion_matrix(y_true, y_pred) -> ConfusionMap",
+            ),
+            ("mse", 2, "ML.mse(y_true, y_pred) -> Float"),
+            ("rmse", 2, "ML.rmse(y_true, y_pred) -> Float"),
+            ("r2_score", 2, "ML.r2_score(y_true, y_pred) -> Float"),
+            ("roc_auc", 2, "ML.roc_auc(y_true, y_scores) -> Float"),
+            ("save_model", 2, "ML.save_model(model_id, path) -> Bool"),
+            ("load_model", 2, "ML.load_model(path) -> model_id"),
+        ],
+        "NN" => &[
+            (
+                "var",
+                2,
+                "NN.var(tensor_or_array, [requires_grad]) -> node_id",
+            ),
+            ("data", 2, "NN.data(node_id) -> Tensor"),
+            ("grad", 2, "NN.grad(node_id) -> Tensor | Nil"),
+            ("matmul", 2, "NN.matmul(a_id, b_id) -> node_id"),
+            ("gelu", 2, "NN.gelu(node_id) -> node_id"),
+            ("silu", 2, "NN.silu(node_id) -> node_id"),
+            (
+                "layer_norm",
+                2,
+                "NN.layer_norm(x_id, gamma_id, beta_id, [eps]) -> node_id",
+            ),
+            (
+                "embedding",
+                2,
+                "NN.embedding(table_id, token_indices) -> node_id",
+            ),
+            (
+                "attention",
+                2,
+                "NN.attention(q_id, k_id, v_id, [causal]) -> node_id",
+            ),
+            (
+                "cross_entropy",
+                2,
+                "NN.cross_entropy(logits_id, target_indices) -> loss_id",
+            ),
+            ("mse_loss", 2, "NN.mse_loss(pred_id, target_id) -> loss_id"),
+            ("backward", 2, "NN.backward(loss_id) -> Bool"),
+            (
+                "adamw_create",
+                2,
+                "NN.adamw_create(params, [lr, beta1, beta2, eps, wd]) -> opt_id",
+            ),
+            ("adamw_step", 2, "NN.adamw_step(opt_id) -> Bool"),
+            (
+                "save_safetensors",
+                2,
+                "NN.save_safetensors(tensors_map, path) -> Bool",
+            ),
+            (
+                "load_safetensors",
+                2,
+                "NN.load_safetensors(path) -> Map<String, Tensor>",
+            ),
+        ],
+        "Matrix" => &[
+            ("zeros", 2, "Matrix.zeros(shape) -> Tensor"),
+            ("ones", 2, "Matrix.ones(shape) -> Tensor"),
+            ("from_array", 2, "Matrix.from_array(arr, [shape]) -> Tensor"),
+            ("arange", 2, "Matrix.arange(start, [stop, step]) -> Tensor"),
+            ("linspace", 2, "Matrix.linspace(start, stop, num) -> Tensor"),
+            ("matmul", 2, "Matrix.matmul(a, b) -> Tensor"),
+            ("exp", 2, "Matrix.exp(t) -> Tensor"),
+            ("log", 2, "Matrix.log(t) -> Tensor"),
+            ("sqrt", 2, "Matrix.sqrt(t) -> Tensor"),
+            ("gelu", 2, "Matrix.gelu(t) -> Tensor"),
+            ("silu", 2, "Matrix.silu(t) -> Tensor"),
+            ("argmax", 2, "Matrix.argmax(t, [axis]) -> Int | Tensor"),
+            ("sum_axis", 2, "Matrix.sum_axis(t, axis) -> Tensor"),
+            ("mean_axis", 2, "Matrix.mean_axis(t, axis) -> Tensor"),
         ],
         _ => &[],
     };

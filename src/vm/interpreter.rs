@@ -109,6 +109,8 @@ impl VM {
         super::regex_engine::register_regex_module(&mut vm.globals);
         super::bio::register_bio_module(&mut vm.globals);
         super::chem::register_chem_module(&mut vm.globals);
+        super::ml::register_ml_module(&mut vm.globals);
+        super::nn::register_nn_module(&mut vm.globals);
         vm
     }
 

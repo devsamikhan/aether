@@ -1,0 +1,179 @@
+# ==============================================================================
+# AetherML — Native Scikit-Learn-Compatible Classical Machine Learning Library
+# Zero Python Dependencies — Backed Directly by Pure-Rust VM Module `ML`
+# ==============================================================================
+
+class StandardScaler:
+    def __init__(self):
+        self.id = nil
+
+    def fit(self, X):
+        self.id = __native_ml.standard_scaler_fit(X)
+        return self
+
+    def transform(self, X):
+        return __native_ml.transform(self.id, X)
+
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
+
+    def save(self, path):
+        return __native_ml.save_model(self.id, path)
+
+class MinMaxScaler:
+    def __init__(self):
+        self.id = nil
+
+    def fit(self, X):
+        self.id = __native_ml.minmax_scaler_fit(X)
+        return self
+
+    def transform(self, X):
+        return __native_ml.transform(self.id, X)
+
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
+
+class LinearRegression:
+    def __init__(self, l2=0.000001):
+        self.l2 = l2
+        self.id = nil
+
+    def fit(self, X, y):
+        self.id = __native_ml.linear_regression_fit(X, y, self.l2)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def weights(self):
+        return __native_ml.linear_weights(self.id)
+
+    def score(self, X, y):
+        let preds = self.predict(X)
+        return __native_ml.r2_score(y, preds)
+
+    def save(self, path):
+        return __native_ml.save_model(self.id, path)
+
+class LogisticRegression:
+    def __init__(self, lr=0.1, epochs=400, l2=0.0001):
+        self.lr = lr
+        self.epochs = epochs
+        self.l2 = l2
+        self.id = nil
+
+    def fit(self, X, y):
+        self.id = __native_ml.logistic_regression_fit(X, y, self.lr, self.epochs, self.l2)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def predict_proba(self, X):
+        return __native_ml.predict_proba(self.id, X)
+
+    def score(self, X, y):
+        let preds = self.predict(X)
+        return __native_ml.accuracy(y, preds)
+
+    def save(self, path):
+        return __native_ml.save_model(self.id, path)
+
+class DecisionTree:
+    def __init__(self, max_depth=6, min_samples_split=2):
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.id = nil
+
+    def fit(self, X, y):
+        self.id = __native_ml.decision_tree_fit(X, y, self.max_depth, self.min_samples_split)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def score(self, X, y):
+        return __native_ml.accuracy(y, self.predict(X))
+
+    def save(self, path):
+        return __native_ml.save_model(self.id, path)
+
+class RandomForest:
+    def __init__(self, n_estimators=15, max_depth=6, seed=42):
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.seed = seed
+        self.id = nil
+
+    def fit(self, X, y):
+        self.id = __native_ml.random_forest_fit(X, y, self.n_estimators, self.max_depth, self.seed)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def score(self, X, y):
+        return __native_ml.accuracy(y, self.predict(X))
+
+    def save(self, path):
+        return __native_ml.save_model(self.id, path)
+
+class KNN:
+    def __init__(self, k=3):
+        self.k = k
+        self.id = nil
+
+    def fit(self, X, y):
+        self.id = __native_ml.knn_fit(X, y, self.k)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def score(self, X, y):
+        return __native_ml.accuracy(y, self.predict(X))
+
+class KMeans:
+    def __init__(self, k=3, max_iter=100, seed=42):
+        self.k = k
+        self.max_iter = max_iter
+        self.seed = seed
+        self.id = nil
+
+    def fit(self, X):
+        self.id = __native_ml.kmeans_fit(X, self.k, self.max_iter, self.seed)
+        return self
+
+    def predict(self, X):
+        return __native_ml.predict(self.id, X)
+
+    def centroids(self):
+        return __native_ml.kmeans_centroids(self.id)
+
+class PCA:
+    def __init__(self, n_components=2):
+        self.n_components = n_components
+        self.id = nil
+
+    def fit(self, X):
+        self.id = __native_ml.pca_fit(X, self.n_components)
+        return self
+
+    def transform(self, X):
+        return __native_ml.transform(self.id, X)
+
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
+
+    def explained_variance(self):
+        return __native_ml.pca_explained_variance(self.id)
+
+def train_test_split(X, y, test_ratio=0.2, seed=42):
+    return __native_ml.train_test_split(X, y, test_ratio, seed)
+
+def load_model(path):
+    return __native_ml.load_model(path)

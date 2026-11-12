@@ -1,0 +1,279 @@
+# ==============================================================================
+# AetherNN — High-Speed Rust-Tape Deep Learning & Transformer Library
+# PyTorch Parity (Layers, Attention, LayerNorm, Embedding, AdamW, Safetensors)
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+def _is_var_instance(obj):
+    if type(obj) != "instance":
+        return false
+    return obj._is_nn_var == true
+
+class Var:
+    def __init__(self, data_or_id, requires_grad=true, _raw_id=nil):
+        self._is_nn_var = true
+        if _raw_id != nil:
+            self.id = _raw_id
+        elif _is_var_instance(data_or_id):
+            self.id = data_or_id.id
+        elif type(data_or_id) == "instance":
+            self.id = __native_nn.var(data_or_id.handle, requires_grad)
+        else:
+            self.id = __native_nn.var(data_or_id, requires_grad)
+
+    def from_id(node_id):
+        return Var(nil, true, node_id)
+
+    def data(self):
+        return Tensor(__native_nn.data(self.id))
+
+    def grad(self):
+        let g = __native_nn.grad(self.id)
+        if g == nil:
+            return nil
+        return Tensor(g)
+
+    def backward(self):
+        return __native_nn.backward(self.id)
+
+    def matmul(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.matmul(self.id, o.id))
+
+    def transpose(self):
+        return Var.from_id(__native_nn.transpose(self.id))
+
+    def reshape(self, new_shape):
+        return Var.from_id(__native_nn.reshape(self.id, new_shape))
+
+    def relu(self):
+        return Var.from_id(__native_nn.relu(self.id))
+
+    def sigmoid(self):
+        return Var.from_id(__native_nn.sigmoid(self.id))
+
+    def tanh(self):
+        return Var.from_id(__native_nn.tanh(self.id))
+
+    def gelu(self):
+        return Var.from_id(__native_nn.gelu(self.id))
+
+    def silu(self):
+        return Var.from_id(__native_nn.silu(self.id))
+
+    def sum(self):
+        return Var.from_id(__native_nn.sum(self.id))
+
+    def mean(self):
+        return Var.from_id(__native_nn.mean(self.id))
+
+    def __add__(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.add(self.id, o.id))
+
+    def __sub__(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.sub(self.id, o.id))
+
+    def __mul__(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.mul(self.id, o.id))
+
+    def __div__(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.div(self.id, o.id))
+
+    def __truediv__(self, other):
+        let o = _ensure_var(other)
+        return Var.from_id(__native_nn.div(self.id, o.id))
+
+def _ensure_var(x):
+    if _is_var_instance(x):
+        return x
+    if type(x) == "instance":
+        return Var(x.handle, false)
+    return Var(x, false)
+
+def mse_loss(pred, target):
+    let p = _ensure_var(pred)
+    let t = _ensure_var(target)
+    return Var.from_id(__native_nn.mse_loss(p.id, t.id))
+
+def cross_entropy_loss(logits, target_indices):
+    let l = _ensure_var(logits)
+    return Var.from_id(__native_nn.cross_entropy(l.id, target_indices))
+
+class Linear:
+    def __init__(self, in_features, out_features, bias=true):
+        let scale = 1.0 / float(in_features)
+        let bound = 0.5
+        if scale < 0.25:
+            bound = 0.25
+        let w = Tensor.random([in_features, out_features], -bound, bound)
+        self.W = Var(w, true)
+        if bias:
+            self.b = Var(Tensor.zeros([1, out_features]), true)
+        else:
+            self.b = nil
+
+    def forward(self, x):
+        let x_v = _ensure_var(x)
+        let out = x_v.matmul(self.W)
+        if self.b != nil:
+            out = out + self.b
+        return out
+
+    def parameters(self):
+        if self.b != nil:
+            return [self.W, self.b]
+        return [self.W]
+
+class LayerNorm:
+    def __init__(self, dim, eps=0.00001):
+        self.gamma = Var(Tensor.ones([1, dim]), true)
+        self.beta = Var(Tensor.zeros([1, dim]), true)
+        self.eps = eps
+
+    def forward(self, x):
+        let x_v = _ensure_var(x)
+        return Var.from_id(__native_nn.layer_norm(x_v.id, self.gamma.id, self.beta.id, self.eps))
+
+    def parameters(self):
+        return [self.gamma, self.beta]
+
+class Embedding:
+    def __init__(self, vocab_size, embed_dim):
+        let w = Tensor.random([vocab_size, embed_dim], -0.2, 0.2)
+        self.weight = Var(w, true)
+
+    def forward(self, indices):
+        return Var.from_id(__native_nn.embedding(self.weight.id, indices))
+
+    def parameters(self):
+        return [self.weight]
+
+class SelfAttention:
+    def __init__(self, embed_dim, causal=false):
+        self.causal = causal
+        self.q_proj = Linear(embed_dim, embed_dim, false)
+        self.k_proj = Linear(embed_dim, embed_dim, false)
+        self.v_proj = Linear(embed_dim, embed_dim, false)
+        self.o_proj = Linear(embed_dim, embed_dim, false)
+
+    def forward(self, x):
+        let x_v = _ensure_var(x)
+        let q = self.q_proj.forward(x_v)
+        let k = self.k_proj.forward(x_v)
+        let v = self.v_proj.forward(x_v)
+        let ctx = Var.from_id(__native_nn.attention(q.id, k.id, v.id, self.causal))
+        return self.o_proj.forward(ctx)
+
+    def parameters(self):
+        let params = []
+        for p in self.q_proj.parameters():
+            params.push(p)
+        for p in self.k_proj.parameters():
+            params.push(p)
+        for p in self.v_proj.parameters():
+            params.push(p)
+        for p in self.o_proj.parameters():
+            params.push(p)
+        return params
+
+class TransformerBlock:
+    def __init__(self, embed_dim, ff_dim, causal=false):
+        self.ln1 = LayerNorm(embed_dim)
+        self.attn = SelfAttention(embed_dim, causal)
+        self.ln2 = LayerNorm(embed_dim)
+        self.fc1 = Linear(embed_dim, ff_dim, true)
+        self.fc2 = Linear(ff_dim, embed_dim, true)
+
+    def forward(self, x):
+        let x_v = _ensure_var(x)
+        let h1 = x_v + self.attn.forward(self.ln1.forward(x_v))
+        let ff = self.fc2.forward(self.fc1.forward(self.ln2.forward(h1)).gelu())
+        return h1 + ff
+
+    def parameters(self):
+        let params = []
+        for p in self.ln1.parameters():
+            params.push(p)
+        for p in self.attn.parameters():
+            params.push(p)
+        for p in self.ln2.parameters():
+            params.push(p)
+        for p in self.fc1.parameters():
+            params.push(p)
+        for p in self.fc2.parameters():
+            params.push(p)
+        return params
+
+class Sequential:
+    def __init__(self, layers):
+        self.layers = layers
+
+    def forward(self, x):
+        let cur = _ensure_var(x)
+        for layer in self.layers:
+            cur = layer.forward(cur)
+        return cur
+
+    def parameters(self):
+        let params = []
+        for layer in self.layers:
+            for p in layer.parameters():
+                params.push(p)
+        return params
+
+class AdamW:
+    def __init__(self, params, lr=0.001, beta1=0.9, beta2=0.999, eps=0.00000001, weight_decay=0.01):
+        let pids = []
+        for p in params:
+            if type(p) == "instance":
+                pids.push(p.id)
+            else:
+                pids.push(p)
+        self.opt_id = __native_nn.adamw_create(pids, lr, beta1, beta2, eps, weight_decay)
+
+    def zero_grad(self):
+        return __native_nn.adamw_zero_grad(self.opt_id)
+
+    def step(self):
+        return __native_nn.adamw_step(self.opt_id)
+
+class SGD:
+    def __init__(self, params, lr=0.01):
+        let pids = []
+        for p in params:
+            if type(p) == "instance":
+                pids.push(p.id)
+            else:
+                pids.push(p)
+        self.pids = pids
+        self.lr = lr
+
+    def zero_grad(self):
+        return __native_nn.zero_grad(self.pids)
+
+    def step(self):
+        return __native_nn.sgd_step(self.pids, self.lr)
+
+def save_weights(named_vars, path):
+    let payload = {}
+    for k in named_vars.keys():
+        let v = named_vars[k]
+        if _is_var_instance(v):
+            payload[k] = v.id
+        elif type(v) == "instance":
+            payload[k] = v.handle
+        else:
+            payload[k] = v
+    return __native_nn.save_safetensors(payload, path)
+
+def load_weights(path):
+    let raw = __native_nn.load_safetensors(path)
+    let out = {}
+    for k in raw.keys():
+        out[k] = Tensor(raw[k])
+    return out

@@ -13,6 +13,7 @@ class Tensor:
         else:
             self.handle = raw_or_data
         self._is_variable = false
+        self._is_nn_var = false
 
     def zeros(shape):
         return Tensor(__native_matrix.zeros(shape))
@@ -58,6 +59,69 @@ class Tensor:
 
     def softmax(self):
         return Tensor(__native_matrix.softmax(self.handle))
+
+    def exp(self):
+        return Tensor(__native_matrix.exp(self.handle))
+
+    def log(self):
+        return Tensor(__native_matrix.log(self.handle))
+
+    def sqrt(self):
+        return Tensor(__native_matrix.sqrt(self.handle))
+
+    def abs(self):
+        return Tensor(__native_matrix.abs(self.handle))
+
+    def tanh(self):
+        return Tensor(__native_matrix.tanh(self.handle))
+
+    def gelu(self):
+        return Tensor(__native_matrix.gelu(self.handle))
+
+    def silu(self):
+        return Tensor(__native_matrix.silu(self.handle))
+
+    def pow(self, exponent):
+        return Tensor(__native_matrix.pow(self.handle, exponent))
+
+    def min(self):
+        return __native_matrix.min(self.handle)
+
+    def max(self):
+        return __native_matrix.max(self.handle)
+
+    def std(self):
+        return __native_matrix.std(self.handle)
+
+    def var(self):
+        return __native_matrix.var(self.handle)
+
+    def argmax(self, axis=nil):
+        if axis == nil:
+            return __native_matrix.argmax(self.handle)
+        return Tensor(__native_matrix.argmax(self.handle, axis))
+
+    def argmin(self):
+        return __native_matrix.argmin(self.handle)
+
+    def sum_axis(self, axis):
+        return Tensor(__native_matrix.sum_axis(self.handle, axis))
+
+    def mean_axis(self, axis):
+        return Tensor(__native_matrix.mean_axis(self.handle, axis))
+
+    def slice_rows(self, start, end):
+        return Tensor(__native_matrix.slice_rows(self.handle, start, end))
+
+    def arange(start, stop=nil, step=nil):
+        if stop == nil:
+            return Tensor(__native_matrix.arange(start))
+        if step == nil:
+            return Tensor(__native_matrix.arange(start, stop))
+        return Tensor(__native_matrix.arange(start, stop, step))
+
+    def linspace(start, stop, num):
+        return Tensor(__native_matrix.linspace(start, stop, num))
 
     def to_list(self):
         return __native_matrix.to_list(self.handle)

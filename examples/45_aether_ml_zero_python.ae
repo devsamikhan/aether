@@ -1,0 +1,41 @@
+# ==============================================================================
+# AETHER Showcase 45: Zero-Python End-to-End Machine Learning & Edge Persistence
+# Replaces NumPy + Scikit-Learn + Joblib/Pickle using Pure-Rust `ML` & `Tensor`
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_ml import StandardScaler, LinearRegression, LogisticRegression, RandomForest, KMeans, PCA, train_test_split, load_model
+
+println("==================================================================")
+println("   AETHER Native ML Engine (Zero Python / Scikit-Learn Bypass)")
+println("==================================================================")
+
+# 1. Extended NumPy-Parity Tensor Math
+let t = Tensor.linspace(0.0, 4.0, 5)
+println("[1] Tensor.linspace(0, 4, 5): " + str(t.to_list()))
+println("    GELU activations:         " + str(t.gelu().to_list()))
+
+# 2. Tabular Classification Pipeline (Scaler -> Split -> RandomForest -> Metrics)
+let X = [
+    [1.0, 0.2], [1.2, 0.1], [0.8, 0.3], [1.1, 0.25],
+    [8.0, 7.5], [8.5, 8.0], [7.8, 7.9], [8.2, 8.4],
+    [1.0, 8.2], [1.3, 7.9], [0.9, 8.5], [1.1, 8.0]
+]
+let y = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2]
+
+let split = train_test_split(X, y, 0.25, 42)
+let scaler = StandardScaler()
+let X_tr = scaler.fit_transform(split["X_train"])
+let X_te = scaler.transform(split["X_test"])
+
+let rf = RandomForest(21, 5, 42).fit(X_tr, split["y_train"])
+let acc = rf.score(X_te, split["y_test"])
+println("[2] RandomForest Test Accuracy: " + str(acc))
+
+# 3. Unsupervised K-Means & PCA
+let km = KMeans(3, 50, 42).fit(X)
+println("[3] KMeans Clusters:            " + str(km.predict([[1.0, 0.2], [8.2, 8.0], [1.1, 8.1]])))
+
+let pca = PCA(1).fit(X)
+println("[4] PCA Explained Variance:     " + str(pca.explained_variance()))
+println("==================================================================")
