@@ -4,9 +4,9 @@
 // Synthesizes Open Packaging Convention (OPC) compliant VSIX packages
 // ==============================================================================
 
+use crate::codegen::apk_builder::{generate_launcher_icon, ZipWriter};
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::codegen::apk_builder::{ZipWriter, generate_launcher_icon};
 
 pub struct VsixBuilder {
     pub source_dir: PathBuf,
@@ -25,7 +25,10 @@ impl VsixBuilder {
     pub fn package(&self) -> Result<PathBuf, String> {
         let package_json_path = self.source_dir.join("package.json");
         if !package_json_path.exists() {
-            return Err(format!("'package.json' not found in '{}'", self.source_dir.display()));
+            return Err(format!(
+                "'package.json' not found in '{}'",
+                self.source_dir.display()
+            ));
         }
 
         let package_json = fs::read_to_string(&package_json_path)
@@ -56,17 +59,22 @@ impl VsixBuilder {
         let readme = if readme_path.exists() {
             fs::read_to_string(&readme_path).unwrap_or_default()
         } else {
-            "# AETHER Language Extension\nOfficial syntax and developer tools for AETHER 2.0.\n".to_string()
+            "# AETHER Language Extension\nOfficial syntax and developer tools for AETHER 2.0.\n"
+                .to_string()
         };
 
         let icon_png = generate_launcher_icon();
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("🧩 AETHER VS CODE EXTENSION (.VSIX) PACKAGER");
         println!("Source: {}", self.source_dir.display());
         println!("Target: {}", self.output_path.display());
         println!("Node/vsce: NOT REQUIRED (Pure-Rust OPC Archive Synthesizer)");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
 
         // 1. [Content_Types].xml
         let content_types = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -107,10 +115,16 @@ impl VsixBuilder {
         zip.add_dir("extension/snippets/");
 
         zip.add_file("extension/package.json", package_json.as_bytes());
-        zip.add_file("extension/language-configuration.json", lang_config.as_bytes());
+        zip.add_file(
+            "extension/language-configuration.json",
+            lang_config.as_bytes(),
+        );
         zip.add_file("extension/README.md", readme.as_bytes());
         zip.add_file("extension/icon.png", &icon_png);
-        zip.add_file("extension/syntaxes/aether.tmLanguage.json", tmlanguage.as_bytes());
+        zip.add_file(
+            "extension/syntaxes/aether.tmLanguage.json",
+            tmlanguage.as_bytes(),
+        );
         zip.add_file("extension/snippets/aether.json", snippets.as_bytes());
 
         let vsix_bytes = zip.finish();
@@ -121,14 +135,30 @@ impl VsixBuilder {
             }
         }
 
-        fs::write(&self.output_path, &vsix_bytes)
-            .map_err(|e| format!("Failed to write VSIX to '{}': {}", self.output_path.display(), e))?;
+        fs::write(&self.output_path, &vsix_bytes).map_err(|e| {
+            format!(
+                "Failed to write VSIX to '{}': {}",
+                self.output_path.display(),
+                e
+            )
+        })?;
 
-        println!("✨ VS Code Extension successfully synthesized: {}", self.output_path.display());
+        println!(
+            "✨ VS Code Extension successfully synthesized: {}",
+            self.output_path.display()
+        );
         println!("   📦 Archive:      Standard Open Packaging Convention (.vsix)");
-        println!("   ⚖️  Size:         {:.2} KB", vsix_bytes.len() as f64 / 1024.0);
-        println!("   🚀 To Install:   code --install-extension {}", self.output_path.display());
-        println!("================================================================================\n");
+        println!(
+            "   ⚖️  Size:         {:.2} KB",
+            vsix_bytes.len() as f64 / 1024.0
+        );
+        println!(
+            "   🚀 To Install:   code --install-extension {}",
+            self.output_path.display()
+        );
+        println!(
+            "================================================================================\n"
+        );
 
         Ok(self.output_path.clone())
     }

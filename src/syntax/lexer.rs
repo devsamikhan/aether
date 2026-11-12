@@ -62,7 +62,8 @@ impl<'a> Lexer<'a> {
                         // Avoid emitting consecutive or leading newlines
                         if let Some(last) = tokens.last() {
                             if last.kind != TokenKind::Newline && last.kind != TokenKind::Indent {
-                                let span = Span::new(start_pos, self.current_pos(), start_line, start_col);
+                                let span =
+                                    Span::new(start_pos, self.current_pos(), start_line, start_col);
                                 tokens.push(Token::new(TokenKind::Newline, span));
                             }
                         }
@@ -93,38 +94,78 @@ impl<'a> Lexer<'a> {
                 // Delimiters
                 '(' => {
                     self.paren_depth += 1;
-                    tokens.push(Token::new(TokenKind::LParen, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    tokens.push(Token::new(
+                        TokenKind::LParen,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
                 ')' => {
-                    if self.paren_depth > 0 { self.paren_depth -= 1; }
-                    tokens.push(Token::new(TokenKind::RParen, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    if self.paren_depth > 0 {
+                        self.paren_depth -= 1;
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::RParen,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
                 '[' => {
                     self.paren_depth += 1;
-                    tokens.push(Token::new(TokenKind::LBracket, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    tokens.push(Token::new(
+                        TokenKind::LBracket,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
                 ']' => {
-                    if self.paren_depth > 0 { self.paren_depth -= 1; }
-                    tokens.push(Token::new(TokenKind::RBracket, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    if self.paren_depth > 0 {
+                        self.paren_depth -= 1;
+                    }
+                    tokens.push(Token::new(
+                        TokenKind::RBracket,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
                 '{' => {
-                    tokens.push(Token::new(TokenKind::LBrace, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    tokens.push(Token::new(
+                        TokenKind::LBrace,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
                 '}' => {
-                    tokens.push(Token::new(TokenKind::RBrace, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    tokens.push(Token::new(
+                        TokenKind::RBrace,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
-                ',' => tokens.push(Token::new(TokenKind::Comma, Span::new(start_pos, self.current_pos(), start_line, start_col))),
-                ';' => tokens.push(Token::new(TokenKind::Semicolon, Span::new(start_pos, self.current_pos(), start_line, start_col))),
-                '@' => tokens.push(Token::new(TokenKind::At, Span::new(start_pos, self.current_pos(), start_line, start_col))),
+                ',' => tokens.push(Token::new(
+                    TokenKind::Comma,
+                    Span::new(start_pos, self.current_pos(), start_line, start_col),
+                )),
+                ';' => tokens.push(Token::new(
+                    TokenKind::Semicolon,
+                    Span::new(start_pos, self.current_pos(), start_line, start_col),
+                )),
+                '@' => tokens.push(Token::new(
+                    TokenKind::At,
+                    Span::new(start_pos, self.current_pos(), start_line, start_col),
+                )),
                 '?' => {
                     if self.peek() == '.' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::QuestionDot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::QuestionDot,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else if self.peek() == '?' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::QuestionQuestion, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::QuestionQuestion,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Question, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Question,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
 
@@ -132,9 +173,15 @@ impl<'a> Lexer<'a> {
                 ':' => {
                     if self.peek() == ':' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::DoubleColon, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::DoubleColon,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Colon, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Colon,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '.' => {
@@ -142,110 +189,197 @@ impl<'a> Lexer<'a> {
                         self.advance();
                         if self.peek() == '=' {
                             self.advance();
-                            tokens.push(Token::new(TokenKind::DotDotEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                            tokens.push(Token::new(
+                                TokenKind::DotDotEqual,
+                                Span::new(start_pos, self.current_pos(), start_line, start_col),
+                            ));
                         } else {
-                            tokens.push(Token::new(TokenKind::DotDot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                            tokens.push(Token::new(
+                                TokenKind::DotDot,
+                                Span::new(start_pos, self.current_pos(), start_line, start_col),
+                            ));
                         }
                     } else {
-                        tokens.push(Token::new(TokenKind::Dot, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Dot,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '+' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::PlusAssign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::PlusAssign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Plus, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Plus,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '-' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::MinusAssign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::MinusAssign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else if self.peek() == '>' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::Arrow, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Arrow,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Minus, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Minus,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '*' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::StarAssign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::StarAssign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else if self.peek() == '*' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::Power, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Power,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Star, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Star,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '/' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::SlashAssign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::SlashAssign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Slash, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Slash,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '%' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::PercentAssign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::PercentAssign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Percent, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Percent,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
-                '^' => tokens.push(Token::new(TokenKind::Power, Span::new(start_pos, self.current_pos(), start_line, start_col))),
+                '^' => tokens.push(Token::new(
+                    TokenKind::Power,
+                    Span::new(start_pos, self.current_pos(), start_line, start_col),
+                )),
                 '=' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::EqualEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::EqualEqual,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else if self.peek() == '>' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::FatArrow, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::FatArrow,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Assign, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Assign,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '!' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::NotEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::NotEqual,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Not, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Not,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '<' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::LessEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::LessEqual,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Less, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Less,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '>' => {
                     if self.peek() == '=' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::GreaterEqual, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::GreaterEqual,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Greater, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Greater,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '|' => {
                     if self.peek() == '>' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::PipeRight, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::PipeRight,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else if self.peek() == '|' {
                         self.advance();
-                        tokens.push(Token::new(TokenKind::Or, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Or,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     } else {
-                        tokens.push(Token::new(TokenKind::Pipe, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                        tokens.push(Token::new(
+                            TokenKind::Pipe,
+                            Span::new(start_pos, self.current_pos(), start_line, start_col),
+                        ));
                     }
                 }
                 '&' if self.peek() == '&' => {
                     self.advance();
-                    tokens.push(Token::new(TokenKind::And, Span::new(start_pos, self.current_pos(), start_line, start_col)));
+                    tokens.push(Token::new(
+                        TokenKind::And,
+                        Span::new(start_pos, self.current_pos(), start_line, start_col),
+                    ));
                 }
 
                 // String Literals & Multi-line Strings
@@ -261,7 +395,9 @@ impl<'a> Lexer<'a> {
                     while !self.is_at_end() {
                         if is_triple {
                             if self.peek() == quote && self.peek_next() == Some(quote) {
-                                if self.cursor + 2 < self.chars.len() && self.chars[self.cursor + 2].1 == quote {
+                                if self.cursor + 2 < self.chars.len()
+                                    && self.chars[self.cursor + 2].1 == quote
+                                {
                                     self.advance();
                                     self.advance();
                                     self.advance();
@@ -312,7 +448,8 @@ impl<'a> Lexer<'a> {
                 '0'..='9' => {
                     let mut num_str = String::new();
                     num_str.push(ch);
-                    while !self.is_at_end() && (self.peek().is_ascii_digit() || self.peek() == '_') {
+                    while !self.is_at_end() && (self.peek().is_ascii_digit() || self.peek() == '_')
+                    {
                         let digit = self.advance();
                         if digit != '_' {
                             num_str.push(digit);
@@ -321,20 +458,28 @@ impl<'a> Lexer<'a> {
 
                     if !self.is_at_end() && self.peek() == '.' {
                         // Lookahead to distinguish float from method call like 10.abs()
-                        if self.peek_next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        if self
+                            .peek_next()
+                            .map(|c| c.is_ascii_digit())
+                            .unwrap_or(false)
+                        {
                             num_str.push(self.advance()); // consume '.'
-                            while !self.is_at_end() && (self.peek().is_ascii_digit() || self.peek() == '_') {
+                            while !self.is_at_end()
+                                && (self.peek().is_ascii_digit() || self.peek() == '_')
+                            {
                                 let digit = self.advance();
                                 if digit != '_' {
                                     num_str.push(digit);
                                 }
                             }
                             let val: f64 = num_str.parse().unwrap_or(0.0);
-                            let span = Span::new(start_pos, self.current_pos(), start_line, start_col);
+                            let span =
+                                Span::new(start_pos, self.current_pos(), start_line, start_col);
                             tokens.push(Token::new(TokenKind::Float(val), span));
                         } else {
                             let val: i64 = num_str.parse().unwrap_or(0);
-                            let span = Span::new(start_pos, self.current_pos(), start_line, start_col);
+                            let span =
+                                Span::new(start_pos, self.current_pos(), start_line, start_col);
                             tokens.push(Token::new(TokenKind::Int(val), span));
                         }
                     } else {
@@ -357,7 +502,9 @@ impl<'a> Lexer<'a> {
                     while !self.is_at_end() {
                         if is_triple {
                             if self.peek() == quote && self.peek_next() == Some(quote) {
-                                if self.cursor + 2 < self.chars.len() && self.chars[self.cursor + 2].1 == quote {
+                                if self.cursor + 2 < self.chars.len()
+                                    && self.chars[self.cursor + 2].1 == quote
+                                {
                                     self.advance();
                                     self.advance();
                                     self.advance();
@@ -408,7 +555,8 @@ impl<'a> Lexer<'a> {
                 c if c.is_alphabetic() || c == '_' => {
                     let mut ident = String::new();
                     ident.push(c);
-                    while !self.is_at_end() && (self.peek().is_alphanumeric() || self.peek() == '_') {
+                    while !self.is_at_end() && (self.peek().is_alphanumeric() || self.peek() == '_')
+                    {
                         ident.push(self.advance());
                     }
 
@@ -484,11 +632,17 @@ impl<'a> Lexer<'a> {
         while self.indent_stack.len() > 1 {
             self.indent_stack.pop();
             let pos = self.current_pos();
-            tokens.push(Token::new(TokenKind::Dedent, Span::new(pos, pos, self.line, self.col)));
+            tokens.push(Token::new(
+                TokenKind::Dedent,
+                Span::new(pos, pos, self.line, self.col),
+            ));
         }
 
         let pos = self.current_pos();
-        tokens.push(Token::new(TokenKind::Eof, Span::new(pos, pos, self.line, self.col)));
+        tokens.push(Token::new(
+            TokenKind::Eof,
+            Span::new(pos, pos, self.line, self.col),
+        ));
 
         Ok(tokens)
     }
@@ -514,7 +668,9 @@ impl<'a> Lexer<'a> {
                 // Empty line, ignore
                 self.cursor = idx;
                 return;
-            } else if ch == '#' || (ch == '/' && idx + 1 < self.chars.len() && self.chars[idx + 1].1 == '/') {
+            } else if ch == '#'
+                || (ch == '/' && idx + 1 < self.chars.len() && self.chars[idx + 1].1 == '/')
+            {
                 // Comment line, ignore indentation
                 return;
             } else {
@@ -555,11 +711,23 @@ impl<'a> Lexer<'a> {
 
         if indent_spaces > current_indent {
             self.indent_stack.push(indent_spaces);
-            tokens.push(Token::new(TokenKind::Indent, Span::new(pos, pos + (indent_spaces - current_indent), self.line, self.col)));
+            tokens.push(Token::new(
+                TokenKind::Indent,
+                Span::new(
+                    pos,
+                    pos + (indent_spaces - current_indent),
+                    self.line,
+                    self.col,
+                ),
+            ));
         } else if indent_spaces < current_indent {
-            while self.indent_stack.len() > 1 && *self.indent_stack.last().unwrap() > indent_spaces {
+            while self.indent_stack.len() > 1 && *self.indent_stack.last().unwrap() > indent_spaces
+            {
                 self.indent_stack.pop();
-                tokens.push(Token::new(TokenKind::Dedent, Span::new(pos, pos, self.line, self.col)));
+                tokens.push(Token::new(
+                    TokenKind::Dedent,
+                    Span::new(pos, pos, self.line, self.col),
+                ));
             }
         }
 
@@ -576,7 +744,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek(&self) -> char {
-        if self.is_at_end() { '\0' } else { self.chars[self.cursor].1 }
+        if self.is_at_end() {
+            '\0'
+        } else {
+            self.chars[self.cursor].1
+        }
     }
 
     fn peek_next(&self) -> Option<char> {

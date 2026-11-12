@@ -261,8 +261,12 @@ impl TensorData {
             aligned_target_shape[offset + i] = target_shape[i];
         }
 
-        for d in 0..ndim {
-            if aligned_target_shape[d] != 1 && aligned_target_shape[d] != self.shape[d] {
+        for (&aligned_dim, &self_dim) in aligned_target_shape
+            .iter()
+            .zip(self.shape.iter())
+            .take(ndim)
+        {
+            if aligned_dim != 1 && aligned_dim != self_dim {
                 return Err(format!(
                     "Cannot reduce tensor of shape {:?} to incompatible shape {:?}",
                     self.shape, target_shape
@@ -276,9 +280,9 @@ impl TensorData {
         let mut coords = vec![0usize; ndim];
         for (i, &val) in self.data.iter().enumerate() {
             let mut rem = i;
-            for d in 0..ndim {
-                coords[d] = rem / self.strides[d];
-                rem %= self.strides[d];
+            for (coord, &stride) in coords.iter_mut().zip(self.strides.iter()).take(ndim) {
+                *coord = rem / stride;
+                rem %= stride;
             }
 
             let mut target_idx = 0;

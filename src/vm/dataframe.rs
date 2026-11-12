@@ -32,6 +32,10 @@ impl TypedColumn {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             TypedColumn::Int(_) => "int64",
@@ -224,7 +228,7 @@ impl TypedColumn {
     }
 
     pub fn mean(&self) -> Value {
-        if self.len() == 0 {
+        if self.is_empty() {
             return Value::Float(0.0);
         }
         match self {
@@ -238,7 +242,7 @@ impl TypedColumn {
     }
 
     pub fn min(&self) -> Value {
-        if self.len() == 0 {
+        if self.is_empty() {
             return Value::Nil;
         }
         match self {
@@ -251,7 +255,7 @@ impl TypedColumn {
     }
 
     pub fn max(&self) -> Value {
-        if self.len() == 0 {
+        if self.is_empty() {
             return Value::Nil;
         }
         match self {

@@ -62,7 +62,16 @@ squares
     let res = run_source(code).expect("List comp failed");
     if let Value::Array(arr) = res {
         let items = arr.lock().clone();
-        assert_eq!(items, vec![Value::Int(1), Value::Int(4), Value::Int(9), Value::Int(16), Value::Int(25)]);
+        assert_eq!(
+            items,
+            vec![
+                Value::Int(1),
+                Value::Int(4),
+                Value::Int(9),
+                Value::Int(16),
+                Value::Int(25)
+            ]
+        );
     } else {
         panic!("Expected array");
     }

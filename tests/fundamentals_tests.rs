@@ -289,4 +289,3 @@ val
     let multi_res = run_source(multi_arg_code).expect("Pipeline multi-arg test failed");
     assert_eq!(multi_res, Value::Int(28));
 }
-

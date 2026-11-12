@@ -179,7 +179,10 @@ impl AetherMcpServer {
                     match crate::syntax::parse(&code) {
                         Ok(_) => "Syntax check PASSED ✅ (0 errors found)".to_string(),
                         Err((e, span)) => {
-                            format!("Syntax Error at line {}, col {}: {}", span.line, span.col, e)
+                            format!(
+                                "Syntax Error at line {}, col {}: {}",
+                                span.line, span.col, e
+                            )
                         }
                     }
                 } else {
@@ -193,15 +196,13 @@ impl AetherMcpServer {
                     doc.version, doc.os, doc.arch
                 )
             }
-            "aether_bench" => {
-                "AETHER Microbenchmarks Scorecard:\n\
+            "aether_bench" => "AETHER Microbenchmarks Scorecard:\n\
                 * Deep Recursion (fib 25): 38.78ms (8x faster than Python)\n\
                 * Vectorized DataFrame (1,000 items): 4.80ms\n\
                 * Knowledge Graph Dijkstra (200 hops): 3.63ms\n\
                 * Zero-Downtime Hot Code Reload: 1.51ms\n\
                 Verdict: 100% PRODUCTION READY 🚀"
-                    .to_string()
-            }
+                .to_string(),
             _ => format!("Unknown tool: {}", name),
         }
     }
@@ -209,32 +210,31 @@ impl AetherMcpServer {
 
 /// Generates system prompt context for passing into LLMs (ChatGPT, Claude, Gemini, Cursor)
 pub fn generate_ai_system_context() -> String {
-    format!(
-        "# AETHER 2.0 — System Prompt & Language Reference\n\
+    "# AETHER 2.0 — System Prompt & Language Reference\n\
         \n\
         You are an expert AI pair-programmer specializing in **AETHER 2.0**.\n\
         AETHER is a modern systems language unifying intent-driven verification, quantum simulation, native deep learning tensors, distributed CRDT swarms, knowledge graph traversal, and zero-downtime hot reloading.\n\
         \n\
         ## 1. Syntax & Core Constructs\n\
         * **Variables:** `let x = 10;` or mutable `let mut y = 20;`\n\
-        * **Functions:** `fn add(a, b) {{ return a + b; }}` or Pythonic `def add(a, b): return a + b`\n\
-        * **Classes:** `class User {{ def __init__(self, name): self.name = name }}`\n\
-        * **Pattern Matching:** `match val {{ 1 => \"One\", _ => \"Other\" }}`\n\
-        * **Fibers (Concurrency):** `spawn {{ /* concurrent green thread */ }};`\n\
+        * **Functions:** `fn add(a, b) { return a + b; }` or Pythonic `def add(a, b): return a + b`\n\
+        * **Classes:** `class User { def __init__(self, name): self.name = name }`\n\
+        * **Pattern Matching:** `match val { 1 => \"One\", _ => \"Other\" }`\n\
+        * **Fibers (Concurrency):** `spawn { /* concurrent green thread */ };`\n\
         \n\
         ## 2. Intent Contracts\n\
         ```aether\n\
-        intent BalanceTransfer {{\n\
-            schema {{\n\
+        intent BalanceTransfer {\n\
+            schema {\n\
                 from_id: String;\n\
                 to_id: String;\n\
                 amount: Float;\n\
-            }}\n\
-            invariants {{\n\
+            }\n\
+            invariants {\n\
                 require(amount > 0.0);\n\
                 ensure(amount > 0.0);\n\
-            }}\n\
-        }}\n\
+            }\n\
+        }\n\
         ```\n\
         \n\
         ## 3. Quantum Simulation\n\
@@ -260,13 +260,12 @@ pub fn generate_ai_system_context() -> String {
         ```aether\n\
         import aether_graph;\n\
         let g = Graph.new();\n\
-        g.add_node(\"A\", {{}});\n\
-        g.add_node(\"B\", {{}});\n\
+        g.add_node(\"A\", {});\n\
+        g.add_node(\"B\", {});\n\
         g.add_edge(\"A\", \"B\", 1.5, \"links\");\n\
         let path = g.dijkstra(\"A\", \"B\");\n\
         ```\n\
-        "
-    )
+        ".to_string()
 }
 
 fn get_spec_markdown() -> String {
@@ -289,15 +288,17 @@ fn parse_json_method(json: &str) -> Option<(String, String)> {
 }
 
 fn format_mcp_response(id: String, result: &str) -> String {
-    format!("{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}", id, result)
+    format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}",
+        id, result
+    )
 }
 
 fn extract_json_str(json: &str, key: &str) -> Option<String> {
     let pattern = format!("\"{}\":", key);
     let start_idx = json.find(&pattern)? + pattern.len();
     let rest = json[start_idx..].trim_start();
-    if rest.starts_with('"') {
-        let inside = &rest[1..];
+    if let Some(inside) = rest.strip_prefix('"') {
         let end_idx = inside.find('"')?;
         Some(inside[..end_idx].to_string())
     } else {

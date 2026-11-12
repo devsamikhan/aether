@@ -140,9 +140,9 @@ impl WorkGroupScheduler {
         let lz = local_size[2].max(1);
 
         // Number of workgroups along each dimension
-        let num_groups_x = (gx + lx - 1) / lx;
-        let num_groups_y = (gy + ly - 1) / ly;
-        let num_groups_z = (gz + lz - 1) / lz;
+        let num_groups_x = gx.div_ceil(lx);
+        let num_groups_y = gy.div_ceil(ly);
+        let num_groups_z = gz.div_ceil(lz);
         let total_workgroups = num_groups_x * num_groups_y * num_groups_z;
 
         if total_workgroups == 0 {
@@ -197,7 +197,7 @@ impl WorkGroupScheduler {
                         let clen = chunk.len();
                         while i + 8 <= clen {
                             let s = start + i;
-                            chunk[i + 0] = a[s + 0] + b[s + 0];
+                            chunk[i] = a[s] + b[s];
                             chunk[i + 1] = a[s + 1] + b[s + 1];
                             chunk[i + 2] = a[s + 2] + b[s + 2];
                             chunk[i + 3] = a[s + 3] + b[s + 3];
@@ -232,7 +232,7 @@ impl WorkGroupScheduler {
                         let clen = chunk.len();
                         while i + 8 <= clen {
                             let s = start + i;
-                            chunk[i + 0] = a[s + 0] - b[s + 0];
+                            chunk[i] = a[s] - b[s];
                             chunk[i + 1] = a[s + 1] - b[s + 1];
                             chunk[i + 2] = a[s + 2] - b[s + 2];
                             chunk[i + 3] = a[s + 3] - b[s + 3];
@@ -267,7 +267,7 @@ impl WorkGroupScheduler {
                         let clen = chunk.len();
                         while i + 8 <= clen {
                             let s = start + i;
-                            chunk[i + 0] = a[s + 0] * b[s + 0];
+                            chunk[i] = a[s] * b[s];
                             chunk[i + 1] = a[s + 1] * b[s + 1];
                             chunk[i + 2] = a[s + 2] * b[s + 2];
                             chunk[i + 3] = a[s + 3] * b[s + 3];
@@ -328,7 +328,7 @@ impl WorkGroupScheduler {
                         let clen = chunk.len();
                         while i + 8 <= clen {
                             let s = start + i;
-                            chunk[i + 0] = a[s + 0].mul_add(b[s + 0], c[s + 0]);
+                            chunk[i] = a[s].mul_add(b[s], c[s]);
                             chunk[i + 1] = a[s + 1].mul_add(b[s + 1], c[s + 1]);
                             chunk[i + 2] = a[s + 2].mul_add(b[s + 2], c[s + 2]);
                             chunk[i + 3] = a[s + 3].mul_add(b[s + 3], c[s + 3]);
@@ -364,7 +364,7 @@ impl WorkGroupScheduler {
                         let clen = chunk.len();
                         while i + 8 <= clen {
                             let s = start + i;
-                            chunk[i + 0] = a[s + 0].mul_add(scale, bias);
+                            chunk[i] = a[s].mul_add(scale, bias);
                             chunk[i + 1] = a[s + 1].mul_add(scale, bias);
                             chunk[i + 2] = a[s + 2].mul_add(scale, bias);
                             chunk[i + 3] = a[s + 3].mul_add(scale, bias);
@@ -463,7 +463,7 @@ impl WorkGroupScheduler {
 
                 // Parallelize over rows M across CPU workers
                 thread::scope(|s| {
-                    let chunk_size = (m + num_workers - 1) / num_workers;
+                    let chunk_size = m.div_ceil(num_workers);
                     let out_chunks = out_data.chunks_mut(chunk_size * n);
 
                     for (worker_idx, chunk) in out_chunks.enumerate() {
@@ -496,7 +496,7 @@ impl WorkGroupScheduler {
                 let kern_w = in_dims[1][0];
                 let kern_h = in_dims[1][1];
 
-                if kern_w % 2 == 0 || kern_h % 2 == 0 {
+                if kern_w.is_multiple_of(2) || kern_h.is_multiple_of(2) {
                     return Err("conv2d kernel dimensions must be odd (e.g. 3x3, 5x5)".into());
                 }
 
@@ -507,7 +507,7 @@ impl WorkGroupScheduler {
 
                 // Parallelize rows of the 2D image across CPU workers
                 thread::scope(|s| {
-                    let chunk_size = (img_h + num_workers - 1) / num_workers;
+                    let chunk_size = img_h.div_ceil(num_workers);
                     let out_chunks = out_data.chunks_mut(chunk_size * img_w);
 
                     for (worker_idx, chunk) in out_chunks.enumerate() {
@@ -550,7 +550,7 @@ impl WorkGroupScheduler {
                 }
                 let a = in_slices[0];
                 let n = a.len();
-                let chunk_size = (n + num_workers - 1) / num_workers;
+                let chunk_size = n.div_ceil(num_workers);
 
                 let partial_sums: Vec<f64> = thread::scope(|s| {
                     let mut handles = Vec::new();
@@ -563,7 +563,7 @@ impl WorkGroupScheduler {
                             let mut i = 0;
                             let clen = chunk.len();
                             while i + 4 <= clen {
-                                acc0 += chunk[i + 0];
+                                acc0 += chunk[i];
                                 acc1 += chunk[i + 1];
                                 acc2 += chunk[i + 2];
                                 acc3 += chunk[i + 3];
@@ -591,7 +591,7 @@ impl WorkGroupScheduler {
                 }
                 let a = in_slices[0];
                 let n = a.len();
-                let chunk_size = (n + num_workers - 1) / num_workers;
+                let chunk_size = n.div_ceil(num_workers);
 
                 let partial_maxs: Vec<f64> = thread::scope(|s| {
                     let mut handles = Vec::new();
@@ -619,7 +619,7 @@ impl WorkGroupScheduler {
                 let a = in_slices[0];
                 let b = in_slices[1];
                 let n = a.len().min(b.len());
-                let chunk_size = (n + num_workers - 1) / num_workers;
+                let chunk_size = n.div_ceil(num_workers);
 
                 let partial_dots: Vec<f64> = thread::scope(|s| {
                     let mut handles = Vec::new();
@@ -633,7 +633,7 @@ impl WorkGroupScheduler {
                             let mut i = 0;
                             let clen = ac.len();
                             while i + 2 <= clen {
-                                acc0 += ac[i + 0] * bc[i + 0];
+                                acc0 += ac[i] * bc[i];
                                 acc1 += ac[i + 1] * bc[i + 1];
                                 i += 2;
                             }
@@ -677,7 +677,7 @@ impl WorkGroupScheduler {
             kernel_fn(0, total_len, &mut out_slice[..total_len]);
             return;
         }
-        let chunk_size = (total_len + num_workers - 1) / num_workers;
+        let chunk_size = total_len.div_ceil(num_workers);
 
         thread::scope(|s| {
             for (worker_idx, chunk) in out_slice[..total_len].chunks_mut(chunk_size).enumerate() {

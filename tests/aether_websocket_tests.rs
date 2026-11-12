@@ -8,7 +8,10 @@ fn test_rfc6455_sec_websocket_accept_test_vector() {
     let key = "dGhlIHNhbXBsZSBub25jZQ==";
     let expected_accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
     let computed = aether::vm::crypto::sec_websocket_accept(key);
-    assert_eq!(computed, expected_accept, "RFC 6455 Sec-WebSocket-Accept token mismatch");
+    assert_eq!(
+        computed, expected_accept,
+        "RFC 6455 Sec-WebSocket-Accept token mismatch"
+    );
 
     let code = r#"
 token = Crypto.sec_websocket_accept("dGhlIHNhbXBsZSBub25jZQ==")

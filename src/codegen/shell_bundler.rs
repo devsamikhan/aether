@@ -8,13 +8,13 @@
 //!
 //! Includes AetherBridge: Bidirectional JavaScript <-> AETHER Native Runtime Bridge.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use crate::codegen::aot_builder::embed_payload;
 use crate::codegen::apk_builder::{
     generate_binary_manifest, generate_classes_dex, generate_launcher_icon,
     generate_meta_inf_signatures, generate_resources_arsc, ApkConfig, ZipWriter,
 };
-use crate::codegen::aot_builder::embed_payload;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct ShellConfig {
@@ -35,8 +35,17 @@ impl ShellConfig {
             .and_then(|s| s.to_str())
             .unwrap_or("AetherApp")
             .to_string();
-        let sanitized = app_name.to_lowercase().replace(|c: char| !c.is_alphanumeric(), "");
-        let package_name = format!("com.aether.{}", if sanitized.is_empty() { "app" } else { &sanitized });
+        let sanitized = app_name
+            .to_lowercase()
+            .replace(|c: char| !c.is_alphanumeric(), "");
+        let package_name = format!(
+            "com.aether.{}",
+            if sanitized.is_empty() {
+                "app"
+            } else {
+                &sanitized
+            }
+        );
 
         Self {
             app_name,
@@ -65,36 +74,62 @@ impl ShellBundler {
             "apk" | "android" => self.bundle_apk(),
             "desktop" | "exe" | "windows" => self.bundle_desktop(),
             "web" | "html" => self.bundle_web(),
-            other => Err(format!("Unsupported bundle target '{}'. Use 'apk', 'desktop', or 'web'.", other)),
+            other => Err(format!(
+                "Unsupported bundle target '{}'. Use 'apk', 'desktop', or 'web'.",
+                other
+            )),
         }
     }
 
     /// Bundles web directory into an installable Android APK with zero Android Studio
     pub fn bundle_apk(&self) -> Result<(), String> {
         if !self.config.dist_dir.exists() {
-            return Err(format!("Distribution directory '{}' does not exist", self.config.dist_dir.display()));
+            return Err(format!(
+                "Distribution directory '{}' does not exist",
+                self.config.dist_dir.display()
+            ));
         }
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("📱 AETHERSHELL: ZERO-SDK ANDROID APK BUNDLER");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("  Frontend Assets: {}", self.config.dist_dir.display());
         println!("  Target Package:  {}", self.config.package_name);
         println!("  Application:     {}", self.config.app_name);
         println!("  Android Studio:  NOT REQUIRED (Pure-Rust Dalvik & AXML Synthesizer)");
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
 
         let mut apk_config = ApkConfig::new(&self.config.app_name);
         apk_config.package_name = self.config.package_name.clone();
         apk_config.version_code = self.config.version_code;
         apk_config.version_name = self.config.version_name.clone();
-        apk_config.permissions.push("android.permission.INTERNET".to_string());
-        apk_config.permissions.push("android.permission.VIBRATE".to_string());
-        apk_config.permissions.push("android.permission.ACCESS_NETWORK_STATE".to_string());
-        apk_config.permissions.push("android.permission.CAMERA".to_string());
-        apk_config.permissions.push("android.permission.ACCESS_FINE_LOCATION".to_string());
-        apk_config.permissions.push("android.permission.SCHEDULE_EXACT_ALARM".to_string());
-        apk_config.permissions.push("android.permission.POST_NOTIFICATIONS".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.INTERNET".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.VIBRATE".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.ACCESS_NETWORK_STATE".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.CAMERA".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.ACCESS_FINE_LOCATION".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.SCHEDULE_EXACT_ALARM".to_string());
+        apk_config
+            .permissions
+            .push("android.permission.POST_NOTIFICATIONS".to_string());
 
         let binary_manifest = generate_binary_manifest(&apk_config);
         let classes_dex = generate_classes_dex(&apk_config);
@@ -105,10 +140,16 @@ impl ShellBundler {
 
         // Recursively read all files in dist_dir
         let mut asset_files: Vec<(String, Vec<u8>)> = Vec::new();
-        Self::collect_files_recursive(&self.config.dist_dir, &self.config.dist_dir, &mut asset_files)?;
+        Self::collect_files_recursive(
+            &self.config.dist_dir,
+            &self.config.dist_dir,
+            &mut asset_files,
+        )?;
 
         // If no index.html exists, create a default one
-        let has_index = asset_files.iter().any(|(p, _)| p == "index.html" || p.ends_with("/index.html"));
+        let has_index = asset_files
+            .iter()
+            .any(|(p, _)| p == "index.html" || p.ends_with("/index.html"));
         if !has_index {
             let default_html = format!(
                 r#"<!DOCTYPE html>
@@ -123,9 +164,14 @@ impl ShellBundler {
         }
 
         // Add AetherBridge JS if not already present
-        let has_bridge = asset_files.iter().any(|(p, _)| p == "aether_bridge.js" || p.ends_with("/aether_bridge.js"));
+        let has_bridge = asset_files
+            .iter()
+            .any(|(p, _)| p == "aether_bridge.js" || p.ends_with("/aether_bridge.js"));
         if !has_bridge {
-            asset_files.push(("aether_bridge.js".to_string(), bridge_js.as_bytes().to_vec()));
+            asset_files.push((
+                "aether_bridge.js".to_string(),
+                bridge_js.as_bytes().to_vec(),
+            ));
         }
 
         // Deduplicate asset_files by relative path
@@ -139,11 +185,12 @@ impl ShellBundler {
         let asset_files = unique_assets;
 
         // Prepare files to sign
-        let mut files_to_sign_refs: Vec<(&str, &[u8])> = Vec::new();
-        files_to_sign_refs.push(("AndroidManifest.xml", &binary_manifest));
-        files_to_sign_refs.push(("classes.dex", &classes_dex));
-        files_to_sign_refs.push(("resources.arsc", &resources_arsc));
-        files_to_sign_refs.push(("res/drawable/ic_launcher.png", &icon_png));
+        let mut files_to_sign_refs: Vec<(&str, &[u8])> = vec![
+            ("AndroidManifest.xml", &binary_manifest),
+            ("classes.dex", &classes_dex),
+            ("resources.arsc", &resources_arsc),
+            ("res/drawable/ic_launcher.png", &icon_png),
+        ];
 
         let formatted_asset_paths: Vec<(String, &[u8])> = asset_files
             .iter()
@@ -183,30 +230,55 @@ impl ShellBundler {
             }
         }
 
-        fs::write(&self.config.output_path, &apk_bytes)
-            .map_err(|e| format!("Failed to write APK to '{}': {}", self.config.output_path.display(), e))?;
+        fs::write(&self.config.output_path, &apk_bytes).map_err(|e| {
+            format!(
+                "Failed to write APK to '{}': {}",
+                self.config.output_path.display(),
+                e
+            )
+        })?;
 
-        println!("✨ Standalone Android APK successfully created: {}", self.config.output_path.display());
+        println!(
+            "✨ Standalone Android APK successfully created: {}",
+            self.config.output_path.display()
+        );
         println!("   📦 Package:      {}", self.config.package_name);
         println!("   🏷️  App Name:     {}", self.config.app_name);
-        println!("   📱 Web Assets:   {} files embedded inside assets/www/", asset_files.len());
-        println!("   ⚖️  Size:         {:.2} KB", apk_bytes.len() as f64 / 1024.0);
+        println!(
+            "   📱 Web Assets:   {} files embedded inside assets/www/",
+            asset_files.len()
+        );
+        println!(
+            "   ⚖️  Size:         {:.2} KB",
+            apk_bytes.len() as f64 / 1024.0
+        );
         println!("   🔑 Certificate:  V1 Developer Signed");
-        println!("   🚀 To Install:   adb install -r {}", self.config.output_path.display());
-        println!("================================================================================\n");
+        println!(
+            "   🚀 To Install:   adb install -r {}",
+            self.config.output_path.display()
+        );
+        println!(
+            "================================================================================\n"
+        );
 
         Ok(())
     }
 
     /// Bundles web directory into a standalone native Windows executable (.exe)
     pub fn bundle_desktop(&self) -> Result<(), String> {
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("🖥️ AETHERSHELL: ZERO-DEPENDENCY DESKTOP EXECUTABLE BUNDLER");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("  Frontend Assets: {}", self.config.dist_dir.display());
         println!("  Output Binary:   {}", self.config.output_path.display());
         println!("  Tauri/Electron:  NOT REQUIRED (Self-Contained Native AETHER Shell)");
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
 
         let current_exe = std::env::current_exe()
             .map_err(|e| format!("Failed to locate active AETHER binary: {}", e))?;
@@ -262,8 +334,7 @@ print("   Press Ctrl+C to terminate application host.\n")
 while true:
     Sys.sleep(10)
 "###,
-            self.config.app_name,
-            html_filename
+            self.config.app_name, html_filename
         );
 
         if let Some(parent) = self.config.output_path.parent() {
@@ -278,11 +349,19 @@ while true:
             .map(|m| m.len() as f64 / (1024.0 * 1024.0))
             .unwrap_or(0.0);
 
-        println!("✨ Standalone Desktop Executable successfully built: {}", self.config.output_path.display());
+        println!(
+            "✨ Standalone Desktop Executable successfully built: {}",
+            self.config.output_path.display()
+        );
         println!("   🏷️  App Name:     {}", self.config.app_name);
-        println!("   ⚖️  Size:         {:.2} MB (Zero external dependencies)", size_mb);
+        println!(
+            "   ⚖️  Size:         {:.2} MB (Zero external dependencies)",
+            size_mb
+        );
         println!("   🚀 To Run:       {}", self.config.output_path.display());
-        println!("================================================================================\n");
+        println!(
+            "================================================================================\n"
+        );
 
         Ok(())
     }
@@ -298,7 +377,10 @@ while true:
         let raw_html = if index_html_path.exists() {
             fs::read_to_string(&index_html_path).map_err(|e| e.to_string())?
         } else {
-            format!("<!DOCTYPE html><html><body><h1>{}</h1></body></html>", self.config.app_name)
+            format!(
+                "<!DOCTYPE html><html><body><h1>{}</h1></body></html>",
+                self.config.app_name
+            )
         };
 
         let inlined = inline_web_assets(&self.config.dist_dir, &raw_html)?;
@@ -309,12 +391,23 @@ while true:
             }
         }
 
-        fs::write(&self.config.output_path, inlined.as_bytes())
-            .map_err(|e| format!("Failed to write web bundle '{}': {}", self.config.output_path.display(), e))?;
+        fs::write(&self.config.output_path, inlined.as_bytes()).map_err(|e| {
+            format!(
+                "Failed to write web bundle '{}': {}",
+                self.config.output_path.display(),
+                e
+            )
+        })?;
 
         let size_kb = inlined.len() as f64 / 1024.0;
-        println!("✨ Standalone Web Application successfully bundled: {}", self.config.output_path.display());
-        println!("   ⚖️  Size:         {:.2} KB (Zero external CDN dependencies)", size_kb);
+        println!(
+            "✨ Standalone Web Application successfully bundled: {}",
+            self.config.output_path.display()
+        );
+        println!(
+            "   ⚖️  Size:         {:.2} KB (Zero external CDN dependencies)",
+            size_kb
+        );
 
         Ok(())
     }
@@ -354,7 +447,8 @@ pub fn inline_web_assets(dist_dir: &Path, html: &str) -> Result<String, String> 
     let mut output = html.to_string();
 
     let bridge_content = if dist_dir.join("aether_bridge.js").exists() {
-        fs::read_to_string(dist_dir.join("aether_bridge.js")).unwrap_or_else(|_| get_aether_bridge_js().to_string())
+        fs::read_to_string(dist_dir.join("aether_bridge.js"))
+            .unwrap_or_else(|_| get_aether_bridge_js().to_string())
     } else {
         get_aether_bridge_js().to_string()
     };

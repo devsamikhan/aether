@@ -131,14 +131,24 @@ impl InferenceContext {
                 subst.extend(s2);
 
                 match op {
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod | BinaryOp::Pow => {
-                        let unified = unify(&apply_subst(&t_lhs, &subst), &apply_subst(&t_rhs, &subst))?;
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::Pow => {
+                        let unified =
+                            unify(&apply_subst(&t_lhs, &subst), &apply_subst(&t_rhs, &subst))?;
                         subst.extend(unified);
                         Ok((apply_subst(&t_lhs, &subst), subst))
                     }
-                    BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual | BinaryOp::In => {
-                        Ok((Type::Bool, subst))
-                    }
+                    BinaryOp::Equal
+                    | BinaryOp::NotEqual
+                    | BinaryOp::Less
+                    | BinaryOp::LessEqual
+                    | BinaryOp::Greater
+                    | BinaryOp::GreaterEqual
+                    | BinaryOp::In => Ok((Type::Bool, subst)),
                     BinaryOp::And | BinaryOp::Or => {
                         let unified1 = unify(&apply_subst(&t_lhs, &subst), &Type::Bool)?;
                         subst.extend(unified1);
@@ -147,7 +157,9 @@ impl InferenceContext {
                         Ok((Type::Bool, subst))
                     }
                     BinaryOp::NullCoalesce => Ok((apply_subst(&t_rhs, &subst), subst)),
-                    BinaryOp::Range | BinaryOp::RangeInclusive => Ok((Type::Vec(Box::new(Type::Int)), subst)),
+                    BinaryOp::Range | BinaryOp::RangeInclusive => {
+                        Ok((Type::Vec(Box::new(Type::Int)), subst))
+                    }
                 }
             }
             Expr::Unary(op, inner, _) => {
@@ -192,7 +204,10 @@ impl InferenceContext {
                     for elem in &elements[1..] {
                         let (elem_type, s) = self.infer_syntax_expr(elem, env)?;
                         subst.extend(s);
-                        let unified = unify(&apply_subst(&first_type, &subst), &apply_subst(&elem_type, &subst))?;
+                        let unified = unify(
+                            &apply_subst(&first_type, &subst),
+                            &apply_subst(&elem_type, &subst),
+                        )?;
                         subst.extend(unified);
                     }
                     Ok((Type::Vec(Box::new(apply_subst(&first_type, &subst))), subst))

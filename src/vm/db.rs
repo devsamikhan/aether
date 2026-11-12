@@ -655,19 +655,19 @@ fn load_database_from_disk(db: &mut DbInstance) -> Result<(), String> {
     // 1. Read primary snapshot
     if Path::new(&db.path).exists() {
         if let Ok(content) = std::fs::read_to_string(&db.path) {
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let serde_json::Value::Object(cols) = parsed {
-                    for (col_name, col_val) in cols.iter() {
-                        if let serde_json::Value::Array(docs) = col_val {
-                            let mut list = Vec::new();
-                            for doc in docs {
-                                let val = Value::from_json(doc);
-                                if let Value::Map(m) = val {
-                                    list.push(m.lock().clone());
-                                }
+            if let Ok(serde_json::Value::Object(cols)) =
+                serde_json::from_str::<serde_json::Value>(&content)
+            {
+                for (col_name, col_val) in cols.iter() {
+                    if let serde_json::Value::Array(docs) = col_val {
+                        let mut list = Vec::new();
+                        for doc in docs {
+                            let val = Value::from_json(doc);
+                            if let Value::Map(m) = val {
+                                list.push(m.lock().clone());
                             }
-                            db.collections.insert(col_name.to_string(), list);
                         }
+                        db.collections.insert(col_name.to_string(), list);
                     }
                 }
             }
@@ -679,14 +679,12 @@ fn load_database_from_disk(db: &mut DbInstance) -> Result<(), String> {
     if Path::new(&wal_path).exists() {
         if let Ok(file) = File::open(&wal_path) {
             let reader = BufReader::new(file);
-            for line_res in reader.lines() {
-                if let Ok(line) = line_res {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
-                        apply_wal_entry(db, &parsed);
-                    }
+            for line in reader.lines().map_while(Result::ok) {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
+                    apply_wal_entry(db, &parsed);
                 }
             }
         }

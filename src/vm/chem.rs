@@ -154,13 +154,7 @@ impl Molecule {
         for atom in &mut atoms {
             let bond_sum: f32 = atom.neighbors.iter().map(|(_, b)| *b).sum();
             let target_valence: f32 = match atom.symbol.as_str() {
-                "C" => {
-                    if atom.is_aromatic {
-                        3.0
-                    } else {
-                        4.0
-                    }
-                }
+                "C" if atom.is_aromatic => 3.0,
                 "N" => {
                     if atom.is_aromatic {
                         if atom.neighbors.len() == 2 {
@@ -624,7 +618,7 @@ fn parse_bracket_atom(content: &str) -> Result<(String, bool, i8, usize), String
             i += 1;
         } else if chars[i] == 'H' {
             i += 1;
-            if i < chars.len() && chars[i].is_digit(10) {
+            if i < chars.len() && chars[i].is_ascii_digit() {
                 explicit_h = chars[i].to_digit(10).unwrap_or(1) as usize;
                 i += 1;
             } else {
@@ -987,7 +981,7 @@ pub fn register_chem_module(globals: &mut HashMap<String, Value>) {
             }
 
             let raw_score = bias + dot;
-            let pic50 = raw_score.max(2.0).min(12.0);
+            let pic50 = raw_score.clamp(2.0, 12.0);
             let kd_nm = (10.0f64).powf(9.0 - pic50);
 
             let binding_class = if kd_nm < 100.0 {
@@ -1008,5 +1002,377 @@ pub fn register_chem_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // Chem.parse_sdf(sdf_text) -> Array<Chem.Molecule>
+    chem.insert(
+        "parse_sdf".to_string(),
+        Value::Native("Chem.parse_sdf".into(), |args| {
+            if args.is_empty() {
+                return Err("Chem.parse_sdf(sdf_text) requires 1 argument".into());
+            }
+            let sdf_text = format!("{}", args[0]);
+            let mols = parse_sdf_records(&sdf_text)?;
+            Ok(Value::array(mols))
+        }),
+    );
+
+    // Chem.substructure_match(mol_or_smiles, pattern) / Chem.has_substructure(...)
+    let sub_fn = Value::Native("Chem.substructure_match".into(), |args| {
+        if args.len() < 2 {
+            return Err(
+                "Chem.substructure_match(mol_or_smiles, smarts) requires 2 arguments".into(),
+            );
+        }
+        let target = extract_molecule(&args[0])?;
+        let pattern_str = format!("{}", args[1]);
+        let matched = has_substructure_match(&target, &pattern_str)?;
+        Ok(Value::Bool(matched))
+    });
+    chem.insert("substructure_match".to_string(), sub_fn.clone());
+    chem.insert("has_substructure".to_string(), sub_fn);
+
     globals.insert("Chem".to_string(), Value::map(chem));
+}
+
+fn populate_implicit_hydrogens(atoms: &mut [ChemAtom]) {
+    for atom in atoms.iter_mut() {
+        let bond_sum: f32 = atom.neighbors.iter().map(|(_, b)| *b).sum();
+        let target_valence: f32 = match atom.symbol.as_str() {
+            "C" if atom.is_aromatic => 3.0,
+            "C" => 4.0,
+            "N" if atom.is_aromatic => {
+                if atom.neighbors.len() == 2 {
+                    2.0
+                } else {
+                    3.0
+                }
+            }
+            "N" => 3.0,
+            "O" => 2.0,
+            "S" if bond_sum > 4.0 => 6.0,
+            "S" if bond_sum > 2.0 => 4.0,
+            "S" => 2.0,
+            "P" if bond_sum > 3.0 => 5.0,
+            "P" => 3.0,
+            "F" | "Cl" | "Br" | "I" | "H" => 1.0,
+            _ => 4.0,
+        };
+        let remaining = target_valence - bond_sum;
+        atom.implicit_h = if remaining > 0.0 {
+            remaining.round() as usize
+        } else {
+            0
+        };
+    }
+}
+
+fn parse_sdf_records(sdf_text: &str) -> Result<Vec<Value>, String> {
+    let mut results = Vec::new();
+    for raw_block in sdf_text.split("$$$$") {
+        if raw_block.trim().is_empty() {
+            continue;
+        }
+        let lines: Vec<&str> = raw_block.lines().collect();
+        if lines.len() < 4 {
+            continue;
+        }
+
+        let title = lines[0].trim().to_string();
+        let counts_idx = lines
+            .iter()
+            .position(|l| l.contains("V2000") || l.contains("v2000"))
+            .unwrap_or(3);
+        if counts_idx >= lines.len() {
+            return Err("ChemError: Missing V2000 counts line in SDF block".into());
+        }
+
+        let counts_line = lines[counts_idx];
+        let (atom_count, bond_count) = parse_v2000_counts(counts_line)?;
+        let atom_start = counts_idx + 1;
+        let bond_start = atom_start + atom_count;
+        if lines.len() < bond_start + bond_count {
+            return Err(format!(
+                "ChemError: Truncated SDF block '{}' (expected {} atoms and {} bonds)",
+                title, atom_count, bond_count
+            ));
+        }
+
+        let mut atoms = Vec::with_capacity(atom_count);
+        let mut coords_3d = Vec::with_capacity(atom_count);
+        for i in 0..atom_count {
+            let aline = lines[atom_start + i];
+            let tokens: Vec<&str> = aline.split_whitespace().collect();
+            if tokens.len() < 4 {
+                return Err(format!("ChemError: Malformed SDF atom line: '{}'", aline));
+            }
+            let x: f64 = tokens[0].parse().unwrap_or(0.0);
+            let y: f64 = tokens[1].parse().unwrap_or(0.0);
+            let z: f64 = tokens[2].parse().unwrap_or(0.0);
+            let sym = tokens[3].to_string();
+
+            atoms.push(ChemAtom {
+                symbol: sym.clone(),
+                is_aromatic: false,
+                formal_charge: 0,
+                implicit_h: 0,
+                neighbors: Vec::new(),
+            });
+
+            let mut c_map = HashMap::new();
+            c_map.insert("symbol".to_string(), Value::string(sym));
+            c_map.insert("x".to_string(), Value::Float(x));
+            c_map.insert("y".to_string(), Value::Float(y));
+            c_map.insert("z".to_string(), Value::Float(z));
+            coords_3d.push(Value::map(c_map));
+        }
+
+        for i in 0..bond_count {
+            let bline = lines[bond_start + i];
+            let (a1, a2, btype) = parse_v2000_bond_line(bline)?;
+            if a1 == 0 || a2 == 0 || a1 > atom_count || a2 > atom_count {
+                return Err(format!(
+                    "ChemError: SDF bond atom index out of range in '{}'",
+                    bline
+                ));
+            }
+            let idx1 = a1 - 1;
+            let idx2 = a2 - 1;
+            let order = match btype {
+                1 => 1.0,
+                2 => 2.0,
+                3 => 3.0,
+                4 => {
+                    atoms[idx1].is_aromatic = true;
+                    atoms[idx2].is_aromatic = true;
+                    1.5
+                }
+                _ => 1.0,
+            };
+            atoms[idx1].neighbors.push((idx2, order));
+            atoms[idx2].neighbors.push((idx1, order));
+        }
+
+        populate_implicit_hydrogens(&mut atoms);
+
+        let mut props = HashMap::new();
+        let mut line_idx = bond_start + bond_count;
+        while line_idx < lines.len() {
+            let l = lines[line_idx].trim();
+            if l.starts_with('>') {
+                if let (Some(open), Some(close)) = (l.find('<'), l.rfind('>')) {
+                    if close > open + 1 {
+                        let key = l[open + 1..close].trim().to_string();
+                        let mut val_lines = Vec::new();
+                        line_idx += 1;
+                        while line_idx < lines.len() && !lines[line_idx].trim().is_empty() {
+                            if lines[line_idx].trim().starts_with('>') {
+                                break;
+                            }
+                            val_lines.push(lines[line_idx].trim());
+                            line_idx += 1;
+                        }
+                        props.insert(key, Value::string(val_lines.join("\n")));
+                        continue;
+                    }
+                }
+            }
+            line_idx += 1;
+        }
+
+        let synthetic_smiles = if title.is_empty() {
+            format!("SDF_MOL_{}A_{}B", atom_count, bond_count)
+        } else {
+            title.clone()
+        };
+        let mol = Molecule {
+            smiles: synthetic_smiles,
+            atoms,
+        };
+        let handle = wrap_molecule_handle(mol);
+        if let Value::Map(m) = &handle {
+            let mut map = m.lock();
+            map.insert("title".to_string(), Value::string(title));
+            map.insert("atom_count".to_string(), Value::Int(atom_count as i64));
+            map.insert("bond_count".to_string(), Value::Int(bond_count as i64));
+            map.insert("coords_3d".to_string(), Value::array(coords_3d));
+            map.insert("properties".to_string(), Value::map(props));
+        }
+        results.push(handle);
+    }
+    Ok(results)
+}
+
+fn parse_v2000_counts(line: &str) -> Result<(usize, usize), String> {
+    if line.len() >= 6 {
+        if let (Ok(a), Ok(b)) = (
+            line[0..3].trim().parse::<usize>(),
+            line[3..6].trim().parse::<usize>(),
+        ) {
+            return Ok((a, b));
+        }
+    }
+    let toks: Vec<&str> = line.split_whitespace().collect();
+    if toks.len() >= 2 {
+        let a = toks[0]
+            .parse::<usize>()
+            .map_err(|_| format!("ChemError: Invalid atom count in SDF line '{}'", line))?;
+        let b = toks[1]
+            .parse::<usize>()
+            .map_err(|_| format!("ChemError: Invalid bond count in SDF line '{}'", line))?;
+        return Ok((a, b));
+    }
+    Err(format!(
+        "ChemError: Cannot parse SDF counts line '{}'",
+        line
+    ))
+}
+
+fn parse_v2000_bond_line(line: &str) -> Result<(usize, usize, usize), String> {
+    if line.len() >= 9 {
+        if let (Ok(a1), Ok(a2), Ok(bt)) = (
+            line[0..3].trim().parse::<usize>(),
+            line[3..6].trim().parse::<usize>(),
+            line[6..9].trim().parse::<usize>(),
+        ) {
+            return Ok((a1, a2, bt));
+        }
+    }
+    let toks: Vec<&str> = line.split_whitespace().collect();
+    if toks.len() >= 3 {
+        let a1 = toks[0]
+            .parse::<usize>()
+            .map_err(|_| format!("ChemError: Invalid bond atom 1 in '{}'", line))?;
+        let a2 = toks[1]
+            .parse::<usize>()
+            .map_err(|_| format!("ChemError: Invalid bond atom 2 in '{}'", line))?;
+        let bt = toks[2]
+            .parse::<usize>()
+            .map_err(|_| format!("ChemError: Invalid bond order in '{}'", line))?;
+        return Ok((a1, a2, bt));
+    }
+    Err(format!("ChemError: Malformed SDF bond line '{}'", line))
+}
+
+fn normalize_smarts_to_smiles(pattern: &str) -> String {
+    pattern
+        .replace("[#6]", "C")
+        .replace("[#7]", "N")
+        .replace("[#8]", "O")
+        .replace("[#9]", "F")
+        .replace("[#15]", "P")
+        .replace("[#16]", "S")
+        .replace("[#17]", "Cl")
+        .replace("[#35]", "Br")
+        .replace("[#53]", "I")
+        .replace("[*]", "[A]")
+        .replace('*', "[A]")
+}
+
+fn has_substructure_match(target: &Molecule, pattern: &str) -> Result<bool, String> {
+    let norm = normalize_smarts_to_smiles(pattern.trim());
+    let query = Molecule::from_smiles(&norm)?;
+    if query.atoms.is_empty() {
+        return Ok(false);
+    }
+    if query.atoms.len() > target.atoms.len() {
+        return Ok(false);
+    }
+
+    let mut mapping: Vec<Option<usize>> = vec![None; query.atoms.len()];
+    let mut used_target = vec![false; target.atoms.len()];
+    Ok(backtrack_substructure(
+        target,
+        &query,
+        0,
+        &mut mapping,
+        &mut used_target,
+    ))
+}
+
+fn atom_matches(q_atom: &ChemAtom, t_atom: &ChemAtom) -> bool {
+    if q_atom.symbol == "*" || q_atom.symbol == "A" {
+        return true;
+    }
+    if !q_atom.symbol.eq_ignore_ascii_case(&t_atom.symbol) {
+        return false;
+    }
+    if q_atom.is_aromatic && !t_atom.is_aromatic && !t_atom.neighbors.iter().any(|&(_, b)| b >= 1.5)
+    {
+        return false;
+    }
+    true
+}
+
+fn bond_matches(q_order: f32, t_order: f32, q_arom: bool, t_arom: bool) -> bool {
+    if (q_order - t_order).abs() < 0.1 {
+        return true;
+    }
+    // Kekule vs aromatic ring equivalence (e.g. C1=CC=CC=C1 vs c1ccccc1)
+    if (q_arom && (t_order == 1.0 || t_order == 2.0 || t_order == 1.5))
+        || (t_arom && (q_order == 1.0 || q_order == 2.0 || q_order == 1.5))
+    {
+        return true;
+    }
+    false
+}
+
+fn backtrack_substructure(
+    target: &Molecule,
+    query: &Molecule,
+    q_idx: usize,
+    mapping: &mut [Option<usize>],
+    used_target: &mut [bool],
+) -> bool {
+    if q_idx == query.atoms.len() {
+        return true;
+    }
+
+    let q_atom = &query.atoms[q_idx];
+    for t_idx in 0..target.atoms.len() {
+        if used_target[t_idx] {
+            continue;
+        }
+        let t_atom = &target.atoms[t_idx];
+        if !atom_matches(q_atom, t_atom) {
+            continue;
+        }
+        if q_atom.neighbors.len() > t_atom.neighbors.len() {
+            continue;
+        }
+
+        // Verify all already-mapped neighbors of q_idx are connected to t_idx with compatible bond order
+        let mut edges_ok = true;
+        for &(q_nbr, q_bond) in &q_atom.neighbors {
+            if q_nbr < q_idx {
+                if let Some(t_nbr) = mapping[q_nbr] {
+                    let found = t_atom.neighbors.iter().any(|&(cand_nbr, t_bond)| {
+                        cand_nbr == t_nbr
+                            && bond_matches(
+                                q_bond,
+                                t_bond,
+                                q_atom.is_aromatic && query.atoms[q_nbr].is_aromatic,
+                                t_atom.is_aromatic && target.atoms[t_nbr].is_aromatic,
+                            )
+                    });
+                    if !found {
+                        edges_ok = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !edges_ok {
+            continue;
+        }
+
+        mapping[q_idx] = Some(t_idx);
+        used_target[t_idx] = true;
+        if backtrack_substructure(target, query, q_idx + 1, mapping, used_target) {
+            return true;
+        }
+        mapping[q_idx] = None;
+        used_target[t_idx] = false;
+    }
+
+    false
 }

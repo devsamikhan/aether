@@ -334,9 +334,7 @@ impl WasmInstance {
         let mut locals = Vec::new();
         locals.extend_from_slice(args);
         for (count, _l_type) in &func.locals {
-            for _ in 0..*count {
-                locals.push(0i64);
-            }
+            locals.resize(locals.len() + (*count as usize), 0i64);
         }
 
         let res = self.execute_bytecode(&func.code, &mut locals, &mut fuel)?;
@@ -451,6 +449,7 @@ impl WasmInstance {
                         let target_idx = control_stack.len() - 1 - depth;
                         let frame = control_stack[target_idx].clone();
                         if frame.block_type == OP_LOOP {
+                            control_stack.truncate(target_idx + 1);
                             pc = frame.pc; // jump back to start of loop
                         } else {
                             // Break out of block: skip to matching end
@@ -481,6 +480,7 @@ impl WasmInstance {
                             let target_idx = control_stack.len() - 1 - depth;
                             let frame = control_stack[target_idx].clone();
                             if frame.block_type == OP_LOOP {
+                                control_stack.truncate(target_idx + 1);
                                 pc = frame.pc;
                             } else {
                                 control_stack.truncate(target_idx);
@@ -521,9 +521,7 @@ impl WasmInstance {
                     }
                     call_locals.reverse();
                     for (count, _) in &target_func.locals {
-                        for _ in 0..*count {
-                            call_locals.push(0i64);
-                        }
+                        call_locals.resize(call_locals.len() + (*count as usize), 0i64);
                     }
 
                     let res = self.execute_bytecode(&target_func.code, &mut call_locals, fuel)?;
@@ -561,13 +559,11 @@ impl WasmInstance {
                     let val = Self::read_i64_at(code, &mut pc)?;
                     stack.push(val);
                 }
-                OP_F64_CONST => {
-                    if pc + 8 <= code.len() {
-                        let bytes: [u8; 8] = code[pc..pc + 8].try_into().unwrap();
-                        pc += 8;
-                        let val = f64::from_le_bytes(bytes);
-                        stack.push(val.to_bits() as i64);
-                    }
+                OP_F64_CONST if pc + 8 <= code.len() => {
+                    let bytes: [u8; 8] = code[pc..pc + 8].try_into().unwrap();
+                    pc += 8;
+                    let val = f64::from_le_bytes(bytes);
+                    stack.push(val.to_bits() as i64);
                 }
                 OP_I64_ADD => {
                     let b = stack.pop().unwrap_or(0);
@@ -615,7 +611,7 @@ impl WasmInstance {
                     let a = stack.pop().unwrap_or(0);
                     stack.push(a ^ b);
                 }
-                OP_I64_EQZ => {
+                OP_I64_EQZ | OP_I32_EQZ => {
                     let a = stack.pop().unwrap_or(0);
                     stack.push(if a == 0 { 1 } else { 0 });
                 }
@@ -766,19 +762,15 @@ impl WasmInstance {
             OP_I64_CONST => {
                 Self::read_i64_at(code, pc)?;
             }
-            OP_F64_CONST => {
-                if *pc + 8 <= code.len() {
-                    *pc += 8;
-                }
+            OP_F64_CONST if *pc + 8 <= code.len() => {
+                *pc += 8;
             }
             OP_I32_LOAD | OP_I64_LOAD | OP_I32_STORE | OP_I64_STORE => {
                 Self::read_u32_at(code, pc)?;
                 Self::read_u32_at(code, pc)?;
             }
-            OP_MEMORY_SIZE | OP_MEMORY_GROW => {
-                if *pc < code.len() {
-                    *pc += 1;
-                }
+            OP_MEMORY_SIZE | OP_MEMORY_GROW if *pc < code.len() => {
+                *pc += 1;
             }
             _ => {}
         }
@@ -869,7 +861,7 @@ pub fn register_wasm_module(globals: &mut HashMap<String, Value>) {
                         arr.lock().iter().map(|v| match v {
                             Value::Int(i) => *i,
                             Value::Float(f) => *f as i64,
-                            Value::Bool(b) => if *b { 1 } else { 0 },
+                            Value::Bool(b) => i64::from(*b),
                             _ => 0,
                         }).collect()
                     }

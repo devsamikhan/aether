@@ -38,9 +38,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.read(path) requires path string".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_read(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
             let content = fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
             Ok(Value::string(content))
@@ -54,9 +52,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.write(path, content) requires 2 arguments".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_write(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
             let content = format!("{}", args[1]);
             fs::write(&path, content)
                 .map_err(|e| format!("Failed to write file '{}': {}", path, e))?;
@@ -71,9 +67,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.append(path, content) requires 2 arguments".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_write(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
             let content = format!("{}", args[1]);
             let mut file = OpenOptions::new()
                 .create(true)
@@ -93,9 +87,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.exists(path) requires path".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_read(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
             Ok(Value::Bool(Path::new(&path).exists()))
         }),
     );
@@ -107,9 +99,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.delete(path) requires path".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_write(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
             fs::remove_file(&path).map_err(|e| format!("Failed to delete '{}': {}", path, e))?;
             Ok(Value::Bool(true))
         }),
@@ -122,9 +112,7 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
                 return Err("File.lines(path) requires path".into());
             }
             let path = format!("{}", args[0]);
-            let _ = crate::vm::interpreter::with_current_vm(|vm| {
-                vm.security_policy.check_fs_read(&path)
-            })?;
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
             let content = fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file '{}': {}", path, e))?;
             let lines: Vec<Value> = content.lines().map(Value::string).collect();
@@ -1519,15 +1507,9 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
             let prompt = format!("{}", args[0]);
             let agent_id = {
                 let mut reg = crate::vm::ai_engine::get_agent_registry().lock().unwrap();
-                if !reg.contains_key(&1) {
-                    reg.insert(
-                        1,
-                        crate::vm::ai_engine::LocalAgent::new(
-                            "AetherCore",
-                            "Native Runtime Copilot",
-                        ),
-                    );
-                }
+                reg.entry(1).or_insert_with(|| {
+                    crate::vm::ai_engine::LocalAgent::new("AetherCore", "Native Runtime Copilot")
+                });
                 1
             };
             let reply = crate::vm::ai_engine::agent_chat(agent_id, &prompt)?;

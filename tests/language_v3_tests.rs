@@ -1,8 +1,8 @@
 use aether::syntax::lexer::Lexer;
 use aether::syntax::parser::Parser;
 use aether::types::checker::TypeChecker;
-use aether::vm::run_source as execute_source;
 use aether::vm::optimizer::{count_peephole_opportunities, optimize_program};
+use aether::vm::run_source as execute_source;
 use aether::vm::value::Value;
 
 #[test]
@@ -32,7 +32,10 @@ let d = describe(Shape::Point)
 f"{a} | {b} | {c} | {d}"
 "#;
     let res = execute_source(src).expect("Execution failed");
-    assert_eq!(res, Value::string("large circle 15 | circle 4 | square 7 | point"));
+    assert_eq!(
+        res,
+        Value::string("large circle 15 | circle 4 | square 7 | point")
+    );
 }
 
 #[test]
@@ -274,7 +277,9 @@ impl Serializable for Packet {
     let program = parser.parse_program().unwrap();
 
     let mut checker = TypeChecker::new();
-    let err = checker.check_program(&program).expect_err("Expected missing trait method error");
+    let err = checker
+        .check_program(&program)
+        .expect_err("Expected missing trait method error");
     assert!(err[0].contains("missing required method 'version'"));
 }
 

@@ -75,13 +75,19 @@ c = matrix.mul(a, 2.0)
         if let Value::Array(b_rows) = &items[0] {
             let r0 = b_rows.lock()[0].clone();
             if let Value::Array(r0_arr) = r0 {
-                assert_eq!(r0_arr.lock().clone(), vec![Value::Float(11.0), Value::Float(12.0)]);
+                assert_eq!(
+                    r0_arr.lock().clone(),
+                    vec![Value::Float(11.0), Value::Float(12.0)]
+                );
             }
         }
         if let Value::Array(c_rows) = &items[1] {
             let r0 = c_rows.lock()[0].clone();
             if let Value::Array(r0_arr) = r0 {
-                assert_eq!(r0_arr.lock().clone(), vec![Value::Float(2.0), Value::Float(4.0)]);
+                assert_eq!(
+                    r0_arr.lock().clone(),
+                    vec![Value::Float(2.0), Value::Float(4.0)]
+                );
             }
         }
     } else {
@@ -110,13 +116,16 @@ sm_sum = matrix.sum(sm)
         let items = arr.lock().clone();
         // relu: [0.0, 0.0, 0.0, 1.5, 3.0]
         if let Value::Array(r_arr) = &items[0] {
-            assert_eq!(r_arr.lock().clone(), vec![
-                Value::Float(0.0),
-                Value::Float(0.0),
-                Value::Float(0.0),
-                Value::Float(1.5),
-                Value::Float(3.0)
-            ]);
+            assert_eq!(
+                r_arr.lock().clone(),
+                vec![
+                    Value::Float(0.0),
+                    Value::Float(0.0),
+                    Value::Float(0.0),
+                    Value::Float(1.5),
+                    Value::Float(3.0)
+                ]
+            );
         }
         // sum: 4.5
         assert_eq!(items[1], Value::Float(4.5));
@@ -161,14 +170,20 @@ t_trans = t1.transpose()
         if let Value::Array(r0) = &items[0] {
             let row0 = r0.lock()[0].clone();
             if let Value::Array(r0_vals) = row0 {
-                assert_eq!(r0_vals.lock().clone(), vec![Value::Float(6.0), Value::Float(8.0)]);
+                assert_eq!(
+                    r0_vals.lock().clone(),
+                    vec![Value::Float(6.0), Value::Float(8.0)]
+                );
             }
         }
         // t_trans: [[1.0, 3.0], [2.0, 4.0]]
         if let Value::Array(r2) = &items[2] {
             let row0 = r2.lock()[0].clone();
             if let Value::Array(r0_vals) = row0 {
-                assert_eq!(r0_vals.lock().clone(), vec![Value::Float(1.0), Value::Float(3.0)]);
+                assert_eq!(
+                    r0_vals.lock().clone(),
+                    vec![Value::Float(1.0), Value::Float(3.0)]
+                );
             }
         }
     } else {

@@ -23,7 +23,11 @@ def multiply(x, y):
 
     let bytes = res.unwrap();
     // Valid machine code object files are substantial and contain binary headers
-    assert!(bytes.len() > 64, "Object file too small: {} bytes", bytes.len());
+    assert!(
+        bytes.len() > 64,
+        "Object file too small: {} bytes",
+        bytes.len()
+    );
 
     // Check for standard object file magic:
     // Windows COFF (x86_64 Machine = 0x8664) or Linux ELF (0x7F 'E' 'L' 'F') or macOS Mach-O
@@ -57,7 +61,11 @@ def fibonacci(n):
 "#;
 
     let res = compile_source_to_object(source, "fib_module");
-    assert!(res.is_ok(), "AOT fibonacci compilation failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "AOT fibonacci compilation failed: {:?}",
+        res.err()
+    );
     let bytes = res.unwrap();
     assert!(bytes.len() > 100);
 }
@@ -76,11 +84,14 @@ def compute_energy(mass, velocity):
 
     fs::write(&src_file, source).expect("Failed to write source file");
 
-    let bytes_written = compile_file_to_object(&src_file, &obj_file)
-        .expect("Failed to compile file to object");
+    let bytes_written =
+        compile_file_to_object(&src_file, &obj_file).expect("Failed to compile file to object");
 
     assert!(obj_file.exists(), "Object file should exist on disk");
-    assert_eq!(bytes_written, fs::metadata(&obj_file).unwrap().len() as usize);
+    assert_eq!(
+        bytes_written,
+        fs::metadata(&obj_file).unwrap().len() as usize
+    );
 }
 
 #[test]
@@ -94,7 +105,44 @@ let result = helper(val) + 5
 "#;
 
     let res = compile_source_to_object(source, "main_app");
-    assert!(res.is_ok(), "AOT main app compilation failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "AOT main app compilation failed: {:?}",
+        res.err()
+    );
     let bytes = res.unwrap();
     assert!(bytes.len() > 120);
+}
+
+#[test]
+fn test_aot_compile_for_ranges_elif_unary_pow_and_break_continue() {
+    let source = r#"
+def classify_and_accumulate(n):
+    let mut total = 0
+    for i in 1..=n:
+        if i % 5 == 0:
+            continue
+        elif i > 8:
+            break
+        else:
+            let neg = -i
+            if not (neg == 0):
+                total += (i ** 2) + neg
+    for j in range(10, 0, -3):
+        total += j
+    return total ?? 1
+"#;
+
+    let res = compile_source_to_object(source, "parity_mod");
+    assert!(
+        res.is_ok(),
+        "AOT parity compilation failed: {:?}",
+        res.err()
+    );
+    let bytes = res.unwrap();
+    assert!(bytes.len() > 200);
+
+    // Verify unsupported constructs return a clean diagnostic error rather than silently miscompiling
+    let bad_src = "def broken():\n    return [1, 2, 3]\n";
+    assert!(compile_source_to_object(bad_src, "bad_mod").is_err());
 }

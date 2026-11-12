@@ -1,7 +1,9 @@
+use aether::codegen::shell_bundler::{
+    get_aether_bridge_js, inline_web_assets, ShellBundler, ShellConfig,
+};
+use aether::toolchain::scaffold_project;
 use std::fs;
 use std::path::PathBuf;
-use aether::codegen::shell_bundler::{ShellBundler, ShellConfig, get_aether_bridge_js, inline_web_assets};
-use aether::toolchain::scaffold_project;
 
 #[test]
 fn test_aether_bridge_js_contains_core_api() {
@@ -18,7 +20,8 @@ fn test_aether_bridge_js_contains_core_api() {
 
 #[test]
 fn test_inline_web_assets() {
-    let html = "<!DOCTYPE html><html><head><title>App</title></head><body><h1>Hello</h1></body></html>";
+    let html =
+        "<!DOCTYPE html><html><head><title>App</title></head><body><h1>Hello</h1></body></html>";
     let inlined = inline_web_assets(&PathBuf::from("."), html).expect("Inlining should succeed");
     assert!(inlined.contains("window.Aether"));
     assert!(inlined.contains("<script>"));
@@ -100,7 +103,9 @@ fn test_bundle_apk_distribution() {
 
     for expected in &expected_entries {
         assert!(
-            apk_bytes.windows(expected.len()).any(|w| w == expected.as_bytes()),
+            apk_bytes
+                .windows(expected.len())
+                .any(|w| w == expected.as_bytes()),
             "Expected entry '{}' missing in bundled APK",
             expected
         );
@@ -142,7 +147,11 @@ fn test_scaffold_frontend_templates() {
                 assert!(index_html.contains("Store") || index_html.contains("Signals"));
             }
             "3d" => {
-                assert!(index_html.contains("WebGL") || index_html.contains("Canvas") || index_html.contains("Universe"));
+                assert!(
+                    index_html.contains("WebGL")
+                        || index_html.contains("Canvas")
+                        || index_html.contains("Universe")
+                );
                 assert!(index_html.contains("requestAnimationFrame"));
             }
             "fullstack" => {
@@ -195,23 +204,43 @@ fn test_flagship_08_chronopulse_alarm_execution_and_artifacts() {
     let exe = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.exe");
     assert!(exe.exists(), "ChronoPulse.exe must exist");
 
-    let html = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.html");
+    let html =
+        std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/ChronoPulse.html");
     assert!(html.exists(), "ChronoPulse.html must exist");
 }
 
 #[test]
 fn test_live_hotreload_server_and_bridge() {
     let bridge = get_aether_bridge_js();
-    assert!(bridge.contains("initLiveHotReload"), "Default bridge must have Live Hot-Reload engine");
-    assert!(bridge.contains("/api/live-status"), "Default bridge must query /api/live-status");
-    assert!(bridge.contains("/api/live-poll"), "Default bridge must query /api/live-poll");
+    assert!(
+        bridge.contains("initLiveHotReload"),
+        "Default bridge must have Live Hot-Reload engine"
+    );
+    assert!(
+        bridge.contains("/api/live-status"),
+        "Default bridge must query /api/live-status"
+    );
+    assert!(
+        bridge.contains("/api/live-poll"),
+        "Default bridge must query /api/live-poll"
+    );
 
-    let custom_bridge_path = std::path::Path::new("flagship_projects/08_aether_chronopulse_alarm/frontend/aether_bridge.js");
+    let custom_bridge_path = std::path::Path::new(
+        "flagship_projects/08_aether_chronopulse_alarm/frontend/aether_bridge.js",
+    );
     let custom_bridge = std::fs::read_to_string(custom_bridge_path).unwrap();
-    assert!(custom_bridge.contains("initLiveHotReload"), "ChronoPulse bridge must have Live Hot-Reload engine");
-    assert!(custom_bridge.contains("aether-live-hud-pill"), "ChronoPulse bridge must have live HUD pill");
+    assert!(
+        custom_bridge.contains("initLiveHotReload"),
+        "ChronoPulse bridge must have Live Hot-Reload engine"
+    );
+    assert!(
+        custom_bridge.contains("aether-live-hud-pill"),
+        "ChronoPulse bridge must have live HUD pill"
+    );
 
-    let config = aether::codegen::live_server::LiveServerConfig::new("flagship_projects/08_aether_chronopulse_alarm/frontend");
+    let config = aether::codegen::live_server::LiveServerConfig::new(
+        "flagship_projects/08_aether_chronopulse_alarm/frontend",
+    );
     assert_eq!(config.port, 8080);
     assert_eq!(config.poll_interval_ms, 80);
 }
@@ -220,7 +249,10 @@ fn test_live_hotreload_server_and_bridge() {
 fn test_adb_deployer_device_discovery() {
     use aether::codegen::adb_deployer::AdbDeployer;
     let devices = AdbDeployer::list_devices();
-    assert!(devices.is_ok(), "AdbDeployer::list_devices() must run without error");
+    assert!(
+        devices.is_ok(),
+        "AdbDeployer::list_devices() must run without error"
+    );
     let list = devices.unwrap();
     println!("Found {} connected ADB device(s): {:?}", list.len(), list);
 }
@@ -233,16 +265,28 @@ fn test_vsix_extension_packager() {
     let vsix_path = out_dir.join("aether-language-support-2.0.0.vsix");
     let builder = VsixBuilder::new("editors/vscode", &vsix_path);
     let res = builder.package();
-    assert!(res.is_ok(), "VsixBuilder::package() should succeed: {:?}", res.err());
-    assert!(vsix_path.exists(), "Packaged .vsix extension must exist on disk");
+    assert!(
+        res.is_ok(),
+        "VsixBuilder::package() should succeed: {:?}",
+        res.err()
+    );
+    assert!(
+        vsix_path.exists(),
+        "Packaged .vsix extension must exist on disk"
+    );
     let size = std::fs::metadata(&vsix_path).unwrap().len();
-    assert!(size > 500, "VSIX file must contain valid zipped package contents");
+    assert!(
+        size > 500,
+        "VSIX file must contain valid zipped package contents"
+    );
     let _ = std::fs::remove_dir_all(out_dir);
 }
 
 #[test]
 fn test_native_ai_engine_rag_and_agent() {
-    use aether::vm::ai_engine::{generate_embedding, cosine_similarity, VectorRagStore, LocalAgent};
+    use aether::vm::ai_engine::{
+        cosine_similarity, generate_embedding, LocalAgent, VectorRagStore,
+    };
 
     let v1 = generate_embedding("AETHER native fast ahead of time compiler");
     let v2 = generate_embedding("AETHER compiler performance benchmark");
@@ -251,7 +295,10 @@ fn test_native_ai_engine_rag_and_agent() {
     assert_eq!(v1.len(), 128);
     let sim_related = cosine_similarity(&v1, &v2);
     let sim_unrelated = cosine_similarity(&v1, &v3);
-    assert!(sim_related > sim_unrelated, "Semantic similarity between related phrases must exceed unrelated phrases");
+    assert!(
+        sim_related > sim_unrelated,
+        "Semantic similarity between related phrases must exceed unrelated phrases"
+    );
 
     let mut store = VectorRagStore::new();
     store.add("AETHER compiles directly to native binary code via Cranelift.");
@@ -267,7 +314,11 @@ fn test_native_ai_engine_rag_and_agent() {
     // Test AETHER VM script integration with AI module
     let script = "let emb = AI.embed(\"aether on-device ai\")\nlet bot = AI.Agent(\"Alpha\", \"Autonomous Copilot\")\nbot.add_knowledge(\"AETHER 2.0 has zero external dependencies.\")\nlet res = bot.chat(\"Tell me about AETHER\")\nres\n";
     let vm_res = aether::vm::run_source(script);
-    assert!(vm_res.is_ok(), "VM script with AI module must succeed: {:?}", vm_res.err());
+    assert!(
+        vm_res.is_ok(),
+        "VM script with AI module must succeed: {:?}",
+        vm_res.err()
+    );
 }
 
 #[test]
@@ -283,12 +334,24 @@ fn test_p2p_swarm_node_and_beacons() {
 #[test]
 fn test_expanded_mobile_hardware_apis_in_bridge() {
     let bridge = get_aether_bridge_js();
-    assert!(bridge.contains("getLocation"), "Bridge must have getLocation API");
+    assert!(
+        bridge.contains("getLocation"),
+        "Bridge must have getLocation API"
+    );
     assert!(bridge.contains("scanQR"), "Bridge must have scanQR API");
-    assert!(bridge.contains("scheduleAlarm"), "Bridge must have scheduleAlarm API");
-    assert!(bridge.contains("showNotification"), "Bridge must have showNotification API");
+    assert!(
+        bridge.contains("scheduleAlarm"),
+        "Bridge must have scheduleAlarm API"
+    );
+    assert!(
+        bridge.contains("showNotification"),
+        "Bridge must have showNotification API"
+    );
     assert!(bridge.contains("pickFile"), "Bridge must have pickFile API");
-    assert!(bridge.contains("isDarkMode"), "Bridge must have isDarkMode API");
+    assert!(
+        bridge.contains("isDarkMode"),
+        "Bridge must have isDarkMode API"
+    );
 }
 
 #[test]
@@ -319,7 +382,10 @@ fn test_edge_server_rest_and_serverless_eval() {
 
     // 1. Test GET /api/health
     if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
-        let req = format!("GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n", port);
+        let req = format!(
+            "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n",
+            port
+        );
         stream.write_all(req.as_bytes()).unwrap();
         let mut buf = [0u8; 4096];
         let n = stream.read(&mut buf).unwrap();
@@ -334,7 +400,9 @@ fn test_edge_server_rest_and_serverless_eval() {
         let body = r#"{"code": "let x = 15; let y = 27; x + y"}"#;
         let req = format!(
             "POST /api/eval HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
-            port, body.len(), body
+            port,
+            body.len(),
+            body
         );
         stream.write_all(req.as_bytes()).unwrap();
         let mut buf = [0u8; 4096];
@@ -349,7 +417,9 @@ fn test_edge_server_rest_and_serverless_eval() {
         let body = r#"{"prompt": "Tell me about AETHER performance"}"#;
         let req = format!(
             "POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
-            port, body.len(), body
+            port,
+            body.len(),
+            body
         );
         stream.write_all(req.as_bytes()).unwrap();
         let mut buf = [0u8; 4096];
@@ -364,7 +434,9 @@ fn test_edge_server_rest_and_serverless_eval() {
         let body = r#"{"query": "SELECT name, role FROM services WHERE latency_ms < 1.0"}"#;
         let req = format!(
             "POST /api/query HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: {}\r\n\r\n{}",
-            port, body.len(), body
+            port,
+            body.len(),
+            body
         );
         stream.write_all(req.as_bytes()).unwrap();
         let mut buf = [0u8; 4096];
@@ -402,7 +474,7 @@ fn test_desktop_app_mode_config() {
 
 #[test]
 fn test_aether_package_manager_publish_and_install_vendoring() {
-    use aether::package_manager::{AetherPackageManager, AetherManifest};
+    use aether::package_manager::{AetherManifest, AetherPackageManager};
 
     let test_dir = std::env::temp_dir().join("aether_pm_test_project");
     let _ = std::fs::remove_dir_all(&test_dir);
@@ -421,7 +493,11 @@ fn test_aether_package_manager_publish_and_install_vendoring() {
 
     // 1. Publish package
     let pub_res = pm.publish();
-    assert!(pub_res.is_ok(), "Package publish must succeed: {:?}", pub_res.err());
+    assert!(
+        pub_res.is_ok(),
+        "Package publish must succeed: {:?}",
+        pub_res.err()
+    );
     let pub_msg = pub_res.unwrap();
     assert!(pub_msg.contains("test_pkg"));
     assert!(pub_msg.contains("SHA-256"));
@@ -429,7 +505,11 @@ fn test_aether_package_manager_publish_and_install_vendoring() {
 
     // 2. Install dependency package
     let inst_res = pm.install("math_lib@0.5.0");
-    assert!(inst_res.is_ok(), "Package install must succeed: {:?}", inst_res.err());
+    assert!(
+        inst_res.is_ok(),
+        "Package install must succeed: {:?}",
+        inst_res.err()
+    );
     let dep = inst_res.unwrap();
     assert_eq!(dep.name, "math_lib");
     assert_eq!(dep.version, "0.5.0");
@@ -445,5 +525,3 @@ fn test_aether_package_manager_publish_and_install_vendoring() {
 
     let _ = std::fs::remove_dir_all(&test_dir);
 }
-
-

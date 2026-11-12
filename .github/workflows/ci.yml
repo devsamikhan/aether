@@ -26,9 +26,9 @@ jobs:
             target
           key: ${{ runner.os }}-lint-${{ hashFiles('**/Cargo.lock') }}
       - name: Check formatting
-        run: rustfmt --check src/main.rs src/cli/mod.rs src/cli/commands.rs src/cli/diagnostics.rs src/cli/report.rs src/cli/test_runner.rs src/interop/python.rs src/vm/net.rs src/vm/mod.rs tests/error_tests.rs
+        run: cargo fmt --all -- --check
       - name: Clippy checks
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets -- -D warnings
 
   build-and-test:
     name: Build & Test (${{ matrix.os }})

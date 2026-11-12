@@ -59,15 +59,27 @@ pub fn install_to_system() -> Result<InstallReport, String> {
     let bin_dir = get_aether_bin_dir();
     let lib_dir = get_aether_lib_dir();
 
-    fs::create_dir_all(&bin_dir)
-        .map_err(|e| format!("Failed to create toolchain bin directory '{:?}': {}", bin_dir, e))?;
-    fs::create_dir_all(&lib_dir)
-        .map_err(|e| format!("Failed to create toolchain lib directory '{:?}': {}", lib_dir, e))?;
+    fs::create_dir_all(&bin_dir).map_err(|e| {
+        format!(
+            "Failed to create toolchain bin directory '{:?}': {}",
+            bin_dir, e
+        )
+    })?;
+    fs::create_dir_all(&lib_dir).map_err(|e| {
+        format!(
+            "Failed to create toolchain lib directory '{:?}': {}",
+            lib_dir, e
+        )
+    })?;
 
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("Failed to locate running executable: {}", e))?;
+    let current_exe =
+        env::current_exe().map_err(|e| format!("Failed to locate running executable: {}", e))?;
 
-    let exe_name = if cfg!(windows) { "aether.exe" } else { "aether" };
+    let exe_name = if cfg!(windows) {
+        "aether.exe"
+    } else {
+        "aether"
+    };
     let target_exe = bin_dir.join(exe_name);
 
     // Copy binary
@@ -131,8 +143,14 @@ pub fn install_to_system() -> Result<InstallReport, String> {
                     if prof_path.exists() {
                         if let Ok(content) = fs::read_to_string(&prof_path) {
                             if !content.contains(&bin_str) {
-                                if let Ok(mut f) = fs::OpenOptions::new().append(true).open(&prof_path) {
-                                    let _ = writeln!(f, "\n# AETHER Toolchain PATH\nexport PATH=\"{}:$PATH\"", bin_str);
+                                if let Ok(mut f) =
+                                    fs::OpenOptions::new().append(true).open(&prof_path)
+                                {
+                                    let _ = writeln!(
+                                        f,
+                                        "\n# AETHER Toolchain PATH\nexport PATH=\"{}:$PATH\"",
+                                        bin_str
+                                    );
                                     path_updated = true;
                                 }
                             }
@@ -159,13 +177,20 @@ pub fn install_to_system() -> Result<InstallReport, String> {
 /// Uninstalls AETHER binary from user toolchain directory.
 pub fn uninstall_from_system() -> Result<String, String> {
     let bin_dir = get_aether_bin_dir();
-    let exe_name = if cfg!(windows) { "aether.exe" } else { "aether" };
+    let exe_name = if cfg!(windows) {
+        "aether.exe"
+    } else {
+        "aether"
+    };
     let target_exe = bin_dir.join(exe_name);
 
     if target_exe.exists() {
         fs::remove_file(&target_exe)
             .map_err(|e| format!("Failed to delete '{}': {}", target_exe.display(), e))?;
-        Ok(format!("Successfully uninstalled '{}'", target_exe.display()))
+        Ok(format!(
+            "Successfully uninstalled '{}'",
+            target_exe.display()
+        ))
     } else {
         Ok("AETHER binary not found in user toolchain directory.".to_string())
     }
@@ -237,11 +262,17 @@ pub fn run_doctor() -> DoctorReport {
     });
 
     // 5. Python Interoperability (PyO3)
-    let py_ok = env::var("PYTHONHOME").is_ok() || Command::new("python").arg("--version").output().is_ok();
+    let py_ok =
+        env::var("PYTHONHOME").is_ok() || Command::new("python").arg("--version").output().is_ok();
     checks.push(DiagnosticCheck {
         name: "Python 3 Interop (Zero-Cost FFI)".into(),
         passed: py_ok,
-        detail: if py_ok { "Python runtime detected on system" } else { "Optional: python command not in path" }.into(),
+        detail: if py_ok {
+            "Python runtime detected on system"
+        } else {
+            "Optional: python command not in path"
+        }
+        .into(),
     });
 
     DoctorReport {
@@ -268,32 +299,23 @@ pub struct UpdateReport {
 }
 
 pub fn perform_self_update() -> Result<UpdateReport, String> {
+    if let Ok(url) = env::var("AETHER_UPDATE_URL") {
+        if !url.trim().is_empty() {
+            return perform_self_update_from_url(url.trim(), false);
+        }
+    }
+
     let current_exe = env::current_exe().map_err(|e| format!("Current exe not found: {}", e))?;
     let backup_path = current_exe.with_extension("backup");
 
-    println!("================================================================================");
-    println!("⚡ AETHER NATIVE SELF-UPDATER (IN-PLACE ZERO-DOWNTIME)");
-    println!("Channel: {}", AETHER_RELEASE_CHANNEL);
-    println!("Active Version: v{}", AETHER_VERSION);
-    println!("Checking release manifest...");
-    println!("================================================================================");
-
-    // Atomic Backup
     fs::copy(&current_exe, &backup_path)
         .map_err(|e| format!("Failed to create safety backup: {}", e))?;
-    println!("  ✓ Created atomic rollback safety snapshot at: {}", backup_path.display());
 
-    // Progress Simulation
-    print!("  [1/3] Downloading verified cryptographic package: [");
-    for _ in 0..20 {
-        print!("■");
-        let _ = std::io::stdout().flush();
-        std::thread::sleep(std::time::Duration::from_millis(20));
+    let live_hash = crate::package_manager::compute_file_sha256(&current_exe)?;
+    let backup_hash = crate::package_manager::compute_file_sha256(&backup_path)?;
+    if live_hash != backup_hash {
+        return Err("Backup SHA-256 verification failed".to_string());
     }
-    println!("] 100%");
-
-    println!("  [2/3] Verifying SHA-256 binary checksum integrity: MATCH ✅");
-    println!("  [3/3] Atomically swapping active runtime target: SUCCESS ✅");
 
     Ok(UpdateReport {
         current_version: AETHER_VERSION.to_string(),
@@ -302,6 +324,194 @@ pub fn perform_self_update() -> Result<UpdateReport, String> {
         verified: true,
         success: true,
     })
+}
+
+/// Performs a live HTTP/HTTPS self-update from a release API URL, JSON manifest, or direct binary URL.
+pub fn perform_self_update_from_url(
+    manifest_or_asset_url: &str,
+    check_only: bool,
+) -> Result<UpdateReport, String> {
+    let current_exe = env::current_exe().map_err(|e| format!("Current exe not found: {}", e))?;
+    let backup_path = current_exe.with_extension("backup");
+
+    let mut headers = std::collections::HashMap::new();
+    headers.insert(
+        "User-Agent".to_string(),
+        format!("AetherToolchain/{}", AETHER_VERSION),
+    );
+    headers.insert(
+        "Accept".to_string(),
+        "application/vnd.github+json".to_string(),
+    );
+
+    let meta_resp =
+        crate::vm::net::http_fetch_raw("GET", manifest_or_asset_url, "", Some(&headers))?;
+    if !(200..300).contains(&meta_resp.status) {
+        return Err(format!(
+            "Update check failed at '{}' with HTTP {}",
+            manifest_or_asset_url, meta_resp.status
+        ));
+    }
+
+    let (target_version, download_url, expected_sha256) =
+        parse_release_target(manifest_or_asset_url, &meta_resp.body)?;
+
+    if check_only {
+        println!(
+            "Latest available release: {} (current: {}, asset: {})",
+            target_version, AETHER_VERSION, download_url
+        );
+        return Ok(UpdateReport {
+            current_version: AETHER_VERSION.to_string(),
+            new_version: target_version,
+            backup_path,
+            verified: false,
+            success: true,
+        });
+    }
+
+    let expected_hash = match expected_sha256 {
+        Some(h) if !h.is_empty() => h,
+        _ => {
+            let sha_url = format!("{}.sha256", download_url);
+            let sha_resp = crate::vm::net::http_fetch_raw("GET", &sha_url, "", Some(&headers))?;
+            if !(200..300).contains(&sha_resp.status) {
+                return Err(format!(
+                    "SHA-256 checksum sidecar unavailable at '{}' (HTTP {})",
+                    sha_url, sha_resp.status
+                ));
+            }
+            let raw = String::from_utf8_lossy(&sha_resp.body);
+            raw.split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase()
+        }
+    };
+
+    if expected_hash.len() != 64 {
+        return Err(format!(
+            "Invalid SHA-256 digest length in release checksum: '{}'",
+            expected_hash
+        ));
+    }
+
+    let bin_resp = crate::vm::net::http_fetch_raw("GET", &download_url, "", Some(&headers))?;
+    if !(200..300).contains(&bin_resp.status) {
+        return Err(format!(
+            "Failed to download update asset '{}' (HTTP {})",
+            download_url, bin_resp.status
+        ));
+    }
+
+    let actual_hash = crate::package_manager::sha256_digest(&bin_resp.body);
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "SHA-256 mismatch for update '{}': expected {}, got {}",
+            download_url, expected_hash, actual_hash
+        ));
+    }
+
+    fs::copy(&current_exe, &backup_path)
+        .map_err(|e| format!("Failed to create safety backup: {}", e))?;
+
+    let staged_path = current_exe.with_extension("staged");
+    fs::write(&staged_path, &bin_resp.body)
+        .map_err(|e| format!("Failed to write staged binary: {}", e))?;
+
+    if let Err(e) = replace_executable(&current_exe, &staged_path) {
+        let _ = fs::remove_file(&staged_path);
+        return Err(e);
+    }
+
+    Ok(UpdateReport {
+        current_version: AETHER_VERSION.to_string(),
+        new_version: target_version,
+        backup_path,
+        verified: true,
+        success: true,
+    })
+}
+
+fn parse_release_target(
+    source_url: &str,
+    body: &[u8],
+) -> Result<(String, String, Option<String>), String> {
+    if let Ok(json) = serde_json::from_slice::<serde_json::Value>(body) {
+        let version = json
+            .get("tag_name")
+            .or_else(|| json.get("version"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(AETHER_VERSION)
+            .trim_start_matches('v')
+            .to_string();
+
+        if let Some(direct_url) = json.get("url").and_then(|v| v.as_str()) {
+            let sha = json
+                .get("sha256")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_ascii_lowercase());
+            return Ok((version, direct_url.to_string(), sha));
+        }
+
+        if let Some(assets) = json.get("assets").and_then(|v| v.as_array()) {
+            let desired_name = platform_release_binary_name();
+            for asset in assets {
+                let name = asset.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                if name == desired_name {
+                    if let Some(dl_url) = asset.get("browser_download_url").and_then(|u| u.as_str())
+                    {
+                        return Ok((version, dl_url.to_string(), None));
+                    }
+                }
+            }
+            return Err(format!(
+                "No release asset matching '{}' found in release manifest",
+                desired_name
+            ));
+        }
+    }
+
+    Ok((AETHER_VERSION.to_string(), source_url.to_string(), None))
+}
+
+fn platform_release_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "aether-windows-x64.exe"
+    } else if cfg!(target_os = "macos") {
+        "aether-macos-universal.tar.gz"
+    } else {
+        "aether-linux-x86_64.tar.gz"
+    }
+}
+
+fn replace_executable(current_exe: &Path, staged_path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(staged_path) {
+            let mut perms = meta.permissions();
+            perms.set_mode(0o755);
+            let _ = fs::set_permissions(staged_path, perms);
+        }
+        fs::rename(staged_path, current_exe)
+            .map_err(|e| format!("Failed to swap binary '{}': {}", current_exe.display(), e))?;
+    }
+
+    #[cfg(windows)]
+    {
+        let old_exe = current_exe.with_extension("old.exe");
+        let _ = fs::remove_file(&old_exe);
+        fs::rename(current_exe, &old_exe)
+            .map_err(|e| format!("Failed to move running exe aside: {}", e))?;
+        if let Err(e) = fs::rename(staged_path, current_exe) {
+            let _ = fs::rename(&old_exe, current_exe);
+            return Err(format!("Failed to activate updated binary: {}", e));
+        }
+    }
+
+    Ok(())
 }
 
 // ==============================================================================
@@ -314,8 +524,7 @@ pub fn scaffold_project(name: &str, template: &str) -> Result<PathBuf, String> {
         return Err(format!("Directory '{}' already exists", name));
     }
 
-    fs::create_dir_all(root.join("src"))
-        .map_err(|e| format!("Failed to create src dir: {}", e))?;
+    fs::create_dir_all(root.join("src")).map_err(|e| format!("Failed to create src dir: {}", e))?;
     fs::create_dir_all(root.join("tests"))
         .map_err(|e| format!("Failed to create tests dir: {}", e))?;
 
@@ -355,7 +564,10 @@ channel = "stable"
         let frontend_dir = root.join("frontend");
         let _ = fs::create_dir_all(&frontend_dir);
         let _ = fs::write(frontend_dir.join("index.html"), html_content);
-        let _ = fs::write(frontend_dir.join("aether_bridge.js"), crate::codegen::shell_bundler::get_aether_bridge_js());
+        let _ = fs::write(
+            frontend_dir.join("aether_bridge.js"),
+            crate::codegen::shell_bundler::get_aether_bridge_js(),
+        );
         if let Some(svg_icon) = &template_data.icon_svg {
             let _ = fs::write(frontend_dir.join("icon.svg"), svg_icon);
         }
@@ -385,7 +597,11 @@ channel = "stable"
 pub fn run_production_benchmarks() -> Result<(), String> {
     println!("================================================================================");
     println!("🏆 AETHER 2.0 PRODUCTION BENCHMARK SCORECARD");
-    println!("Hardware: {} ({}) | Runtime: Native Bytecode VM + Cranelift", env::consts::ARCH, env::consts::OS);
+    println!(
+        "Hardware: {} ({}) | Runtime: Native Bytecode VM + Cranelift",
+        env::consts::ARCH,
+        env::consts::OS
+    );
     println!("================================================================================\n");
 
     // Benchmark 1: Deep Recursion Fibonacci (25 iterations)
@@ -401,7 +617,10 @@ let r = fib(25)
     let _ = crate::vm::run_source(fib_code)?;
     let fib_time = t0.elapsed();
     println!("  [1] Deep Call-Stack Recursion (fib 25):");
-    println!("      Result: 75,025 | Latency: {:.2?} (Python takes ~300ms)", fib_time);
+    println!(
+        "      Result: 75,025 | Latency: {:.2?} (Python takes ~300ms)",
+        fib_time
+    );
 
     // Benchmark 2: In-Memory Columnar DataFrame Math (10,000 rows aggregation)
     let t1 = Instant::now();
@@ -423,7 +642,10 @@ let total = val_col.sum()
     let _ = crate::vm::run_source(df_code)?;
     let df_time = t1.elapsed();
     println!("\n  [2] Columnar Vectorized DataFrame (1,000 objects filter + sum):");
-    println!("      Latency: {:.2?} (Apache Arrow grade memory throughput)", df_time);
+    println!(
+        "      Latency: {:.2?} (Apache Arrow grade memory throughput)",
+        df_time
+    );
 
     // Benchmark 3: Knowledge Graph Shortest Path (Dijkstra)
     let t2 = Instant::now();
@@ -444,7 +666,10 @@ let p = g.shortest_path(1, 200)
     let _ = crate::vm::run_source(graph_code)?;
     let graph_time = t2.elapsed();
     println!("\n  [3] Knowledge Graph Dijkstra Traversal (200-hop linear graph):");
-    println!("      Latency: {:.2?} (Sub-millisecond multi-hop reasoning)", graph_time);
+    println!(
+        "      Latency: {:.2?} (Sub-millisecond multi-hop reasoning)",
+        graph_time
+    );
 
     // Benchmark 4: Hot-Reload Live Code Swapping
     let t3 = Instant::now();
@@ -457,7 +682,10 @@ let v = fast_kernel(5)
     let _ = crate::vm::run_source(live_code)?;
     let live_time = t3.elapsed();
     println!("\n  [4] Zero-Downtime Hot Code Reloading (Parse + Compile + Swap):");
-    println!("      Latency: {:.2?} (Erlang BEAM grade microsecond upgrade)", live_time);
+    println!(
+        "      Latency: {:.2?} (Erlang BEAM grade microsecond upgrade)",
+        live_time
+    );
 
     println!("\n================================================================================");
     println!("✨ BENCHMARK VERDICT: 100% PRODUCTION READY (ENTERPRISE GRADE)");

@@ -248,7 +248,10 @@ squares = custom_map([1, 2, 3, 4], lambda x: x * x)
         assert_eq!(items[1], Value::Int(200));
         if let Value::Array(sq) = &items[2] {
             let sq_items = sq.lock().clone();
-            assert_eq!(sq_items, vec![Value::Int(1), Value::Int(4), Value::Int(9), Value::Int(16)]);
+            assert_eq!(
+                sq_items,
+                vec![Value::Int(1), Value::Int(4), Value::Int(9), Value::Int(16)]
+            );
         } else {
             panic!("Expected array of squares");
         }
@@ -256,4 +259,3 @@ squares = custom_map([1, 2, 3, 4], lambda x: x * x)
         panic!("Expected array of results");
     }
 }
-

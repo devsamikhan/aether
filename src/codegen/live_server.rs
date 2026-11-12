@@ -62,19 +62,30 @@ impl LiveDevServer {
     pub fn start(&self) -> Result<(), String> {
         let dist_dir = self.config.dist_dir.clone();
         if !dist_dir.exists() {
-            return Err(format!("Frontend directory '{}' does not exist", dist_dir.display()));
+            return Err(format!(
+                "Frontend directory '{}' does not exist",
+                dist_dir.display()
+            ));
         }
 
         let addr = format!("0.0.0.0:{}", self.config.port);
         let listener = TcpListener::bind(&addr)
             .map_err(|e| format!("Failed to bind Live Dev Server on {}: {}", addr, e))?;
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("⚡ AETHERSHELL: REAL-TIME ZERO-SDK LIVE HOT-RELOAD SERVER");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("  📂 Root Assets:  {}", dist_dir.display());
         println!("  🌐 Local Host:   http://localhost:{}", self.config.port);
-        println!("  📡 Network Host: http://{}:{}", get_local_ip().unwrap_or_else(|| "127.0.0.1".into()), self.config.port);
+        println!(
+            "  📡 Network Host: http://{}:{}",
+            get_local_ip().unwrap_or_else(|| "127.0.0.1".into()),
+            self.config.port
+        );
         println!("  ⏱️  Poll Cycle:  {} ms", self.config.poll_interval_ms);
         println!("  🔄 Hot-Reload:   Instant DOM & CSS Swapping (State Preserved)");
 
@@ -89,7 +100,13 @@ impl LiveDevServer {
             let is_desktop = self.config.desktop_app_mode;
             let width = self.config.window_width;
             let height = self.config.window_height;
-            let title = self.config.dist_dir.file_name().and_then(|s| s.to_str()).unwrap_or("AetherApp").to_string();
+            let title = self
+                .config
+                .dist_dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("AetherApp")
+                .to_string();
             thread::spawn(move || {
                 thread::sleep(Duration::from_millis(300));
                 if is_desktop {
@@ -111,7 +128,9 @@ impl LiveDevServer {
             run_file_watcher(watcher_dir, poll_interval);
         });
 
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
         println!("✨ AetherLive is active and listening for connected clients.");
         println!("   Mobile phone and Desktop UI will update automatically on file save.");
         println!("   Press Ctrl+C to stop dev server.\n");
@@ -143,9 +162,14 @@ fn setup_adb_reverse(port: u16) {
     match output {
         Ok(out) => {
             if out.status.success() {
-                println!("  📱 Mobile Link:  ADB Reverse Port {} -> Connected & Forwarded! 🟢", port);
+                println!(
+                    "  📱 Mobile Link:  ADB Reverse Port {} -> Connected & Forwarded! 🟢",
+                    port
+                );
             } else {
-                println!("  📱 Mobile Link:  ADB available, waiting for phone connection (offline mode)");
+                println!(
+                    "  📱 Mobile Link:  ADB available, waiting for phone connection (offline mode)"
+                );
             }
         }
         Err(_) => {
@@ -444,7 +468,10 @@ pub fn launch_desktop_window(
         Ok(())
     } else if cfg!(target_os = "macos") {
         let status = Command::new("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-            .args([&format!("--app={}", url), &format!("--window-size={},{}", width, height)])
+            .args([
+                &format!("--app={}", url),
+                &format!("--window-size={},{}", width, height),
+            ])
             .spawn();
         if status.is_ok() {
             return Ok(());
@@ -455,9 +482,17 @@ pub fn launch_desktop_window(
             .map_err(|e| format!("Failed to open macOS browser: {}", e))?;
         Ok(())
     } else {
-        for browser in &["google-chrome", "chromium-browser", "chromium", "microsoft-edge"] {
+        for browser in &[
+            "google-chrome",
+            "chromium-browser",
+            "chromium",
+            "microsoft-edge",
+        ] {
             let status = Command::new(browser)
-                .args([&format!("--app={}", url), &format!("--window-size={},{}", width, height)])
+                .args([
+                    &format!("--app={}", url),
+                    &format!("--window-size={},{}", width, height),
+                ])
                 .spawn();
             if status.is_ok() {
                 return Ok(());

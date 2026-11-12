@@ -12,8 +12,14 @@ let h2 = sha256("")
     let res = run_source(code).expect("SHA-256 test failed");
     if let Value::Array(arr) = res {
         let items = arr.lock().clone();
-        assert_eq!(items[0], Value::string("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"));
-        assert_eq!(items[1], Value::string("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+        assert_eq!(
+            items[0],
+            Value::string("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+        );
+        assert_eq!(
+            items[1],
+            Value::string("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        );
     } else {
         panic!("Expected array of hashes");
     }
@@ -162,7 +168,10 @@ let res3 = app.handle(req3)
         assert_eq!(items[0], Value::Int(200));
         assert_eq!(items[1], Value::string("{\"status\":\"healthy\"}"));
         assert_eq!(items[2], Value::Int(200));
-        assert_eq!(items[3], Value::string("{\"trace\":\"trace-999\",\"user\":\"42\"}"));
+        assert_eq!(
+            items[3],
+            Value::string("{\"trace\":\"trace-999\",\"user\":\"42\"}")
+        );
         assert_eq!(items[4], Value::Int(404));
     } else {
         panic!("Expected array of results");

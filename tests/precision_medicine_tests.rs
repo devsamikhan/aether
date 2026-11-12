@@ -49,5 +49,9 @@ assert(aff_osimer.kd_nm < 100.0) # High potency
 "#;
 
     let res = run_source(source);
-    assert!(res.is_ok(), "Precision medicine pipeline failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Precision medicine pipeline failed: {:?}",
+        res.err()
+    );
 }

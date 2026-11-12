@@ -35,9 +35,22 @@ impl Span {
     pub fn merge(&self, other: Span) -> Span {
         let start = self.start.min(other.start);
         let end = self.end.max(other.end);
-        let line = if self.start <= other.start { self.line } else { other.line };
-        let col = if self.start <= other.start { self.col } else { other.col };
-        Span { start, end, line, col }
+        let line = if self.start <= other.start {
+            self.line
+        } else {
+            other.line
+        };
+        let col = if self.start <= other.start {
+            self.col
+        } else {
+            other.col
+        };
+        Span {
+            start,
+            end,
+            line,
+            col,
+        }
     }
 }
 

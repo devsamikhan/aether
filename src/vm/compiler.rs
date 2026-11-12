@@ -1039,23 +1039,19 @@ impl BytecodeCompiler {
                             methods.insert(m_name.clone(), Arc::new(compiled));
                         }
                         Statement::Assign {
-                            target,
+                            target: Expr::Ident(var_name, _),
                             op: AssignOp::Assign,
-                            value,
+                            value: Expr::Literal(lit, _),
                             ..
                         } => {
-                            if let Expr::Ident(var_name, _) = target {
-                                if let Expr::Literal(lit, _) = value {
-                                    let val = match lit {
-                                        Literal::Int(i) => Value::Int(*i),
-                                        Literal::Float(f) => Value::Float(*f),
-                                        Literal::String(s) => Value::string(s.clone()),
-                                        Literal::Bool(b) => Value::Bool(*b),
-                                        Literal::Nil => Value::Nil,
-                                    };
-                                    class_vars.insert(var_name.clone(), val);
-                                }
-                            }
+                            let val = match lit {
+                                Literal::Int(i) => Value::Int(*i),
+                                Literal::Float(f) => Value::Float(*f),
+                                Literal::String(s) => Value::string(s.clone()),
+                                Literal::Bool(b) => Value::Bool(*b),
+                                Literal::Nil => Value::Nil,
+                            };
+                            class_vars.insert(var_name.clone(), val);
                         }
                         _ => {}
                     }
@@ -1173,7 +1169,7 @@ impl BytecodeCompiler {
 
                 let bind_name = alias
                     .clone()
-                    .unwrap_or_else(|| module.split('.').last().unwrap_or(module).to_string());
+                    .unwrap_or_else(|| module.split('.').next_back().unwrap_or(module).to_string());
 
                 if self.scope_depth > 0 {
                     self.add_local(bind_name, *span)?;
@@ -2316,12 +2312,10 @@ impl BytecodeCompiler {
         span: Span,
     ) -> Result<(), String> {
         match pattern {
-            MatchPattern::Ident(name) => {
-                if name != "_" {
-                    self.emit_op(OpCode::GetLocal, span);
-                    self.emit_u16(val_slot as u16, span);
-                    self.add_local(name.clone(), span)?;
-                }
+            MatchPattern::Ident(name) if name != "_" => {
+                self.emit_op(OpCode::GetLocal, span);
+                self.emit_u16(val_slot as u16, span);
+                self.add_local(name.clone(), span)?;
             }
             MatchPattern::EnumVariant { bindings, .. } => {
                 for (idx, b_name) in bindings.iter().enumerate() {
@@ -2443,11 +2437,15 @@ impl BytecodeCompiler {
 
     fn prescan_captures_in_stmt(&mut self, stmt: &Statement) {
         match stmt {
-            Statement::Let { initializer, .. } => {
-                if let Some(ref init) = initializer {
-                    self.prescan_captures_in_expr(init);
-                }
+            Statement::Let {
+                initializer: Some(init),
+                ..
+            } => {
+                self.prescan_captures_in_expr(init);
             }
+            Statement::Let {
+                initializer: None, ..
+            } => {}
             Statement::LetDestructure { initializer, .. } => {
                 self.prescan_captures_in_expr(initializer);
             }
@@ -2470,11 +2468,10 @@ impl BytecodeCompiler {
                     self.prescan_captures_in_expr(v);
                 }
             }
-            Statement::Raise { expr, .. } => {
-                if let Some(ref e) = expr {
-                    self.prescan_captures_in_expr(e);
-                }
+            Statement::Raise { expr: Some(e), .. } => {
+                self.prescan_captures_in_expr(e);
             }
+            Statement::Raise { expr: None, .. } => {}
             Statement::TryCatch {
                 try_block,
                 handlers,
@@ -2501,10 +2498,8 @@ impl BytecodeCompiler {
 
     fn prescan_captures_in_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Ident(name, _) => {
-                if !self.global_vars.contains(name) {
-                    let _ = self.resolve_local(name);
-                }
+            Expr::Ident(name, _) if !self.global_vars.contains(name) => {
+                let _ = self.resolve_local(name);
             }
             Expr::Binary(l, _, r, _)
             | Expr::Pipe(l, r, _)

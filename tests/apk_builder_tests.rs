@@ -22,7 +22,10 @@ fn test_sha1_and_base64() {
     let sha1 = calculate_sha1(data);
     // Known SHA-1: 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12
     let expected_hex = "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12";
-    let actual_hex = sha1.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+    let actual_hex = sha1
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
     assert_eq!(actual_hex, expected_hex);
 
     let b64 = base64_encode(&sha1);
@@ -49,7 +52,10 @@ fn test_zip_writer_standalone() {
 fn test_launcher_icon_png_format() {
     let png = generate_launcher_icon();
     // Verify PNG magic [0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n']
-    assert_eq!(&png[0..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    assert_eq!(
+        &png[0..8],
+        &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    );
     // Must contain IHDR, IDAT, IEND
     assert!(png.windows(4).any(|w| w == b"IHDR"));
     assert!(png.windows(4).any(|w| w == b"IDAT"));
@@ -154,7 +160,9 @@ increment()
 
     for entry in entries {
         assert!(
-            apk_bytes.windows(entry.len()).any(|w| w == entry.as_bytes()),
+            apk_bytes
+                .windows(entry.len())
+                .any(|w| w == entry.as_bytes()),
             "Entry '{}' not found in generated APK",
             entry
         );
@@ -178,7 +186,11 @@ fn test_export_android_studio_project() {
     assert!(out_project.join("build.gradle.kts").exists());
     assert!(out_project.join("settings.gradle.kts").exists());
     assert!(out_project.join("app/build.gradle.kts").exists());
-    assert!(out_project.join("app/src/main/AndroidManifest.xml").exists());
-    assert!(out_project.join("app/src/main/java/com/aether/runtime/MainActivity.kt").exists());
+    assert!(out_project
+        .join("app/src/main/AndroidManifest.xml")
+        .exists());
+    assert!(out_project
+        .join("app/src/main/java/com/aether/runtime/MainActivity.kt")
+        .exists());
     assert!(out_project.join("app/src/main/assets/app.ae").exists());
 }

@@ -30,8 +30,61 @@ where
     f(map)
 }
 
+pub struct HttpRawResponse {
+    pub status: i64,
+    pub headers: HashMap<String, String>,
+    pub body: Vec<u8>,
+}
+
+pub enum WsStream {
+    Plain(TcpStream),
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl WsStream {
+    fn tcp_ref(&self) -> &TcpStream {
+        match self {
+            WsStream::Plain(s) => s,
+            WsStream::Tls(s) => s.get_ref(),
+        }
+    }
+
+    pub fn set_read_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
+        self.tcp_ref().set_read_timeout(dur)
+    }
+
+    pub fn set_nonblocking(&self, nonblocking: bool) -> std::io::Result<()> {
+        self.tcp_ref().set_nonblocking(nonblocking)
+    }
+}
+
+impl Read for WsStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            WsStream::Plain(s) => s.read(buf),
+            WsStream::Tls(s) => s.read(buf),
+        }
+    }
+}
+
+impl Write for WsStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            WsStream::Plain(s) => s.write(buf),
+            WsStream::Tls(s) => s.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            WsStream::Plain(s) => s.flush(),
+            WsStream::Tls(s) => s.flush(),
+        }
+    }
+}
+
 pub struct WsConnection {
-    pub stream: Arc<Mutex<TcpStream>>,
+    pub stream: Arc<Mutex<WsStream>>,
     pub is_client: bool,
 }
 
@@ -410,7 +463,7 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
         stream.set_read_timeout(Some(Duration::from_millis(50))).map_err(|e| e.to_string())?;
 
         let ws_id = NEXT_WS_ID.fetch_add(1, Ordering::SeqCst);
-        let stream = Arc::new(Mutex::new(stream));
+        let stream = Arc::new(Mutex::new(WsStream::Plain(stream)));
         with_websockets(|map| map.insert(ws_id, WsConnection { stream, is_client: false }));
         Ok(Value::Int(ws_id as i64))
     }));
@@ -421,10 +474,19 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
             return Err("WebSocket.connect(url) expects URL string".to_string());
         }
         let url_str = args[0].to_string();
-        let (host, port, path) = parse_url(&url_str)?;
+        let parsed = parse_url_parts(&url_str)?;
+        let tcp_stream = connect_tcp_with_dns(&parsed.host, parsed.port)
+            .map_err(|e| format!("WebSocket connect to {}:{} failed: {}", parsed.host, parsed.port, e))?;
 
-        let mut stream = TcpStream::connect((host.as_str(), port))
-            .map_err(|e| format!("WebSocket connect to {}:{} failed: {}", host, port, e))?;
+        let mut ws_stream = if parsed.is_tls {
+            let server_name = rustls::pki_types::ServerName::try_from(parsed.host.clone())
+                .map_err(|e| format!("Invalid TLS server name '{}': {}", parsed.host, e))?;
+            let conn = rustls::ClientConnection::new(get_tls_client_config(), server_name)
+                .map_err(|e| format!("TLS WebSocket init failed for '{}': {}", parsed.host, e))?;
+            WsStream::Tls(Box::new(rustls::StreamOwned::new(conn, tcp_stream)))
+        } else {
+            WsStream::Plain(tcp_stream)
+        };
 
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -438,24 +500,39 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
         }
         let sec_key = crate::vm::crypto::base64_encode(&key_bytes);
 
+        let is_default_port = (parsed.is_tls && parsed.port == 443) || (!parsed.is_tls && parsed.port == 80);
+        let host_header = if is_default_port {
+            parsed.host.clone()
+        } else {
+            format!("{}:{}", parsed.host, parsed.port)
+        };
         let handshake_req = format!(
-            "GET {} HTTP/1.1\r\nHost: {}:{}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {}\r\nSec-WebSocket-Version: 13\r\n\r\n",
-            path, host, port, sec_key
+            "GET {} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {}\r\nSec-WebSocket-Version: 13\r\n\r\n",
+            parsed.path, host_header, sec_key
         );
 
-        stream.write_all(handshake_req.as_bytes()).map_err(|e| e.to_string())?;
-        stream.flush().map_err(|e| e.to_string())?;
+        ws_stream.write_all(handshake_req.as_bytes()).map_err(|e| e.to_string())?;
+        ws_stream.flush().map_err(|e| e.to_string())?;
 
-        stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
-        let (status_line, _resp_headers) = read_http_headers(&mut stream)?;
+        ws_stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
+        let (status_line, resp_headers) = read_http_headers(&mut ws_stream)?;
 
         if !status_line.contains("101") {
             return Err(format!("WebSocket handshake rejected with status: {}", status_line.trim()));
         }
+        let expected_accept = crate::vm::crypto::sec_websocket_accept(&sec_key);
+        if let Some(server_accept) = resp_headers.get("sec-websocket-accept") {
+            if server_accept != &expected_accept {
+                return Err(format!(
+                    "WebSocket Sec-WebSocket-Accept mismatch: expected '{}', got '{}'",
+                    expected_accept, server_accept
+                ));
+            }
+        }
 
-        stream.set_read_timeout(Some(Duration::from_millis(50))).map_err(|e| e.to_string())?;
+        ws_stream.set_read_timeout(Some(Duration::from_millis(50))).map_err(|e| e.to_string())?;
         let ws_id = NEXT_WS_ID.fetch_add(1, Ordering::SeqCst);
-        let stream = Arc::new(Mutex::new(stream));
+        let stream = Arc::new(Mutex::new(ws_stream));
         with_websockets(|map| map.insert(ws_id, WsConnection { stream, is_client: true }));
         Ok(Value::Int(ws_id as i64))
     }));
@@ -479,7 +556,7 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
             };
 
             let (stream_arc, is_client) =
-                with_websockets(|map| -> Result<(Arc<Mutex<TcpStream>>, bool), String> {
+                with_websockets(|map| -> Result<(Arc<Mutex<WsStream>>, bool), String> {
                     let conn = map
                         .get(&ws_id)
                         .ok_or_else(|| format!("WebSocket {} not found", ws_id))?;
@@ -515,7 +592,7 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
             };
 
             let (stream_arc, is_client) =
-                with_websockets(|map| -> Result<(Arc<Mutex<TcpStream>>, bool), String> {
+                with_websockets(|map| -> Result<(Arc<Mutex<WsStream>>, bool), String> {
                     let conn = match map.get(&ws_id) {
                         Some(c) => c,
                         None => return Err(format!("WebSocket {} not found", ws_id)),
@@ -529,7 +606,7 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
                 if let Some(to) = timeout_ms {
                     let _ = stream.set_read_timeout(Some(to));
                 }
-                decode_ws_frame(&mut stream)
+                decode_ws_frame(&mut *stream)
             };
 
             match frame_res {
@@ -716,7 +793,7 @@ pub fn register_net_module(globals: &mut HashMap<String, Value>) {
         .or_insert_with(|| Value::map(ws_module));
 }
 
-fn read_http_headers(stream: &mut TcpStream) -> Result<(String, HashMap<String, String>), String> {
+fn read_http_headers<R: Read>(stream: &mut R) -> Result<(String, HashMap<String, String>), String> {
     let mut header_bytes = Vec::new();
     let mut buf = [0u8; 1];
     while !header_bytes.ends_with(b"\r\n\r\n") {
@@ -946,7 +1023,7 @@ fn perform_http_roundtrip<S: Read + Write>(
     url: &ParsedUrl,
     post_body: &str,
     custom_headers: Option<&HashMap<String, String>>,
-) -> Result<(i64, HashMap<String, Value>, String), String> {
+) -> Result<HttpRawResponse, String> {
     let is_default_port = (url.is_tls && url.port == 443) || (!url.is_tls && url.port == 80);
     let default_host = if is_default_port {
         url.host.clone()
@@ -1036,13 +1113,20 @@ fn perform_http_roundtrip<S: Read + Write>(
             break;
         }
         if let Some((k, v)) = line.split_once(':') {
-            headers.insert(k.trim().to_lowercase(), Value::string(v.trim()));
+            headers.insert(k.trim().to_lowercase(), v.trim().to_string());
         }
     }
 
-    let body_bytes = read_http_body(&mut reader, &headers)?;
-    let body = String::from_utf8_lossy(&body_bytes).to_string();
-    Ok((status_code, headers, body))
+    let mut header_values = HashMap::new();
+    for (k, v) in &headers {
+        header_values.insert(k.clone(), Value::string(v));
+    }
+    let body = read_http_body(&mut reader, &header_values)?;
+    Ok(HttpRawResponse {
+        status: status_code,
+        headers,
+        body,
+    })
 }
 
 fn resolve_redirect_url(base: &ParsedUrl, location: &str) -> String {
@@ -1067,12 +1151,13 @@ fn resolve_redirect_url(base: &ParsedUrl, location: &str) -> String {
     }
 }
 
-fn execute_http_client_request(
+/// Executes an HTTP/HTTPS request with DNS resolution, TLS verification, chunked decoding, and redirects.
+pub fn http_fetch_raw(
     method: &str,
     url_str: &str,
     post_body: &str,
-    custom_headers: Option<HashMap<String, String>>,
-) -> Result<Value, String> {
+    custom_headers: Option<&HashMap<String, String>>,
+) -> Result<HttpRawResponse, String> {
     const MAX_REDIRECTS: usize = 5;
     let mut current_method = method.to_string();
     let mut current_url = url_str.to_string();
@@ -1084,7 +1169,7 @@ fn execute_http_client_request(
         let _ = tcp_stream.set_read_timeout(Some(Duration::from_secs(15)));
         let _ = tcp_stream.set_write_timeout(Some(Duration::from_secs(15)));
 
-        let (status_code, headers, body) = if parsed.is_tls {
+        let resp = if parsed.is_tls {
             let server_name = rustls::pki_types::ServerName::try_from(parsed.host.clone())
                 .map_err(|e| format!("Invalid TLS server name '{}': {}", parsed.host, e))?;
             let conn = rustls::ClientConnection::new(get_tls_client_config(), server_name)
@@ -1095,7 +1180,7 @@ fn execute_http_client_request(
                 &current_method,
                 &parsed,
                 &current_body,
-                custom_headers.as_ref(),
+                custom_headers,
             )?
         } else {
             perform_http_roundtrip(
@@ -1103,15 +1188,15 @@ fn execute_http_client_request(
                 &current_method,
                 &parsed,
                 &current_body,
-                custom_headers.as_ref(),
+                custom_headers,
             )?
         };
 
-        let is_redirect = matches!(status_code, 301 | 302 | 303 | 307 | 308);
+        let is_redirect = matches!(resp.status, 301 | 302 | 303 | 307 | 308);
         if is_redirect && hop < MAX_REDIRECTS {
-            if let Some(loc_val) = headers.get("location") {
-                current_url = resolve_redirect_url(&parsed, &loc_val.to_string());
-                if matches!(status_code, 301..=303) && current_method == "POST" {
+            if let Some(location) = resp.headers.get("location") {
+                current_url = resolve_redirect_url(&parsed, location);
+                if matches!(resp.status, 301..=303) && current_method == "POST" {
                     current_method = "GET".to_string();
                     current_body.clear();
                 }
@@ -1119,21 +1204,38 @@ fn execute_http_client_request(
             }
         }
 
-        let mut result = HashMap::new();
-        result.insert("status".to_string(), Value::Int(status_code));
-        result.insert(
-            "ok".to_string(),
-            Value::Bool((200..300).contains(&status_code)),
-        );
-        result.insert("body".to_string(), Value::string(body));
-        result.insert("headers".to_string(), Value::map(headers));
-        return Ok(Value::map(result));
+        return Ok(resp);
     }
 
     Err(format!(
         "Too many HTTP redirects (exceeded {})",
         MAX_REDIRECTS
     ))
+}
+
+fn execute_http_client_request(
+    method: &str,
+    url_str: &str,
+    post_body: &str,
+    custom_headers: Option<HashMap<String, String>>,
+) -> Result<Value, String> {
+    let raw = http_fetch_raw(method, url_str, post_body, custom_headers.as_ref())?;
+    let mut header_values = HashMap::new();
+    for (k, v) in raw.headers {
+        header_values.insert(k, Value::string(v));
+    }
+    let mut result = HashMap::new();
+    result.insert("status".to_string(), Value::Int(raw.status));
+    result.insert(
+        "ok".to_string(),
+        Value::Bool((200..300).contains(&raw.status)),
+    );
+    result.insert(
+        "body".to_string(),
+        Value::string(String::from_utf8_lossy(&raw.body)),
+    );
+    result.insert("headers".to_string(), Value::map(header_values));
+    Ok(Value::map(result))
 }
 
 fn parse_url_parts(url: &str) -> Result<ParsedUrl, String> {
@@ -1193,11 +1295,6 @@ fn parse_url_parts(url: &str) -> Result<ParsedUrl, String> {
     })
 }
 
-fn parse_url(url: &str) -> Result<(String, u16, String), String> {
-    let parsed = parse_url_parts(url)?;
-    Ok((parsed.host, parsed.port, parsed.path))
-}
-
 fn parse_status_code(status_line: &str) -> Option<i64> {
     let parts: Vec<&str> = status_line.split_whitespace().collect();
     if parts.len() >= 2 {
@@ -1253,7 +1350,7 @@ fn encode_ws_frame(payload: &[u8], opcode: u8, mask: bool) -> Vec<u8> {
     frame
 }
 
-fn decode_ws_frame(stream: &mut TcpStream) -> WsFrameResult {
+fn decode_ws_frame<R: Read>(stream: &mut R) -> WsFrameResult {
     let mut header = [0u8; 2];
     match stream.read_exact(&mut header) {
         Ok(()) => {}

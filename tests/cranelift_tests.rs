@@ -136,4 +136,3 @@ arr[0] + arr[1] + arr[2] + arr[3]
     let res = compiler.compile_and_run(&prog).expect("Execution failed");
     assert_eq!(res, 1000);
 }
-

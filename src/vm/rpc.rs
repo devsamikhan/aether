@@ -310,7 +310,7 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 
 pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
     let clean = hex.trim();
-    if clean.len() % 2 != 0 {
+    if !clean.len().is_multiple_of(2) {
         return Err("Hex string length must be even".to_string());
     }
     let mut bytes = Vec::with_capacity(clean.len() / 2);
@@ -505,7 +505,7 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
             let mut map = HashMap::new();
             map.insert("pack_bytes".to_string(), Value::Int(bytes.len() as i64));
             map.insert("json_bytes".to_string(), Value::Int(json_str.len() as i64));
-            let savings = if json_str.len() > 0 {
+            let savings = if !json_str.is_empty() {
                 let diff = (json_str.len() as f64 - bytes.len() as f64) / json_str.len() as f64;
                 (diff * 100.0).round()
             } else {
@@ -616,44 +616,40 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                             let _ = stream.set_nonblocking(false);
                             if let Ok(()) = stream.read_exact(&mut payload) {
                                 let _ = stream.set_nonblocking(true);
-                                if let Ok(val) = AetherPack::unpack(&payload) {
-                                    if let Value::Map(m) = val {
-                                        let map = m.lock().clone();
-                                        let client_req_id = match map.get("id") {
-                                            Some(Value::Int(i)) => *i as u64,
-                                            _ => 0,
-                                        };
-                                        let method = match map.get("method") {
-                                            Some(v) => v.to_string(),
-                                            None => "unknown".to_string(),
-                                        };
-                                        let call_args = match map.get("args") {
-                                            Some(v) => v.clone(),
-                                            None => Value::array(Vec::new()),
-                                        };
+                                if let Ok(Value::Map(m)) = AetherPack::unpack(&payload) {
+                                    let map = m.lock().clone();
+                                    let client_req_id = match map.get("id") {
+                                        Some(Value::Int(i)) => *i as u64,
+                                        _ => 0,
+                                    };
+                                    let method = match map.get("method") {
+                                        Some(v) => v.to_string(),
+                                        None => "unknown".to_string(),
+                                    };
+                                    let call_args = match map.get("args") {
+                                        Some(v) => v.clone(),
+                                        None => Value::array(Vec::new()),
+                                    };
 
-                                        let call_id = NEXT_CALL_ID.fetch_add(1, Ordering::SeqCst);
-                                        get_pending_calls().lock().unwrap().insert(
-                                            call_id,
-                                            RpcPendingCall {
-                                                stream: Arc::clone(client_arc),
-                                                client_req_id,
-                                            },
-                                        );
+                                    let call_id = NEXT_CALL_ID.fetch_add(1, Ordering::SeqCst);
+                                    get_pending_calls().lock().unwrap().insert(
+                                        call_id,
+                                        RpcPendingCall {
+                                            stream: Arc::clone(client_arc),
+                                            client_req_id,
+                                        },
+                                    );
 
-                                        let mut res_map = HashMap::new();
-                                        res_map.insert(
-                                            "call_id".to_string(),
-                                            Value::Int(call_id as i64),
-                                        );
-                                        res_map.insert(
-                                            "client_id".to_string(),
-                                            Value::Int(client_req_id as i64),
-                                        );
-                                        res_map.insert("method".to_string(), Value::string(method));
-                                        res_map.insert("args".to_string(), call_args);
-                                        return Ok(Value::map(res_map));
-                                    }
+                                    let mut res_map = HashMap::new();
+                                    res_map
+                                        .insert("call_id".to_string(), Value::Int(call_id as i64));
+                                    res_map.insert(
+                                        "client_id".to_string(),
+                                        Value::Int(client_req_id as i64),
+                                    );
+                                    res_map.insert("method".to_string(), Value::string(method));
+                                    res_map.insert("args".to_string(), call_args);
+                                    return Ok(Value::map(res_map));
                                 }
                             }
                         }
@@ -823,7 +819,7 @@ pub fn register_rpc_module(globals: &mut HashMap<String, Value>) {
                 if status == "ok" {
                     Ok(result)
                 } else {
-                    Err(format!("RPC Remote Error: {}", result.to_string()))
+                    Err(format!("RPC Remote Error: {}", result))
                 }
             } else {
                 Err("Invalid RPC response structure".to_string())

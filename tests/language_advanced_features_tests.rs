@@ -22,7 +22,8 @@ let joined = taken.join("-")
 (total, found, has_nine, all_pos, joined, flat.sum())
 "#;
 
-    let result = aether::vm::run_source(source).expect("Failed to run functional collection pipeline test");
+    let result =
+        aether::vm::run_source(source).expect("Failed to run functional collection pipeline test");
     assert_eq!(
         result,
         Value::tuple(vec![
@@ -59,11 +60,7 @@ let FACTORIAL_TABLE = comptime {
     let result = aether::vm::run_source(source).expect("Failed to run comptime & macro test");
     assert_eq!(
         result,
-        Value::tuple(vec![
-            Value::Int(1),
-            Value::Int(720),
-            Value::Int(50),
-        ])
+        Value::tuple(vec![Value::Int(1), Value::Int(720), Value::Int(50),])
     );
 }
 
@@ -130,7 +127,8 @@ let status = run_transaction()
 (status, trace.join(","))
 "#;
 
-    let result = aether::vm::run_source(source).expect("Failed to run defer & with context manager test");
+    let result =
+        aether::vm::run_source(source).expect("Failed to run defer & with context manager test");
     assert_eq!(
         result,
         Value::tuple(vec![
@@ -230,7 +228,8 @@ let maybe_val = nil
 (chain_res, pipe_res, maybe_val)
 "#;
 
-    let result = aether::vm::run_source(source).expect("Failed to run multi-line fluent chaining test");
+    let result =
+        aether::vm::run_source(source).expect("Failed to run multi-line fluent chaining test");
     assert_eq!(
         result,
         Value::tuple(vec![
@@ -263,7 +262,8 @@ let summary = Test.summary()
 (summary["total"], summary["passed"], summary["failed"], fuzz_ok)
 "#;
 
-    let result = aether::vm::run_source(source).expect("Failed to run language-level test & fuzzing");
+    let result =
+        aether::vm::run_source(source).expect("Failed to run language-level test & fuzzing");
     assert_eq!(
         result,
         Value::tuple(vec![
@@ -279,7 +279,11 @@ let summary = Test.summary()
 Fuzz.check(|x| x < 50, 50)
 "#;
     let err = aether::vm::run_source(bad_fuzz).expect_err("Expected FuzzFailure");
-    assert!(err.contains("FuzzFailure"), "Expected FuzzFailure, got: {}", err);
+    assert!(
+        err.contains("FuzzFailure"),
+        "Expected FuzzFailure, got: {}",
+        err
+    );
 }
 
 #[test]
@@ -363,7 +367,8 @@ let mapped_items = RangeCounter(1, 4).map(|x| x + 100)
 )
 "#;
 
-    let result = aether::vm::run_source(source).expect("Failed to run struct operator overloading & custom iterator test");
+    let result = aether::vm::run_source(source)
+        .expect("Failed to run struct operator overloading & custom iterator test");
     assert_eq!(
         result,
         Value::tuple(vec![

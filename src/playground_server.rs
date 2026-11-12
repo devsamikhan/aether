@@ -93,12 +93,7 @@ fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
                 elapsed_ms
             );
 
-            return send_response(
-                &mut stream,
-                200,
-                "application/json",
-                json_resp.as_bytes(),
-            );
+            return send_response(&mut stream, 200, "application/json", json_resp.as_bytes());
         }
     }
 
@@ -125,7 +120,12 @@ fn handle_client(mut stream: TcpStream) -> std::io::Result<()> {
         };
         send_response(&mut stream, 200, content_type, &content)
     } else if clean_path.ends_with(".html") {
-        send_response(&mut stream, 200, "text/html; charset=utf-8", get_fallback_studio_html().as_bytes())
+        send_response(
+            &mut stream,
+            200,
+            "text/html; charset=utf-8",
+            get_fallback_studio_html().as_bytes(),
+        )
     } else {
         send_response(&mut stream, 404, "text/plain", b"Asset not found.")
     }
@@ -240,8 +240,7 @@ fn extract_code_from_json(json: &str) -> Option<String> {
     let pattern = "\"code\":";
     let start_idx = json.find(pattern)? + pattern.len();
     let rest = json[start_idx..].trim_start();
-    if rest.starts_with('"') {
-        let inside = &rest[1..];
+    if let Some(inside) = rest.strip_prefix('"') {
         let end_idx = inside.find('"')?;
         Some(inside[..end_idx].replace("\\n", "\n").replace("\\\"", "\""))
     } else {

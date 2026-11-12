@@ -18,7 +18,9 @@ def multiply(x, y):
 "#;
     let program = parse(source).expect("Failed to parse Aether source");
     let mut compiler = WasmCompiler::new();
-    let wasm_bytes = compiler.compile_program(&program).expect("Failed to compile to WASM");
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
 
     // 1. Verify W3C Magic Header: \0asm (0x00, 0x61, 0x73, 0x6D)
     assert!(wasm_bytes.len() >= 8);
@@ -45,13 +47,17 @@ def compute_formula(x, y, z):
 "#;
     let program = parse(source).expect("Failed to parse Aether source");
     let mut compiler = WasmCompiler::new();
-    let wasm_bytes = compiler.compile_program(&program).expect("Failed to compile to WASM");
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
 
     let module = WasmModule::parse(&wasm_bytes).expect("Failed to parse WASM");
     let mut instance = WasmInstance::new(module);
 
     // compute_formula(5, 6, 7) = (5 * 6) - 7 + 10 = 30 - 7 + 10 = 33
-    let result = instance.invoke("compute_formula", &[5, 6, 7], 100_000).expect("WASM invoke failed");
+    let result = instance
+        .invoke("compute_formula", &[5, 6, 7], 100_000)
+        .expect("WASM invoke failed");
     assert_eq!(result, 33);
 }
 
@@ -65,17 +71,23 @@ def fib(n):
 "#;
     let program = parse(source).expect("Failed to parse Aether source");
     let mut compiler = WasmCompiler::new();
-    let wasm_bytes = compiler.compile_program(&program).expect("Failed to compile to WASM");
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
 
     let module = WasmModule::parse(&wasm_bytes).expect("Failed to parse WASM");
     let mut instance = WasmInstance::new(module);
 
     // fib(10) = 55
-    let result = instance.invoke("fib", &[10], 1_000_000).expect("WASM invoke failed");
+    let result = instance
+        .invoke("fib", &[10], 1_000_000)
+        .expect("WASM invoke failed");
     assert_eq!(result, 55);
 
     // fib(7) = 13
-    let result_7 = instance.invoke("fib", &[7], 1_000_000).expect("WASM invoke failed");
+    let result_7 = instance
+        .invoke("fib", &[7], 1_000_000)
+        .expect("WASM invoke failed");
     assert_eq!(result_7, 13);
 }
 
@@ -95,17 +107,23 @@ def power_mod(base, exp, modulus):
 "#;
     let program = parse(source).expect("Failed to parse Aether source");
     let mut compiler = WasmCompiler::new();
-    let wasm_bytes = compiler.compile_program(&program).expect("Failed to compile to WASM");
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
 
     let module = WasmModule::parse(&wasm_bytes).expect("Failed to parse WASM");
     let mut instance = WasmInstance::new(module);
 
     // 7^13 mod 100 = 7
-    let result = instance.invoke("power_mod", &[7, 13, 100], 100_000).expect("WASM invoke failed");
+    let result = instance
+        .invoke("power_mod", &[7, 13, 100], 100_000)
+        .expect("WASM invoke failed");
     assert_eq!(result, 7);
 
     // 3^7 mod 13: 2187 mod 13 = 3
-    let result_2 = instance.invoke("power_mod", &[3, 7, 13], 100_000).expect("WASM invoke failed");
+    let result_2 = instance
+        .invoke("power_mod", &[3, 7, 13], 100_000)
+        .expect("WASM invoke failed");
     assert_eq!(result_2, 3);
 }
 
@@ -117,12 +135,16 @@ def get_banner_ptr():
 "#;
     let program = parse(source).expect("Failed to parse Aether source");
     let mut compiler = WasmCompiler::new();
-    let wasm_bytes = compiler.compile_program(&program).expect("Failed to compile to WASM");
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
 
     let module = WasmModule::parse(&wasm_bytes).expect("Failed to parse WASM");
     let mut instance = WasmInstance::new(module);
 
-    let offset = instance.invoke("get_banner_ptr", &[], 100_000).expect("WASM invoke failed") as usize;
+    let offset = instance
+        .invoke("get_banner_ptr", &[], 100_000)
+        .expect("WASM invoke failed") as usize;
     assert!(offset >= 1024);
 
     let banner = String::from_utf8_lossy(&instance.memory[offset..offset + 23]).to_string();
@@ -170,4 +192,46 @@ res = worker.handle_request(req)
     } else {
         panic!("Expected Array, got {:?}", res);
     }
+}
+
+#[test]
+fn test_wasm_for_ranges_break_continue_unary_pow_and_arrays() {
+    let source = r#"
+def compute_series(limit):
+    let arr = [10, 20, 30, 40]
+    arr[1] += 5
+    let mut acc = len(arr) + arr[1]
+    for i in 1..=limit:
+        if i == 2:
+            continue
+        elif i > 5:
+            break
+        let term = (i ** 2) + (-1)
+        if not (term == 0) and (2 and 4):
+            acc += term
+    for k in range(6, 0, -2):
+        acc += k
+    return acc
+"#;
+    let program = parse(source).expect("Failed to parse Aether source");
+    let mut compiler = WasmCompiler::new();
+    let wasm_bytes = compiler
+        .compile_program(&program)
+        .expect("Failed to compile to WASM");
+
+    let module = WasmModule::parse(&wasm_bytes).expect("Failed to parse WASM");
+    let mut instance = WasmInstance::new(module);
+
+    // Initial acc = 4 + 25 = 29
+    // i=1: term = 1 - 1 = 0 (skipped by `not (term == 0)`)
+    // i=2: continue
+    // i=3: term = 9 - 1 = 8 -> acc = 37
+    // i=4: term = 16 - 1 = 15 -> acc = 52
+    // i=5: term = 25 - 1 = 24 -> acc = 76
+    // i=6: break
+    // k=6, 4, 2: +12 -> acc = 88
+    let result = instance
+        .invoke("compute_series", &[8], 200_000)
+        .expect("WASM invoke failed");
+    assert_eq!(result, 88);
 }

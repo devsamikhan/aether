@@ -125,5 +125,9 @@ assert(st["status"] == "INITIALIZING", "State at step 1 matches")
 "#;
 
     let res = run_source(src);
-    assert!(res.is_ok(), "Aether stdlib TUI test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Aether stdlib TUI test failed: {:?}",
+        res.err()
+    );
 }

@@ -17,10 +17,7 @@ fn test_compute_buffer_allocation_and_indexing() {
     assert_eq!(b1.get(2, 0, 0), Some(99.0));
 
     // 2D Buffer [width=3, height=2, depth=1]
-    let b2 = ComputeBuffer::new([3, 2, 1], vec![
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0,
-    ]).unwrap();
+    let b2 = ComputeBuffer::new([3, 2, 1], vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
     assert_eq!(b2.get(1, 1, 0), Some(5.0));
     assert_eq!(b2.get(2, 1, 0), Some(6.0));
     assert_eq!(b2.get(3, 1, 0), None); // Out of bounds
@@ -46,7 +43,8 @@ fn test_compute_parallel_vector_add_and_fma() {
         [n, 1, 1],
         [64, 1, 1],
         &[],
-    ).unwrap();
+    )
+    .unwrap();
 
     let out_guard = buf_out.lock().unwrap();
     for i in 0..n {
@@ -62,7 +60,8 @@ fn test_compute_parallel_vector_add_and_fma() {
         [n, 1, 1],
         [64, 1, 1],
         &[],
-    ).unwrap();
+    )
+    .unwrap();
 
     let out_guard2 = buf_out.lock().unwrap();
     for i in 0..n {
@@ -100,7 +99,8 @@ fn test_compute_parallel_matmul() {
         [2, 2, 1],
         [16, 16, 1],
         &[],
-    ).unwrap();
+    )
+    .unwrap();
 
     let res = buf_out.lock().unwrap();
     assert_eq!(res.data, vec![31.0, 19.0, 85.0, 55.0]);
@@ -114,12 +114,16 @@ fn test_compute_parallel_conv2d() {
     let mut img_data = vec![0.0; img_w * img_h];
     // Set center pixel to 10.0
     img_data[2 * img_w + 2] = 10.0;
-    let img_buf = Arc::new(Mutex::new(ComputeBuffer::new([img_w, img_h, 1], img_data).unwrap()));
+    let img_buf = Arc::new(Mutex::new(
+        ComputeBuffer::new([img_w, img_h, 1], img_data).unwrap(),
+    ));
 
     // 3x3 Box blur filter (uniform 1/9)
     let k_val = 1.0 / 9.0;
     let kernel_data = vec![k_val; 9];
-    let kernel_buf = Arc::new(Mutex::new(ComputeBuffer::new([3, 3, 1], kernel_data).unwrap()));
+    let kernel_buf = Arc::new(Mutex::new(
+        ComputeBuffer::new([3, 3, 1], kernel_data).unwrap(),
+    ));
 
     let out_buf = Arc::new(Mutex::new(ComputeBuffer::zeros([img_w, img_h, 1])));
 
@@ -130,7 +134,8 @@ fn test_compute_parallel_conv2d() {
         [img_w, img_h, 1],
         [16, 16, 1],
         &[],
-    ).unwrap();
+    )
+    .unwrap();
 
     let out = out_buf.lock().unwrap();
     // Center pixel of blurred image should receive 10.0 * (1/9)
@@ -148,23 +153,17 @@ fn test_compute_parallel_reductions() {
     // Parallel Sum: 10000 * 10001 / 2 = 50,005,000
     WorkGroupScheduler::dispatch(
         "parallel_sum",
-        &[buf.clone()],
+        std::slice::from_ref(&buf),
         &out,
         [n, 1, 1],
         [64, 1, 1],
         &[],
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(out.lock().unwrap().data[0], 50005000.0);
 
     // Parallel Max: 10000.0
-    WorkGroupScheduler::dispatch(
-        "parallel_max",
-        &[buf],
-        &out,
-        [n, 1, 1],
-        [64, 1, 1],
-        &[],
-    ).unwrap();
+    WorkGroupScheduler::dispatch("parallel_max", &[buf], &out, [n, 1, 1], [64, 1, 1], &[]).unwrap();
     assert_eq!(out.lock().unwrap().data[0], 10000.0);
 }
 

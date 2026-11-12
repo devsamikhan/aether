@@ -52,7 +52,8 @@ print("💡 Run `aether bundle frontend/ --target apk` to generate Android APK i
 
     let test_main_ae = r#"assert(DB != nil, "Database engine must be online")
 print("✓ React host test suite passed cleanly ✅")
-"#.to_string();
+"#
+    .to_string();
 
     let raw_html = r###"<!DOCTYPE html>
 <html lang="en">
@@ -910,7 +911,8 @@ db.execute("INSERT INTO test VALUES (42);")
 let res = db.query("SELECT * FROM test;")
 assert(len(res) == 1, "DB query must return 1 row")
 print("Fullstack database tests passed ✅")
-"#.to_string();
+"#
+    .to_string();
 
     let raw_html = r###"<!DOCTYPE html>
 <html lang="en">
@@ -991,7 +993,8 @@ kg.add_edge(a, b, "CONNECTS", 1.0)
 let p = kg.shortest_path(a, b)
 assert(p["cost"] == 1.0, "Path cost should be 1.0")
 print("AI Agent test suite passed ✅")
-"#.to_string();
+"#
+    .to_string();
 
     TemplateData {
         main_ae,
@@ -1035,7 +1038,8 @@ print("✓ Settlement processed cleanly. Remaining balance:", final_bal)
 
 assert(transfer_test(100, 40) == 60, "Transfer contract verified")
 print("FinTech formal contract tests passed ✅")
-"#.to_string();
+"#
+    .to_string();
 
     TemplateData {
         main_ae,
@@ -1069,7 +1073,8 @@ main()
     print("Sanity test passed ✅")
 
 test_sanity()
-"#.to_string();
+"#
+    .to_string();
 
     TemplateData {
         main_ae,

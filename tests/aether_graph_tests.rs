@@ -115,11 +115,19 @@ fn test_graph_hybrid_vector_semantic_search() {
     {
         let mut g = g_arc.lock().unwrap();
         // Concept: Artificial Intelligence
-        ai_node = g.add_node("Artificial Intelligence", HashMap::new(), Some(vec![0.9, 0.8, 0.1]));
+        ai_node = g.add_node(
+            "Artificial Intelligence",
+            HashMap::new(),
+            Some(vec![0.9, 0.8, 0.1]),
+        );
         // Concept: Quantum Physics
         physics_node = g.add_node("Quantum Physics", HashMap::new(), Some(vec![0.1, 0.2, 0.9]));
         // Concept: Molecular Biology
-        let _bio_node = g.add_node("Molecular Biology", HashMap::new(), Some(vec![0.2, 0.7, 0.3]));
+        let _bio_node = g.add_node(
+            "Molecular Biology",
+            HashMap::new(),
+            Some(vec![0.2, 0.7, 0.3]),
+        );
 
         let _ = g.add_edge(ai_node, physics_node, "INTERSECTS", 1.0, HashMap::new());
     }

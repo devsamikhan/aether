@@ -57,7 +57,11 @@ assert(len(empty_tbls) == 0)
 "#;
 
     let res = run_source(source);
-    assert!(res.is_ok(), "DB relational SQL test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "DB relational SQL test failed: {:?}",
+        res.err()
+    );
 }
 
 #[test]

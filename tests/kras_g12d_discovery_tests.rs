@@ -40,5 +40,9 @@ assert(soto_smiles.contains("C(=O)C=C"))
 "#;
 
     let res = run_source(source);
-    assert!(res.is_ok(), "KRAS G12D real discovery test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "KRAS G12D real discovery test failed: {:?}",
+        res.err()
+    );
 }

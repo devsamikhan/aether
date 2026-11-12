@@ -156,7 +156,9 @@ res = agent.run("What is the capital of Pakistan?")
         let items = arr.lock().clone();
         assert_eq!(items[0].to_string(), "completed");
         assert_eq!(items[1].to_string(), "2");
-        assert!(items[2].to_string().contains("Islamabad is the capital of Pakistan"));
+        assert!(items[2]
+            .to_string()
+            .contains("Islamabad is the capital of Pakistan"));
         assert_eq!(items[3].to_string(), "3"); // 1 user + 1 tool + 1 assistant
     } else {
         panic!("Expected Array, got {:?}", res);

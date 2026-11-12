@@ -4,13 +4,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub type MemoCache = Arc<parking_lot::Mutex<HashMap<String, Value>>>;
+
 pub struct CallFrame {
     pub function: Arc<CompiledFunction>,
     pub ip: usize,
     pub stack_offset: usize,
     pub constructor_instance: Option<Value>,
     pub closure_upvalues: Option<Arc<parking_lot::Mutex<Vec<Value>>>>,
-    pub memo_target: Option<(Arc<parking_lot::Mutex<HashMap<String, Value>>>, String)>,
+    pub memo_target: Option<(MemoCache, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -3463,6 +3465,7 @@ impl VM {
                                                     | "count_kmers"
                                                     | "hamming_distance"
                                                     | "find_orfs"
+                                                    | "orf_finder"
                                                     | "to_string"
                                                     | "str"
                                                     | "len"
@@ -3498,6 +3501,8 @@ impl VM {
                                                     | "safety_profile"
                                                     | "fingerprint"
                                                     | "predict_binding_affinity"
+                                                    | "substructure_match"
+                                                    | "has_substructure"
                                                     | "smiles"
                                                     | "len"
                                             ))
@@ -3559,6 +3564,7 @@ impl VM {
                                                     | "count_kmers"
                                                     | "hamming_distance"
                                                     | "find_orfs"
+                                                    | "orf_finder"
                                                     | "to_string"
                                                     | "str"
                                                     | "len"
@@ -3594,6 +3600,8 @@ impl VM {
                                                     | "safety_profile"
                                                     | "fingerprint"
                                                     | "predict_binding_affinity"
+                                                    | "substructure_match"
+                                                    | "has_substructure"
                                                     | "smiles"
                                                     | "len"
                                             ))

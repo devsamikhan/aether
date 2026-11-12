@@ -14,10 +14,16 @@ fn test_toolchain_diagnostics_doctor() {
     assert_eq!(report.version, "1.1.0");
     assert!(!report.checks.is_empty());
 
-    let home_check = report.checks.iter().find(|c| c.name.contains("AETHER_HOME"));
+    let home_check = report
+        .checks
+        .iter()
+        .find(|c| c.name.contains("AETHER_HOME"));
     assert!(home_check.is_some());
 
-    let vm_check = report.checks.iter().find(|c| c.name.contains("Bytecode VM"));
+    let vm_check = report
+        .checks
+        .iter()
+        .find(|c| c.name.contains("Bytecode VM"));
     assert!(vm_check.is_some());
     assert!(vm_check.unwrap().passed);
 }
@@ -30,7 +36,8 @@ fn test_toolchain_project_scaffolding_templates() {
     }
 
     // 1. Scaffold AI Template
-    let path = scaffold_project(temp_dir.to_str().unwrap(), "ai").expect("Failed to scaffold project");
+    let path =
+        scaffold_project(temp_dir.to_str().unwrap(), "ai").expect("Failed to scaffold project");
     assert!(path.exists());
     assert!(path.join("aether.toml").exists());
     assert!(path.join("src/main.ae").exists());
@@ -39,11 +46,19 @@ fn test_toolchain_project_scaffolding_templates() {
     // Verify generated code executes cleanly
     let main_src = fs::read_to_string(path.join("src/main.ae")).unwrap();
     let res = run_source(&main_src);
-    assert!(res.is_ok(), "Generated AI main.ae should execute cleanly: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Generated AI main.ae should execute cleanly: {:?}",
+        res.err()
+    );
 
     let test_src = fs::read_to_string(path.join("tests/test_main.ae")).unwrap();
     let test_res = run_source(&test_src);
-    assert!(test_res.is_ok(), "Generated AI test_main.ae should execute cleanly: {:?}", test_res.err());
+    assert!(
+        test_res.is_ok(),
+        "Generated AI test_main.ae should execute cleanly: {:?}",
+        test_res.err()
+    );
 
     // Cleanup
     let _ = fs::remove_dir_all(&temp_dir);
@@ -54,14 +69,23 @@ fn test_toolchain_project_scaffolding_templates() {
         let _ = fs::remove_dir_all(&fintech_dir);
     }
 
-    let fpath = scaffold_project(fintech_dir.to_str().unwrap(), "fintech").expect("Failed to scaffold fintech project");
+    let fpath = scaffold_project(fintech_dir.to_str().unwrap(), "fintech")
+        .expect("Failed to scaffold fintech project");
     let fmain_src = fs::read_to_string(fpath.join("src/main.ae")).unwrap();
     let fres = run_source(&fmain_src);
-    assert!(fres.is_ok(), "Generated FinTech main.ae should execute cleanly: {:?}", fres.err());
+    assert!(
+        fres.is_ok(),
+        "Generated FinTech main.ae should execute cleanly: {:?}",
+        fres.err()
+    );
 
     let ftest_src = fs::read_to_string(fpath.join("tests/test_main.ae")).unwrap();
     let ftest_res = run_source(&ftest_src);
-    assert!(ftest_res.is_ok(), "Generated FinTech test_main.ae should execute cleanly: {:?}", ftest_res.err());
+    assert!(
+        ftest_res.is_ok(),
+        "Generated FinTech test_main.ae should execute cleanly: {:?}",
+        ftest_res.err()
+    );
 
     // Cleanup
     let _ = fs::remove_dir_all(&fintech_dir);
@@ -94,7 +118,11 @@ assert(result == 4950, "Sum 0..99 should be 4950")
 "#;
 
     let res = run_source(script);
-    assert!(res.is_ok(), "Stress recursive stack & concurrency failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Stress recursive stack & concurrency failed: {:?}",
+        res.err()
+    );
 }
 
 #[test]
@@ -133,7 +161,11 @@ assert(path["cost"] == 50.0, "Cost across 50 linear edges should be 50.0")
 "#;
 
     let res = run_source(script);
-    assert!(res.is_ok(), "Stress dataframe and graph scale failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Stress dataframe and graph scale failed: {:?}",
+        res.err()
+    );
 }
 
 #[test]
@@ -144,4 +176,68 @@ fn test_toolchain_self_update_simulation() {
     assert!(rep.success);
     // Cleanup temporary backup
     let _ = fs::remove_file(rep.backup_path);
+}
+
+#[test]
+fn test_toolchain_self_update_from_url_check_and_checksum_rejection() {
+    use aether::package_manager::sha256_digest;
+    use aether::toolchain::{perform_self_update_from_url, AETHER_VERSION};
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let payload_bytes = b"fake-aether-binary-payload";
+    let bad_sha = sha256_digest(b"different-payload");
+
+    let server_handle = std::thread::spawn(move || {
+        for _ in 0..3 {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 2048];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                if req.starts_with("GET /manifest.json ") {
+                    let manifest = format!(
+                        r#"{{"version":"99.0.0","url":"http://127.0.0.1:{}/bin/aether","sha256":"{}"}}"#,
+                        port, bad_sha
+                    );
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        manifest.len(),
+                        manifest
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                } else {
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        payload_bytes.len()
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                    let _ = stream.write_all(payload_bytes);
+                }
+            }
+        }
+    });
+
+    let url = format!("http://127.0.0.1:{}/manifest.json", port);
+
+    // 1. Check-only mode queries manifest cleanly without replacing executable
+    let check_rep =
+        perform_self_update_from_url(&url, true).expect("check_only update should succeed");
+    assert_eq!(check_rep.current_version, AETHER_VERSION);
+    assert_eq!(check_rep.new_version, "99.0.0");
+    assert!(check_rep.success);
+
+    // 2. Full download detects SHA-256 mismatch and refuses to overwrite executable
+    let err_res = perform_self_update_from_url(&url, false);
+    match err_res {
+        Err(msg) => assert!(
+            msg.contains("SHA-256") || msg.contains("sha256") || msg.contains("checksum"),
+            "Unexpected error: {}",
+            msg
+        ),
+        Ok(_) => panic!("Expected SHA-256 mismatch error on self-update"),
+    }
+
+    let _ = server_handle.join();
 }

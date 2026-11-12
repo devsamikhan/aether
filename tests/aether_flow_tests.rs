@@ -67,8 +67,8 @@ fn test_flow_sliding_window_aggregations() {
     assert_eq!(wins.len(), 3);
 
     let sums = aether::vm::flow::aggregate_windows(&wins, "sum");
-    assert_eq!(sums[0], Value::Float(6.0));  // 1+2+3
-    assert_eq!(sums[1], Value::Float(9.0));  // 2+3+4
+    assert_eq!(sums[0], Value::Float(6.0)); // 1+2+3
+    assert_eq!(sums[1], Value::Float(9.0)); // 2+3+4
     assert_eq!(sums[2], Value::Float(12.0)); // 3+4+5
 }
 
@@ -138,5 +138,9 @@ assert(counts[0] == 2, "Window size count is 2")
 "#;
 
     let res = run_source(src);
-    assert!(res.is_ok(), "Aether stdlib Flow test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Aether stdlib Flow test failed: {:?}",
+        res.err()
+    );
 }

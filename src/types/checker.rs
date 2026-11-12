@@ -2,11 +2,24 @@ use super::{Type, TypeEnv};
 use crate::syntax::ast::{Program, Statement};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeDiagnostic {
+    pub line: usize,
+    pub col: usize,
+    pub message: String,
+}
+
 /// Static type checker verifying schemas, intents, enums, traits, impls, type aliases, and function signatures.
 pub struct TypeChecker {
     pub env: TypeEnv,
     pub traits: HashMap<String, Vec<String>>,
     pub type_aliases: HashMap<String, String>,
+}
+
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeChecker {
@@ -59,6 +72,15 @@ impl TypeChecker {
 
     /// Statically analyze an entire AETHER `Program`, registering declarations and verifying `trait`/`impl` contracts.
     pub fn check_program(&mut self, program: &Program) -> Result<(), Vec<String>> {
+        self.check_program_with_spans(program)
+            .map_err(|diags| diags.into_iter().map(|d| d.message).collect())
+    }
+
+    /// Statically analyze an AETHER `Program`, preserving source `Span` line/column locations for every diagnostic.
+    pub fn check_program_with_spans(
+        &mut self,
+        program: &Program,
+    ) -> Result<(), Vec<TypeDiagnostic>> {
         let mut errors = Vec::new();
         for stmt in &program.statements {
             match stmt {
@@ -81,7 +103,7 @@ impl TypeChecker {
                     trait_name: Some(t_name),
                     target_type,
                     methods,
-                    ..
+                    span,
                 } => {
                     if let Some(required_methods) = self.traits.get(t_name) {
                         let implemented: Vec<String> = methods
@@ -93,10 +115,14 @@ impl TypeChecker {
                             .collect();
                         for req in required_methods {
                             if !implemented.contains(req) {
-                                errors.push(format!(
-                                    "TraitError: Type '{}' is missing required method '{}' from trait '{}'",
-                                    target_type, req, t_name
-                                ));
+                                errors.push(TypeDiagnostic {
+                                    line: span.line,
+                                    col: span.col,
+                                    message: format!(
+                                        "TraitError: Type '{}' is missing required method '{}' from trait '{}'",
+                                        target_type, req, t_name
+                                    ),
+                                });
                             }
                         }
                     }

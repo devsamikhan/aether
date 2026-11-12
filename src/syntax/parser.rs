@@ -1,7 +1,7 @@
 use super::ast::*;
+use super::lexer::Lexer;
 use super::span::Span;
 use super::token::{Token, TokenKind};
-use super::lexer::Lexer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
@@ -135,7 +135,8 @@ impl Parser {
         let body = self.parse_block()?;
         let span = test_tok.span.merge(body.span);
         let test_mod = Expr::Ident("Test".to_string(), test_tok.span);
-        let register_member = Expr::Member(Box::new(test_mod), "register".to_string(), test_tok.span);
+        let register_member =
+            Expr::Member(Box::new(test_mod), "register".to_string(), test_tok.span);
         let name_lit = Expr::Literal(Literal::String(test_name), name_tok.span);
         let lambda = Expr::Lambda(Vec::new(), Box::new(body), span);
         Ok(Statement::Expr(Expr::Call(
@@ -165,7 +166,10 @@ impl Parser {
                     vars.push(s.clone());
                     self.advance();
                 } else {
-                    return Err(("Expected identifier in tuple destructuring".to_string(), self.current_span()));
+                    return Err((
+                        "Expected identifier in tuple destructuring".to_string(),
+                        self.current_span(),
+                    ));
                 }
                 self.skip_braced_whitespace();
                 if !self.match_token(&TokenKind::Comma) {
@@ -212,7 +216,10 @@ impl Parser {
                     elements.push(s.clone());
                     self.advance();
                 } else {
-                    return Err(("Expected identifier in array destructuring".to_string(), self.current_span()));
+                    return Err((
+                        "Expected identifier in array destructuring".to_string(),
+                        self.current_span(),
+                    ));
                 }
                 self.skip_braced_whitespace();
                 if !self.match_token(&TokenKind::Comma) {
@@ -244,7 +251,12 @@ impl Parser {
                 self.skip_braced_whitespace();
                 let key = match &self.peek().kind {
                     TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
-                    _ => return Err(("Expected field name in map destructuring".to_string(), self.current_span())),
+                    _ => {
+                        return Err((
+                            "Expected field name in map destructuring".to_string(),
+                            self.current_span(),
+                        ))
+                    }
                 };
                 self.advance();
                 let mut bind_var = key.clone();
@@ -282,7 +294,12 @@ impl Parser {
 
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected variable name after 'let'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected variable name after 'let'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
 
@@ -298,7 +315,10 @@ impl Parser {
             initializer = Some(self.parse_expression(Precedence::None)?);
         }
 
-        let end_span = initializer.as_ref().map(|e| e.span()).unwrap_or(let_token.span);
+        let end_span = initializer
+            .as_ref()
+            .map(|e| e.span())
+            .unwrap_or(let_token.span);
         self.consume_statement_terminator();
 
         Ok(Statement::Let {
@@ -436,7 +456,12 @@ impl Parser {
         while !self.is_at_end() {
             let name = match &self.peek().kind {
                 TokenKind::Ident(s) => s.clone(),
-                _ => return Err(("Expected variable name after 'global'".to_string(), self.current_span())),
+                _ => {
+                    return Err((
+                        "Expected variable name after 'global'".to_string(),
+                        self.current_span(),
+                    ))
+                }
             };
             self.advance();
             names.push(name);
@@ -458,7 +483,10 @@ impl Parser {
                 if let Some(s) = other.as_ident_str() {
                     s.to_string()
                 } else {
-                    return Err(("Expected function name after 'fn' or 'def'".to_string(), self.current_span()));
+                    return Err((
+                        "Expected function name after 'fn' or 'def'".to_string(),
+                        self.current_span(),
+                    ));
                 }
             }
         };
@@ -608,7 +636,11 @@ impl Parser {
         let is_braced = self.match_token(&TokenKind::LBrace);
         if is_braced || self.match_token(&TokenKind::Indent) {
             self.advance();
-            let close_tok = if is_braced { TokenKind::RBrace } else { TokenKind::Dedent };
+            let close_tok = if is_braced {
+                TokenKind::RBrace
+            } else {
+                TokenKind::Dedent
+            };
             while !self.check(&close_tok) && !self.is_at_end() {
                 if is_braced {
                     self.skip_braced_whitespace();
@@ -621,15 +653,20 @@ impl Parser {
 
                 if self.match_token(&TokenKind::Require) {
                     self.advance();
-                    if self.match_token(&TokenKind::Colon) { self.advance(); }
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                    }
                     require.push(self.parse_expression(Precedence::None)?);
                     self.consume_statement_terminator();
                 } else if self.match_token(&TokenKind::Ensure) {
                     self.advance();
-                    if self.match_token(&TokenKind::Colon) { self.advance(); }
+                    if self.match_token(&TokenKind::Colon) {
+                        self.advance();
+                    }
                     ensure.push(self.parse_expression(Precedence::None)?);
                     self.consume_statement_terminator();
-                } else if matches!(&self.peek().kind, TokenKind::Ident(s) if s == "body" || s == "do") {
+                } else if matches!(&self.peek().kind, TokenKind::Ident(s) if s == "body" || s == "do")
+                {
                     self.advance();
                     let sub_block = self.parse_block()?;
                     statements.extend(sub_block.statements);
@@ -682,7 +719,12 @@ impl Parser {
         let for_tok = self.advance();
         let item = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected identifier after 'for'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected identifier after 'for'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
 
@@ -701,18 +743,30 @@ impl Parser {
     fn parse_return_statement(&mut self) -> Result<Statement, (String, Span)> {
         let ret_tok = self.advance();
         let mut value = None;
-        if !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+        if !self.check(&TokenKind::Newline)
+            && !self.check(&TokenKind::Semicolon)
+            && !self.check(&TokenKind::Dedent)
+            && !self.is_at_end()
+        {
             let first = self.parse_expression(Precedence::None)?;
             if self.match_token(&TokenKind::Comma) {
                 let mut items = vec![first];
                 while self.match_token(&TokenKind::Comma) {
                     self.advance();
-                    if self.check(&TokenKind::Newline) || self.check(&TokenKind::Semicolon) || self.check(&TokenKind::Dedent) || self.is_at_end() {
+                    if self.check(&TokenKind::Newline)
+                        || self.check(&TokenKind::Semicolon)
+                        || self.check(&TokenKind::Dedent)
+                        || self.is_at_end()
+                    {
                         break;
                     }
                     items.push(self.parse_expression(Precedence::None)?);
                 }
-                let span = items.first().unwrap().span().merge(items.last().unwrap().span());
+                let span = items
+                    .first()
+                    .unwrap()
+                    .span()
+                    .merge(items.last().unwrap().span());
                 value = Some(Expr::Tuple(items, span));
             } else {
                 value = Some(first);
@@ -729,7 +783,11 @@ impl Parser {
     fn parse_yield_statement(&mut self) -> Result<Statement, (String, Span)> {
         let yld_tok = self.advance();
         let mut value = None;
-        if !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+        if !self.check(&TokenKind::Newline)
+            && !self.check(&TokenKind::Semicolon)
+            && !self.check(&TokenKind::Dedent)
+            && !self.is_at_end()
+        {
             value = Some(self.parse_expression(Precedence::None)?);
         }
         let end_span = value.as_ref().map(|v| v.span()).unwrap_or(yld_tok.span);
@@ -784,7 +842,9 @@ impl Parser {
                         let _ = self.parse_type_annotation();
                     }
                 }
-                if !self.match_token(&TokenKind::Comma) { break; }
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
                 self.advance();
             }
             self.consume(&TokenKind::RParen, "Expected ')' after struct fields")?;
@@ -793,7 +853,9 @@ impl Parser {
             self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                 self.skip_braced_whitespace();
-                if self.check(&TokenKind::RBrace) { break; }
+                if self.check(&TokenKind::RBrace) {
+                    break;
+                }
                 if let TokenKind::Ident(f) = &self.peek().kind {
                     fields.push(f.clone());
                     self.advance();
@@ -815,7 +877,9 @@ impl Parser {
                 self.advance();
                 while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
                     self.skip_newlines();
-                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.check(&TokenKind::Dedent) {
+                        break;
+                    }
                     if let TokenKind::Ident(f) = &self.peek().kind {
                         fields.push(f.clone());
                         self.advance();
@@ -828,7 +892,10 @@ impl Parser {
                 }
                 self.consume(&TokenKind::Dedent, "Expected dedent after struct fields")?;
             } else {
-                while !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.is_at_end() {
+                while !self.check(&TokenKind::Newline)
+                    && !self.check(&TokenKind::Semicolon)
+                    && !self.is_at_end()
+                {
                     if let TokenKind::Ident(f) = &self.peek().kind {
                         fields.push(f.clone());
                         self.advance();
@@ -837,7 +904,9 @@ impl Parser {
                             let _ = self.parse_type_annotation();
                         }
                     }
-                    if !self.match_token(&TokenKind::Comma) { break; }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
             }
@@ -852,7 +921,12 @@ impl Parser {
         let enum_tok = self.advance(); // consume 'enum'
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected enum name after 'enum'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected enum name after 'enum'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
 
@@ -864,7 +938,9 @@ impl Parser {
             self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                 self.skip_braced_whitespace();
-                if self.check(&TokenKind::RBrace) { break; }
+                if self.check(&TokenKind::RBrace) {
+                    break;
+                }
                 variants.push(self.parse_enum_variant()?);
                 self.skip_braced_whitespace();
                 if self.match_token(&TokenKind::Comma) {
@@ -880,7 +956,9 @@ impl Parser {
                 self.advance();
                 while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
                     self.skip_newlines();
-                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.check(&TokenKind::Dedent) {
+                        break;
+                    }
                     variants.push(self.parse_enum_variant()?);
                     if self.match_token(&TokenKind::Comma) {
                         self.advance();
@@ -889,9 +967,14 @@ impl Parser {
                 }
                 self.consume(&TokenKind::Dedent, "Expected dedent after enum body")?;
             } else {
-                while !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.is_at_end() {
+                while !self.check(&TokenKind::Newline)
+                    && !self.check(&TokenKind::Semicolon)
+                    && !self.is_at_end()
+                {
                     variants.push(self.parse_enum_variant()?);
-                    if !self.match_token(&TokenKind::Comma) { break; }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
             }
@@ -912,7 +995,10 @@ impl Parser {
                 if let Some(s) = other.as_ident_str() {
                     s.to_string()
                 } else {
-                    return Err(("Expected enum variant name".to_string(), self.current_span()));
+                    return Err((
+                        "Expected enum variant name".to_string(),
+                        self.current_span(),
+                    ));
                 }
             }
         };
@@ -935,7 +1021,9 @@ impl Parser {
                     break;
                 }
                 self.skip_braced_whitespace();
-                if !self.match_token(&TokenKind::Comma) { break; }
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
                 self.advance();
                 self.skip_braced_whitespace();
             }
@@ -952,7 +1040,12 @@ impl Parser {
         let trait_tok = self.advance(); // consume 'trait'
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected trait name after 'trait'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected trait name after 'trait'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
         let _type_params = self.parse_optional_type_params();
@@ -963,7 +1056,9 @@ impl Parser {
             self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                 self.skip_braced_whitespace();
-                if self.check(&TokenKind::RBrace) { break; }
+                if self.check(&TokenKind::RBrace) {
+                    break;
+                }
                 if self.match_token(&TokenKind::Fn) || self.match_token(&TokenKind::Def) {
                     self.advance();
                     if let TokenKind::Ident(m_name) = &self.peek().kind {
@@ -974,11 +1069,14 @@ impl Parser {
                     if self.match_token(&TokenKind::LParen) {
                         let mut depth = 0;
                         while !self.is_at_end() {
-                            if self.check(&TokenKind::LParen) { depth += 1; }
-                            else if self.check(&TokenKind::RParen) {
+                            if self.check(&TokenKind::LParen) {
+                                depth += 1;
+                            } else if self.check(&TokenKind::RParen) {
                                 depth -= 1;
                                 self.advance();
-                                if depth == 0 { break; }
+                                if depth == 0 {
+                                    break;
+                                }
                                 continue;
                             }
                             self.advance();
@@ -988,8 +1086,6 @@ impl Parser {
                         self.advance();
                         let _ = self.parse_type_annotation();
                     }
-                } else if self.match_token(&TokenKind::Pass) {
-                    self.advance();
                 } else {
                     self.advance();
                 }
@@ -1003,14 +1099,19 @@ impl Parser {
                 self.advance();
                 while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
                     self.skip_newlines();
-                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.check(&TokenKind::Dedent) {
+                        break;
+                    }
                     if self.match_token(&TokenKind::Fn) || self.match_token(&TokenKind::Def) {
                         self.advance();
                         if let TokenKind::Ident(m_name) = &self.peek().kind {
                             methods.push(m_name.clone());
                             self.advance();
                         }
-                        while !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+                        while !self.check(&TokenKind::Newline)
+                            && !self.check(&TokenKind::Dedent)
+                            && !self.is_at_end()
+                        {
                             self.advance();
                         }
                     } else {
@@ -1036,7 +1137,12 @@ impl Parser {
 
         let first_name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected type or trait name after 'impl'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected type or trait name after 'impl'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
         let _ = self.parse_optional_type_params();
@@ -1045,7 +1151,12 @@ impl Parser {
             self.advance(); // consume 'for'
             let target = match &self.peek().kind {
                 TokenKind::Ident(s) => s.clone(),
-                _ => return Err(("Expected target type name after 'for' in impl".to_string(), self.current_span())),
+                _ => {
+                    return Err((
+                        "Expected target type name after 'for' in impl".to_string(),
+                        self.current_span(),
+                    ))
+                }
             };
             self.advance();
             let _ = self.parse_optional_type_params();
@@ -1062,7 +1173,9 @@ impl Parser {
                 self.advance();
                 while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
                     self.skip_newlines();
-                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.check(&TokenKind::Dedent) {
+                        break;
+                    }
                     methods.push(self.parse_statement()?);
                     self.skip_newlines();
                 }
@@ -1073,7 +1186,9 @@ impl Parser {
             self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                 self.skip_braced_whitespace();
-                if self.check(&TokenKind::RBrace) { break; }
+                if self.check(&TokenKind::RBrace) {
+                    break;
+                }
                 methods.push(self.parse_statement()?);
                 self.skip_braced_whitespace();
             }
@@ -1093,7 +1208,12 @@ impl Parser {
         let type_tok = self.advance(); // consume 'type'
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected type alias name after 'type'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected type alias name after 'type'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
         let _ = self.parse_optional_type_params();
@@ -1129,7 +1249,12 @@ impl Parser {
         let class_tok = self.advance(); // consume 'class'
         let name = match &self.peek().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(("Expected class name after 'class'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected class name after 'class'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
         let _type_params = self.parse_optional_type_params();
@@ -1144,10 +1269,15 @@ impl Parser {
                     bases.push(b.clone());
                     self.advance();
                 } else {
-                    return Err(("Expected base class name in inheritance list".to_string(), self.current_span()));
+                    return Err((
+                        "Expected base class name in inheritance list".to_string(),
+                        self.current_span(),
+                    ));
                 }
                 self.skip_braced_whitespace();
-                if !self.match_token(&TokenKind::Comma) { break; }
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
                 self.advance();
                 self.skip_braced_whitespace();
             }
@@ -1164,12 +1294,15 @@ impl Parser {
                 self.advance(); // consume Indent
                 while !self.check(&TokenKind::Dedent) && !self.is_at_end() {
                     self.skip_newlines();
-                    if self.check(&TokenKind::Dedent) { break; }
+                    if self.check(&TokenKind::Dedent) {
+                        break;
+                    }
                     let stmt = self.parse_statement()?;
                     body.push(stmt);
                     self.skip_newlines();
                 }
-                let dedent = self.consume(&TokenKind::Dedent, "Expected dedent after class body")?;
+                let dedent =
+                    self.consume(&TokenKind::Dedent, "Expected dedent after class body")?;
                 end_span = dedent.span;
             } else {
                 // Single line body (e.g. class Empty: pass)
@@ -1182,7 +1315,9 @@ impl Parser {
             self.skip_braced_whitespace();
             while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                 self.skip_braced_whitespace();
-                if self.check(&TokenKind::RBrace) { break; }
+                if self.check(&TokenKind::RBrace) {
+                    break;
+                }
                 let stmt = self.parse_statement()?;
                 body.push(stmt);
                 self.skip_braced_whitespace();
@@ -1190,12 +1325,20 @@ impl Parser {
             let rbrace = self.consume(&TokenKind::RBrace, "Expected '}' after class body")?;
             end_span = rbrace.span;
         } else {
-            return Err(("Expected ':' or '{' to start class body".to_string(), self.current_span()));
+            return Err((
+                "Expected ':' or '{' to start class body".to_string(),
+                self.current_span(),
+            ));
         }
 
         self.consume_statement_terminator();
         let span = class_tok.span.merge(end_span);
-        Ok(Statement::ClassDef { name, bases, body, span })
+        Ok(Statement::ClassDef {
+            name,
+            bases,
+            body,
+            span,
+        })
     }
 
     fn parse_defer_statement(&mut self) -> Result<Statement, (String, Span)> {
@@ -1222,7 +1365,10 @@ impl Parser {
                 alias = Some(name.clone());
                 self.advance();
             } else {
-                return Err(("Expected identifier after 'as' in 'with' statement".to_string(), self.current_span()));
+                return Err((
+                    "Expected identifier after 'as' in 'with' statement".to_string(),
+                    self.current_span(),
+                ));
             }
         }
         let body = self.parse_block()?;
@@ -1247,7 +1393,11 @@ impl Parser {
             let mut as_name = None;
 
             // Optional exception type if not followed immediately by colon, newline, or brace
-            if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::Newline) && !self.check(&TokenKind::LBrace) && !self.check(&TokenKind::As) {
+            if !self.check(&TokenKind::Colon)
+                && !self.check(&TokenKind::Newline)
+                && !self.check(&TokenKind::LBrace)
+                && !self.check(&TokenKind::As)
+            {
                 if let TokenKind::Ident(t) = &self.peek().kind {
                     exception_type = Some(t.clone());
                     self.advance();
@@ -1261,7 +1411,10 @@ impl Parser {
                     as_name = Some(n.clone());
                     self.advance();
                 } else {
-                    return Err(("Expected identifier after 'as'".to_string(), self.current_span()));
+                    return Err((
+                        "Expected identifier after 'as'".to_string(),
+                        self.current_span(),
+                    ));
                 }
             }
 
@@ -1283,7 +1436,10 @@ impl Parser {
         }
 
         if handlers.is_empty() && finally_block.is_none() {
-            return Err(("Expected at least one 'except' or 'finally' block after 'try'".to_string(), try_tok.span));
+            return Err((
+                "Expected at least one 'except' or 'finally' block after 'try'".to_string(),
+                try_tok.span,
+            ));
         }
 
         let end_span = if let Some(fb) = &finally_block {
@@ -1305,7 +1461,11 @@ impl Parser {
     fn parse_raise_statement(&mut self) -> Result<Statement, (String, Span)> {
         let raise_tok = self.advance(); // consume 'raise'
         let mut expr = None;
-        if !self.check(&TokenKind::Newline) && !self.check(&TokenKind::Semicolon) && !self.check(&TokenKind::Dedent) && !self.is_at_end() {
+        if !self.check(&TokenKind::Newline)
+            && !self.check(&TokenKind::Semicolon)
+            && !self.check(&TokenKind::Dedent)
+            && !self.is_at_end()
+        {
             expr = Some(self.parse_expression(Precedence::None)?);
         }
         let end_span = expr.as_ref().map(|e| e.span()).unwrap_or(raise_tok.span);
@@ -1320,7 +1480,12 @@ impl Parser {
         let import_tok = self.advance(); // consume 'import'
         let mut module = match &self.peek().kind {
             TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
-            _ => return Err(("Expected module name or path after 'import'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected module name or path after 'import'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
 
@@ -1331,7 +1496,10 @@ impl Parser {
                 module.push_str(sub);
                 self.advance();
             } else {
-                return Err(("Expected identifier after '.' in module import".to_string(), self.current_span()));
+                return Err((
+                    "Expected identifier after '.' in module import".to_string(),
+                    self.current_span(),
+                ));
             }
         }
 
@@ -1342,7 +1510,10 @@ impl Parser {
                 alias = Some(a.clone());
                 self.advance();
             } else {
-                return Err(("Expected alias name after 'as'".to_string(), self.current_span()));
+                return Err((
+                    "Expected alias name after 'as'".to_string(),
+                    self.current_span(),
+                ));
             }
         }
 
@@ -1359,7 +1530,12 @@ impl Parser {
         let from_tok = self.advance(); // consume 'from'
         let mut module = match &self.peek().kind {
             TokenKind::Ident(s) | TokenKind::String(s) => s.clone(),
-            _ => return Err(("Expected module name or path after 'from'".to_string(), self.current_span())),
+            _ => {
+                return Err((
+                    "Expected module name or path after 'from'".to_string(),
+                    self.current_span(),
+                ))
+            }
         };
         self.advance();
 
@@ -1370,18 +1546,29 @@ impl Parser {
                 module.push_str(sub);
                 self.advance();
             } else {
-                return Err(("Expected identifier after '.' in from-import".to_string(), self.current_span()));
+                return Err((
+                    "Expected identifier after '.' in from-import".to_string(),
+                    self.current_span(),
+                ));
             }
         }
 
-        self.consume(&TokenKind::Import, "Expected 'import' after module name in from-import")?;
+        self.consume(
+            &TokenKind::Import,
+            "Expected 'import' after module name in from-import",
+        )?;
 
         let mut symbols = Vec::new();
         while !self.is_at_end() {
             let sym = match &self.peek().kind {
                 TokenKind::Ident(s) => s.clone(),
                 TokenKind::Star => "*".to_string(),
-                _ => return Err(("Expected symbol name after 'import'".to_string(), self.current_span())),
+                _ => {
+                    return Err((
+                        "Expected symbol name after 'import'".to_string(),
+                        self.current_span(),
+                    ))
+                }
             };
             self.advance();
 
@@ -1392,7 +1579,10 @@ impl Parser {
                     alias = Some(a.clone());
                     self.advance();
                 } else {
-                    return Err(("Expected alias name after 'as'".to_string(), self.current_span()));
+                    return Err((
+                        "Expected alias name after 'as'".to_string(),
+                        self.current_span(),
+                    ));
                 }
             }
 
@@ -1425,7 +1615,11 @@ impl Parser {
                 }
                 targets.push(self.parse_expression(Precedence::None)?);
             }
-            let span = targets.first().unwrap().span().merge(targets.last().unwrap().span());
+            let span = targets
+                .first()
+                .unwrap()
+                .span()
+                .merge(targets.last().unwrap().span());
             expr = Expr::Tuple(targets, span);
         }
 
@@ -1447,12 +1641,20 @@ impl Parser {
                 let mut items = vec![value];
                 while self.match_token(&TokenKind::Comma) {
                     self.advance();
-                    if self.check(&TokenKind::Newline) || self.check(&TokenKind::Semicolon) || self.check(&TokenKind::Dedent) || self.is_at_end() {
+                    if self.check(&TokenKind::Newline)
+                        || self.check(&TokenKind::Semicolon)
+                        || self.check(&TokenKind::Dedent)
+                        || self.is_at_end()
+                    {
                         break;
                     }
                     items.push(self.parse_expression(Precedence::None)?);
                 }
-                let span = items.first().unwrap().span().merge(items.last().unwrap().span());
+                let span = items
+                    .first()
+                    .unwrap()
+                    .span()
+                    .merge(items.last().unwrap().span());
                 value = Expr::Tuple(items, span);
             }
             let span = expr.span().merge(value.span());
@@ -1616,10 +1818,15 @@ impl Parser {
                     // List comprehension!
                     self.advance(); // consume 'for'
                     self.skip_braced_whitespace();
-                    let item = match &self.peek().kind {
-                        TokenKind::Ident(s) => s.clone(),
-                        _ => return Err(("Expected variable identifier after 'for' in list comprehension".to_string(), self.current_span())),
-                    };
+                    let item =
+                        match &self.peek().kind {
+                            TokenKind::Ident(s) => s.clone(),
+                            _ => return Err((
+                                "Expected variable identifier after 'for' in list comprehension"
+                                    .to_string(),
+                                self.current_span(),
+                            )),
+                        };
                     self.advance();
                     self.skip_braced_whitespace();
                     self.consume(&TokenKind::In, "Expected 'in' in list comprehension")?;
@@ -1635,7 +1842,10 @@ impl Parser {
                         self.skip_braced_whitespace();
                     }
 
-                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after list comprehension")?;
+                    let end_tok = self.consume(
+                        &TokenKind::RBracket,
+                        "Expected ']' after list comprehension",
+                    )?;
                     let span = token.span.merge(end_tok.span);
                     return Ok(Expr::ListComp {
                         element: Box::new(first),
@@ -1685,7 +1895,13 @@ impl Parser {
                         self.skip_braced_whitespace();
                         let item = match &self.peek().kind {
                             TokenKind::Ident(s) => s.clone(),
-                            _ => return Err(("Expected identifier after 'for' in dict comprehension".to_string(), self.current_span())),
+                            _ => {
+                                return Err((
+                                    "Expected identifier after 'for' in dict comprehension"
+                                        .to_string(),
+                                    self.current_span(),
+                                ))
+                            }
                         };
                         self.advance();
                         self.skip_braced_whitespace();
@@ -1702,7 +1918,8 @@ impl Parser {
                             self.skip_braced_whitespace();
                         }
 
-                        let end_tok = self.consume(&TokenKind::RBrace, "Expected '}' after dict comprehension")?;
+                        let end_tok = self
+                            .consume(&TokenKind::RBrace, "Expected '}' after dict comprehension")?;
                         let span = token.span.merge(end_tok.span);
                         return Ok(Expr::DictComp {
                             key: Box::new(first),
@@ -1871,7 +2088,7 @@ impl Parser {
                     span = span.merge(rparen.span);
                 }
                 Ok(Expr::Super(span))
-            },
+            }
 
             TokenKind::Channel => Ok(Expr::Ident("channel".to_string(), token.span)),
             TokenKind::Spawn => Ok(Expr::Ident("spawn".to_string(), token.span)),
@@ -1888,7 +2105,10 @@ impl Parser {
                 Ok(Expr::Comptime(block, span))
             }
 
-            _ => Err((format!("Unexpected token in expression: '{:?}'", token.kind), token.span)),
+            _ => Err((
+                format!("Unexpected token in expression: '{:?}'", token.kind),
+                token.span,
+            )),
         }
     }
 
@@ -1912,7 +2132,10 @@ impl Parser {
             else_branch = Some(self.parse_block()?);
         }
 
-        let end_span = else_branch.as_ref().map(|b| b.span).unwrap_or(then_branch.span);
+        let end_span = else_branch
+            .as_ref()
+            .map(|b| b.span)
+            .unwrap_or(then_branch.span);
         let span = token.span.merge(end_span);
 
         Ok(Expr::If {
@@ -1938,7 +2161,12 @@ impl Parser {
 
             let p_name = match &self.peek().kind {
                 TokenKind::Ident(s) => s.clone(),
-                _ => return Err(("Expected parameter name in lambda".to_string(), self.current_span())),
+                _ => {
+                    return Err((
+                        "Expected parameter name in lambda".to_string(),
+                        self.current_span(),
+                    ))
+                }
             };
             self.advance();
 
@@ -1975,21 +2203,29 @@ impl Parser {
 
     fn parse_match_expression(&mut self, match_token: Token) -> Result<Expr, (String, Span)> {
         let target = self.parse_expression(Precedence::None)?;
-        if self.match_token(&TokenKind::Colon) { self.advance(); }
+        if self.match_token(&TokenKind::Colon) {
+            self.advance();
+        }
         self.skip_newlines();
 
         let mut arms = Vec::new();
         let is_braced = self.match_token(&TokenKind::LBrace);
         if is_braced || self.match_token(&TokenKind::Indent) {
             self.advance();
-            let close_tok = if is_braced { TokenKind::RBrace } else { TokenKind::Dedent };
+            let close_tok = if is_braced {
+                TokenKind::RBrace
+            } else {
+                TokenKind::Dedent
+            };
             while !self.check(&close_tok) && !self.is_at_end() {
                 if is_braced {
                     self.skip_braced_whitespace();
                 } else {
                     self.skip_newlines();
                 }
-                if self.check(&close_tok) { break; }
+                if self.check(&close_tok) {
+                    break;
+                }
 
                 let arm_start = self.current_span();
                 // Optional Pythonic 'case' keyword:
@@ -2008,17 +2244,20 @@ impl Parser {
                 };
 
                 // Separator: '=>' (Rust/Aether) or ':' (Python case 1:)
-                if self.match_token(&TokenKind::FatArrow) {
-                    self.advance();
-                } else if self.match_token(&TokenKind::Colon) {
+                if self.match_token(&TokenKind::FatArrow) || self.match_token(&TokenKind::Colon) {
                     self.advance();
                 } else {
-                    return Err(("Expected '=>' or ':' after match pattern".to_string(), self.current_span()));
+                    return Err((
+                        "Expected '=>' or ':' after match pattern".to_string(),
+                        self.current_span(),
+                    ));
                 }
 
                 self.skip_newlines();
                 // Support both indented block body or single expression:
-                let body = if self.match_token(&TokenKind::Indent) || self.match_token(&TokenKind::LBrace) {
+                let body = if self.match_token(&TokenKind::Indent)
+                    || self.match_token(&TokenKind::LBrace)
+                {
                     let block = self.parse_block()?;
                     let span = block.span;
                     Expr::Block(block, span)
@@ -2071,15 +2310,18 @@ impl Parser {
         let tok = self.advance();
         match &tok.kind {
             TokenKind::Int(i) => {
-                if self.match_token(&TokenKind::DotDot) || self.match_token(&TokenKind::DotDotEqual) {
-                    let inclusive = self.match_token(&TokenKind::DotDotEqual);
+                if self.match_token(&TokenKind::DotDot) || self.match_token(&TokenKind::DotDotEqual)
+                {
                     self.advance();
                     if let TokenKind::Int(end_i) = &self.peek().kind {
-                        let end_val = if inclusive { *end_i } else { *end_i };
+                        let end_val = *end_i;
                         self.advance();
                         Ok(MatchPattern::Range(Literal::Int(*i), Literal::Int(end_val)))
                     } else {
-                        Err(("Expected integer after '..'".to_string(), self.current_span()))
+                        Err((
+                            "Expected integer after '..'".to_string(),
+                            self.current_span(),
+                        ))
                     }
                 } else {
                     Ok(MatchPattern::Literal(Literal::Int(*i)))
@@ -2095,7 +2337,9 @@ impl Parser {
                 let mut pats = Vec::new();
                 while !self.check(&TokenKind::RParen) && !self.is_at_end() {
                     pats.push(self.parse_match_pattern()?);
-                    if !self.match_token(&TokenKind::Comma) { break; }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
                 self.consume(&TokenKind::RParen, "Expected ')' in tuple match pattern")?;
@@ -2113,11 +2357,15 @@ impl Parser {
                         } else {
                             rest = Some("_".to_string());
                         }
-                        if self.match_token(&TokenKind::Comma) { self.advance(); }
+                        if self.match_token(&TokenKind::Comma) {
+                            self.advance();
+                        }
                         break;
                     }
                     elements.push(self.parse_match_pattern()?);
-                    if !self.match_token(&TokenKind::Comma) { break; }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
                 self.consume(&TokenKind::RBracket, "Expected ']' in array match pattern")?;
@@ -2128,7 +2376,12 @@ impl Parser {
                 while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
                     let key = match &self.peek().kind {
                         TokenKind::String(s) | TokenKind::Ident(s) => s.clone(),
-                        _ => return Err(("Expected key in map match pattern".to_string(), self.current_span())),
+                        _ => {
+                            return Err((
+                                "Expected key in map match pattern".to_string(),
+                                self.current_span(),
+                            ))
+                        }
                     };
                     self.advance();
                     let pat = if self.match_token(&TokenKind::Colon) {
@@ -2138,7 +2391,9 @@ impl Parser {
                         MatchPattern::Ident(key.clone())
                     };
                     entries.push((key, pat));
-                    if !self.match_token(&TokenKind::Comma) { break; }
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
                     self.advance();
                 }
                 self.consume(&TokenKind::RBrace, "Expected '}' in map match pattern")?;
@@ -2147,11 +2402,18 @@ impl Parser {
             TokenKind::Ident(name) => {
                 if name == "_" {
                     Ok(MatchPattern::Wildcard)
-                } else if self.match_token(&TokenKind::DoubleColon) || self.match_token(&TokenKind::Dot) {
+                } else if self.match_token(&TokenKind::DoubleColon)
+                    || self.match_token(&TokenKind::Dot)
+                {
                     self.advance(); // consume '::' or '.'
                     let variant = match &self.peek().kind {
                         TokenKind::Ident(v) => v.clone(),
-                        _ => return Err(("Expected variant name after '::'".to_string(), self.current_span())),
+                        _ => {
+                            return Err((
+                                "Expected variant name after '::'".to_string(),
+                                self.current_span(),
+                            ))
+                        }
                     };
                     self.advance();
                     let mut bindings = Vec::new();
@@ -2165,7 +2427,9 @@ impl Parser {
                                 bindings.push("_".to_string());
                                 self.advance();
                             }
-                            if !self.match_token(&TokenKind::Comma) { break; }
+                            if !self.match_token(&TokenKind::Comma) {
+                                break;
+                            }
                             self.advance();
                         }
                         self.consume(&TokenKind::RParen, "Expected ')' after variant bindings")?;
@@ -2186,7 +2450,9 @@ impl Parser {
                             bindings.push("_".to_string());
                             self.advance();
                         }
-                        if !self.match_token(&TokenKind::Comma) { break; }
+                        if !self.match_token(&TokenKind::Comma) {
+                            break;
+                        }
                         self.advance();
                     }
                     self.consume(&TokenKind::RParen, "Expected ')' after variant pattern")?;
@@ -2199,7 +2465,10 @@ impl Parser {
                     Ok(MatchPattern::Ident(name.clone()))
                 }
             }
-            _ => Err((format!("Invalid match pattern token '{:?}'", tok.kind), tok.span)),
+            _ => Err((
+                format!("Invalid match pattern token '{:?}'", tok.kind),
+                tok.span,
+            )),
         }
     }
 
@@ -2220,7 +2489,10 @@ impl Parser {
                 }
                 // Flush accumulated literal string
                 if !current_lit.is_empty() {
-                    parts.push(Expr::Literal(Literal::String(std::mem::take(&mut current_lit)), span));
+                    parts.push(Expr::Literal(
+                        Literal::String(std::mem::take(&mut current_lit)),
+                        span,
+                    ));
                 }
                 // Parse expression inside { ... }
                 i += 1; // skip '{'
@@ -2272,9 +2544,12 @@ impl Parser {
                 }
 
                 let mut sub_lexer = Lexer::new(trimmed);
-                let sub_tokens = sub_lexer.tokenize().map_err(|(e, _)| (format!("Invalid expression in f-string: {}", e), span))?;
+                let sub_tokens = sub_lexer
+                    .tokenize()
+                    .map_err(|(e, _)| (format!("Invalid expression in f-string: {}", e), span))?;
                 let mut sub_parser = Parser::new(sub_tokens);
-                let expr = sub_parser.parse_expression(Precedence::None)
+                let expr = sub_parser
+                    .parse_expression(Precedence::None)
                     .map_err(|(e, _)| (format!("Invalid expression in f-string: {}", e), span))?;
                 parts.push(expr);
             } else if chars[i] == '}' {
@@ -2310,9 +2585,13 @@ impl Parser {
             }
 
             // Binary Operators
-            TokenKind::QuestionQuestion => self.parse_binary(left, BinaryOp::NullCoalesce, Precedence::NullCoalesce),
+            TokenKind::QuestionQuestion => {
+                self.parse_binary(left, BinaryOp::NullCoalesce, Precedence::NullCoalesce)
+            }
             TokenKind::DotDot => self.parse_binary(left, BinaryOp::Range, Precedence::Range),
-            TokenKind::DotDotEqual => self.parse_binary(left, BinaryOp::RangeInclusive, Precedence::Range),
+            TokenKind::DotDotEqual => {
+                self.parse_binary(left, BinaryOp::RangeInclusive, Precedence::Range)
+            }
             TokenKind::Plus => self.parse_binary(left, BinaryOp::Add, Precedence::Term),
             TokenKind::Minus => self.parse_binary(left, BinaryOp::Sub, Precedence::Term),
             TokenKind::Star => self.parse_binary(left, BinaryOp::Mul, Precedence::Factor),
@@ -2320,11 +2599,19 @@ impl Parser {
             TokenKind::Percent => self.parse_binary(left, BinaryOp::Mod, Precedence::Factor),
             TokenKind::Power => self.parse_binary(left, BinaryOp::Pow, Precedence::Power),
             TokenKind::EqualEqual => self.parse_binary(left, BinaryOp::Equal, Precedence::Equality),
-            TokenKind::NotEqual => self.parse_binary(left, BinaryOp::NotEqual, Precedence::Equality),
+            TokenKind::NotEqual => {
+                self.parse_binary(left, BinaryOp::NotEqual, Precedence::Equality)
+            }
             TokenKind::Less => self.parse_binary(left, BinaryOp::Less, Precedence::Comparison),
-            TokenKind::LessEqual => self.parse_binary(left, BinaryOp::LessEqual, Precedence::Comparison),
-            TokenKind::Greater => self.parse_binary(left, BinaryOp::Greater, Precedence::Comparison),
-            TokenKind::GreaterEqual => self.parse_binary(left, BinaryOp::GreaterEqual, Precedence::Comparison),
+            TokenKind::LessEqual => {
+                self.parse_binary(left, BinaryOp::LessEqual, Precedence::Comparison)
+            }
+            TokenKind::Greater => {
+                self.parse_binary(left, BinaryOp::Greater, Precedence::Comparison)
+            }
+            TokenKind::GreaterEqual => {
+                self.parse_binary(left, BinaryOp::GreaterEqual, Precedence::Comparison)
+            }
             TokenKind::In => self.parse_binary(left, BinaryOp::In, Precedence::Comparison),
             TokenKind::And => self.parse_binary(left, BinaryOp::And, Precedence::And),
             TokenKind::Or => self.parse_binary(left, BinaryOp::Or, Precedence::Or),
@@ -2345,8 +2632,14 @@ impl Parser {
                         let inner = self.parse_expression(Precedence::None)?;
                         let span = star_tok.span.merge(inner.span());
                         args.push(Expr::StarArg(Box::new(inner), span));
-                    } else if matches!(&self.peek().kind, TokenKind::Ident(_)) && self.peek_next().map(|t| &t.kind) == Some(&TokenKind::Assign) {
-                        let name = if let TokenKind::Ident(s) = &self.peek().kind { s.clone() } else { unreachable!() };
+                    } else if matches!(&self.peek().kind, TokenKind::Ident(_))
+                        && self.peek_next().map(|t| &t.kind) == Some(&TokenKind::Assign)
+                    {
+                        let name = if let TokenKind::Ident(s) = &self.peek().kind {
+                            s.clone()
+                        } else {
+                            unreachable!()
+                        };
                         let id_tok = self.advance();
                         self.advance(); // consume '='
                         let val = self.parse_expression(Precedence::None)?;
@@ -2362,7 +2655,8 @@ impl Parser {
                     self.advance();
                     self.skip_braced_whitespace();
                 }
-                let end_tok = self.consume(&TokenKind::RParen, "Expected ')' after call arguments")?;
+                let end_tok =
+                    self.consume(&TokenKind::RParen, "Expected ')' after call arguments")?;
                 let span = left.span().merge(end_tok.span);
                 Ok(Expr::Call(Box::new(left), args, span))
             }
@@ -2390,7 +2684,8 @@ impl Parser {
                 if self.match_token(&TokenKind::Colon) {
                     // Slice starting with ':': arr[:end] or arr[:end:step]
                     self.advance(); // consume ':'
-                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket) {
+                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket)
+                    {
                         Some(Box::new(self.parse_expression(Precedence::None)?))
                     } else {
                         None
@@ -2436,7 +2731,8 @@ impl Parser {
                     })
                 } else if self.match_token(&TokenKind::Colon) {
                     self.advance(); // consume ':'
-                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket) {
+                    let end = if !self.check(&TokenKind::Colon) && !self.check(&TokenKind::RBracket)
+                    {
                         Some(Box::new(self.parse_expression(Precedence::None)?))
                     } else {
                         None
@@ -2475,7 +2771,10 @@ impl Parser {
                         if let Some(s) = other.as_ident_str() {
                             s.to_string()
                         } else {
-                            return Err(("Expected identifier after '.' or '::'".to_string(), self.current_span()));
+                            return Err((
+                                "Expected identifier after '.' or '::'".to_string(),
+                                self.current_span(),
+                            ));
                         }
                     }
                 };
@@ -2489,7 +2788,8 @@ impl Parser {
                 if self.match_token(&TokenKind::LBracket) {
                     self.advance(); // consume '['
                     let idx = self.parse_expression(Precedence::None)?;
-                    let end_tok = self.consume(&TokenKind::RBracket, "Expected ']' after optional index")?;
+                    let end_tok =
+                        self.consume(&TokenKind::RBracket, "Expected ']' after optional index")?;
                     let span = left.span().merge(end_tok.span);
                     return Ok(Expr::OptionalIndex(Box::new(left), Box::new(idx), span));
                 }
@@ -2499,7 +2799,10 @@ impl Parser {
                         if let Some(s) = other.as_ident_str() {
                             s.to_string()
                         } else {
-                            return Err(("Expected identifier after '?.'".to_string(), self.current_span()));
+                            return Err((
+                                "Expected identifier after '?.'".to_string(),
+                                self.current_span(),
+                            ));
                         }
                     }
                 };
@@ -2522,11 +2825,19 @@ impl Parser {
                 }
             }
 
-            _ => Err((format!("Unexpected infix operator '{:?}'", op_tok.kind), op_tok.span)),
+            _ => Err((
+                format!("Unexpected infix operator '{:?}'", op_tok.kind),
+                op_tok.span,
+            )),
         }
     }
 
-    fn parse_binary(&mut self, left: Expr, op: BinaryOp, prec: Precedence) -> Result<Expr, (String, Span)> {
+    fn parse_binary(
+        &mut self,
+        left: Expr,
+        op: BinaryOp,
+        prec: Precedence,
+    ) -> Result<Expr, (String, Span)> {
         let right = self.parse_expression(prec)?;
         let span = left.span().merge(right.span());
         Ok(Expr::Binary(Box::new(left), op, Box::new(right), span))
@@ -2543,7 +2854,11 @@ impl Parser {
             TokenKind::Or => Precedence::Or,
             TokenKind::And => Precedence::And,
             TokenKind::EqualEqual | TokenKind::NotEqual => Precedence::Equality,
-            TokenKind::Less | TokenKind::LessEqual | TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::In => Precedence::Comparison,
+            TokenKind::Less
+            | TokenKind::LessEqual
+            | TokenKind::Greater
+            | TokenKind::GreaterEqual
+            | TokenKind::In => Precedence::Comparison,
             TokenKind::DotDot | TokenKind::DotDotEqual => Precedence::Range,
             TokenKind::Plus | TokenKind::Minus => Precedence::Term,
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Precedence::Factor,
@@ -2606,7 +2921,10 @@ impl Parser {
         if self.check(kind) {
             Ok(self.advance())
         } else {
-            Err((format!("{}: found {:?}", err_msg, self.peek().kind), self.current_span()))
+            Err((
+                format!("{}: found {:?}", err_msg, self.peek().kind),
+                self.current_span(),
+            ))
         }
     }
 
@@ -2621,24 +2939,28 @@ impl Parser {
     }
 
     fn skip_newlines(&mut self) {
-        while !self.is_at_end() && (self.peek().kind == TokenKind::Newline || self.peek().kind == TokenKind::Semicolon) {
+        while !self.is_at_end()
+            && (self.peek().kind == TokenKind::Newline || self.peek().kind == TokenKind::Semicolon)
+        {
             self.advance();
         }
     }
 
     fn consume_statement_terminator(&mut self) {
-        while !self.is_at_end() && (self.peek().kind == TokenKind::Newline || self.peek().kind == TokenKind::Semicolon) {
+        while !self.is_at_end()
+            && (self.peek().kind == TokenKind::Newline || self.peek().kind == TokenKind::Semicolon)
+        {
             self.advance();
         }
     }
 
     fn skip_braced_whitespace(&mut self) {
-        while !self.is_at_end() && (
-            self.peek().kind == TokenKind::Newline ||
-            self.peek().kind == TokenKind::Semicolon ||
-            self.peek().kind == TokenKind::Indent ||
-            self.peek().kind == TokenKind::Dedent
-        ) {
+        while !self.is_at_end()
+            && (self.peek().kind == TokenKind::Newline
+                || self.peek().kind == TokenKind::Semicolon
+                || self.peek().kind == TokenKind::Indent
+                || self.peek().kind == TokenKind::Dedent)
+        {
             self.advance();
         }
     }

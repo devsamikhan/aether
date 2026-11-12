@@ -12,20 +12,41 @@ use std::sync::{Arc, Mutex};
 fn create_sample_products_df() -> Arc<Mutex<NativeDataFrame>> {
     let mut cols = HashMap::new();
     cols.insert("id".to_string(), TypedColumn::Int(vec![1, 2, 3, 4]));
-    cols.insert("name".to_string(), TypedColumn::String(vec![
-        "Laptop".into(), "Phone".into(), "Tablet".into(), "Monitor".into()
-    ]));
-    cols.insert("price".to_string(), TypedColumn::Float(vec![1200.0, 800.0, 400.0, 300.0]));
-    cols.insert("in_stock".to_string(), TypedColumn::Bool(vec![true, true, false, true]));
+    cols.insert(
+        "name".to_string(),
+        TypedColumn::String(vec![
+            "Laptop".into(),
+            "Phone".into(),
+            "Tablet".into(),
+            "Monitor".into(),
+        ]),
+    );
+    cols.insert(
+        "price".to_string(),
+        TypedColumn::Float(vec![1200.0, 800.0, 400.0, 300.0]),
+    );
+    cols.insert(
+        "in_stock".to_string(),
+        TypedColumn::Bool(vec![true, true, false, true]),
+    );
     // 2D Embeddings: Laptop [0.9, 0.1], Phone [0.8, 0.2], Tablet [0.7, 0.3], Monitor [0.1, 0.9]
-    cols.insert("emb".to_string(), TypedColumn::from_values(&[
-        Value::array(vec![Value::Float(0.9), Value::Float(0.1)]),
-        Value::array(vec![Value::Float(0.8), Value::Float(0.2)]),
-        Value::array(vec![Value::Float(0.7), Value::Float(0.3)]),
-        Value::array(vec![Value::Float(0.1), Value::Float(0.9)]),
-    ]));
+    cols.insert(
+        "emb".to_string(),
+        TypedColumn::from_values(&[
+            Value::array(vec![Value::Float(0.9), Value::Float(0.1)]),
+            Value::array(vec![Value::Float(0.8), Value::Float(0.2)]),
+            Value::array(vec![Value::Float(0.7), Value::Float(0.3)]),
+            Value::array(vec![Value::Float(0.1), Value::Float(0.9)]),
+        ]),
+    );
 
-    let names = vec!["id".into(), "name".into(), "price".into(), "in_stock".into(), "emb".into()];
+    let names = vec![
+        "id".into(),
+        "name".into(),
+        "price".into(),
+        "in_stock".into(),
+        "emb".into(),
+    ];
     Arc::new(Mutex::new(NativeDataFrame::new(names, cols)))
 }
 
@@ -85,10 +106,16 @@ fn test_sql_vector_l2_and_dot() {
 #[test]
 fn test_sql_computed_columns_and_aliases() {
     let mut cols = HashMap::new();
-    cols.insert("item".to_string(), TypedColumn::String(vec!["A".into(), "B".into()]));
+    cols.insert(
+        "item".to_string(),
+        TypedColumn::String(vec!["A".into(), "B".into()]),
+    );
     cols.insert("price".to_string(), TypedColumn::Float(vec![10.0, 20.0]));
     cols.insert("qty".to_string(), TypedColumn::Int(vec![5, 3]));
-    let df = Arc::new(Mutex::new(NativeDataFrame::new(vec!["item".into(), "price".into(), "qty".into()], cols)));
+    let df = Arc::new(Mutex::new(NativeDataFrame::new(
+        vec!["item".into(), "price".into(), "qty".into()],
+        cols,
+    )));
 
     let mut tables = HashMap::new();
     tables.insert("sales".to_string(), df);

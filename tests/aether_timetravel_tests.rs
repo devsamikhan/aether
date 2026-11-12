@@ -15,8 +15,14 @@ fn test_timetravel_record_mutation_and_state() {
     sess.record_mutation("user_status", Value::string("active"));
 
     assert_eq!(sess.current_step, 2);
-    assert_eq!(sess.current_state.get("account_balance"), Some(&Value::Float(1000.0)));
-    assert_eq!(sess.current_state.get("user_status"), Some(&Value::string("active")));
+    assert_eq!(
+        sess.current_state.get("account_balance"),
+        Some(&Value::Float(1000.0))
+    );
+    assert_eq!(
+        sess.current_state.get("user_status"),
+        Some(&Value::string("active"))
+    );
 }
 
 #[test]
@@ -71,8 +77,14 @@ fn test_timetravel_timeline_diff() {
 
     let diffs = sess.diff_checkpoints("v1", "v2").unwrap();
     assert_eq!(diffs.len(), 2);
-    assert_eq!(diffs.get("counter"), Some(&(Value::Int(10), Value::Int(25))));
-    assert_eq!(diffs.get("new_feature"), Some(&(Value::Nil, Value::Bool(true))));
+    assert_eq!(
+        diffs.get("counter"),
+        Some(&(Value::Int(10), Value::Int(25)))
+    );
+    assert_eq!(
+        diffs.get("new_feature"),
+        Some(&(Value::Nil, Value::Bool(true)))
+    );
 }
 
 #[test]

@@ -57,3 +57,19 @@ test "cheminformatics descriptors, lipinski ro5, and affinity model" {
     assert(aff.pic50 > 0.0)
     assert(aff.kd_nm > 0.0)
 }
+
+test "fastq quality filtering, 6-frame orf_finder, sdf parser, and smarts substructure" {
+    let fq = "@r1\nATGCATGC\n+\nIIIIIIII\n@r2\nATGC\n+\n####\n"
+    let kept = Bio.filter_fastq(fq, 30.0, 6)
+    assert_eq(kept.len(), 1)
+    assert_eq(kept[0].id, "r1")
+
+    let orfs = Bio.orf_finder("TTATTTCAT", 2)
+    assert_eq(orfs.len(), 1)
+    assert_eq(orfs[0].strand, "-")
+    assert_eq(orfs[0].protein, "MK")
+
+    let aspirin = Chem.from_smiles("CC(=O)OC1=CC=CC=C1C(=O)O")
+    assert(aspirin.has_substructure("c1ccccc1"))
+    assert(Chem.substructure_match(aspirin, "[#6](=O)[#8]"))
+}

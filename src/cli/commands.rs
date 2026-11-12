@@ -1123,12 +1123,22 @@ pub fn run_bench() -> Result<(), String> {
     aether::toolchain::run_production_benchmarks()
 }
 
-pub fn run_self_update() -> Result<(), String> {
-    let rep = aether::toolchain::perform_self_update()?;
-    println!(
-        "Toolchain updated: {} -> {}",
-        rep.current_version, rep.new_version
-    );
+pub fn run_self_update(url_override: Option<&str>, check_only: bool) -> Result<(), String> {
+    const DEFAULT_RELEASE_API: &str =
+        "https://api.github.com/repos/devsamikhan/aether/releases/latest";
+    let env_url = std::env::var("AETHER_UPDATE_URL").ok();
+    let target_url = url_override
+        .or(env_url.as_deref())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(DEFAULT_RELEASE_API);
+
+    let rep = aether::toolchain::perform_self_update_from_url(target_url, check_only)?;
+    if !check_only {
+        println!(
+            "Toolchain updated: {} -> {} (SHA-256 verified: {})",
+            rep.current_version, rep.new_version, rep.verified
+        );
+    }
     Ok(())
 }
 

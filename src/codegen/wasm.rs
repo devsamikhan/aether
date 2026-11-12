@@ -182,6 +182,52 @@ pub struct WasmFunction {
     pub code: Vec<u8>,
 }
 
+struct WasmFnCtx {
+    locals: HashMap<String, u32>,
+    local_count: u32,
+    depth: u32,
+    loop_stack: Vec<(u32, u32)>,
+}
+
+impl WasmFnCtx {
+    fn new(param_count: u32) -> Self {
+        Self {
+            locals: HashMap::new(),
+            local_count: param_count,
+            depth: 0,
+            loop_stack: Vec::new(),
+        }
+    }
+
+    fn alloc_temp(&mut self) -> u32 {
+        let s = self.local_count;
+        self.local_count += 1;
+        s
+    }
+
+    fn get_or_alloc_local(&mut self, name: &str) -> u32 {
+        if let Some(&s) = self.locals.get(name) {
+            s
+        } else {
+            let s = self.local_count;
+            self.local_count += 1;
+            self.locals.insert(name.to_string(), s);
+            s
+        }
+    }
+}
+
+fn assign_op_opcode(op: AssignOp) -> u8 {
+    match op {
+        AssignOp::AddAssign => OP_I64_ADD,
+        AssignOp::SubAssign => OP_I64_SUB,
+        AssignOp::MulAssign => OP_I64_MUL,
+        AssignOp::DivAssign => OP_I64_DIV_S,
+        AssignOp::ModAssign => OP_I64_REM_S,
+        AssignOp::Assign => OP_NOP,
+    }
+}
+
 pub struct WasmCompiler {
     types: Vec<WasmFuncType>,
     functions: Vec<WasmFunction>,
@@ -215,7 +261,9 @@ impl WasmCompiler {
     pub fn compile_program(&mut self, program: &Program) -> Result<Vec<u8>, String> {
         // Pass 1: Collect and declare function signatures
         for stmt in &program.statements {
-            if let Statement::FnDef { name, params, .. } = stmt {
+            if let Statement::FnDef { name, params, .. }
+            | Statement::IntentDef { name, params, .. } = stmt
+            {
                 let param_types = vec![TYPE_I64; params.len()];
                 let return_types = vec![TYPE_I64]; // default all functions return i64
                 let type_idx = self.get_or_add_type(WasmFuncType {
@@ -235,7 +283,13 @@ impl WasmCompiler {
 
         // Pass 2: Compile function bodies
         for stmt in &program.statements {
-            if let Statement::FnDef { name, params, body, .. } = stmt {
+            if let Statement::FnDef {
+                name, params, body, ..
+            }
+            | Statement::IntentDef {
+                name, params, body, ..
+            } = stmt
+            {
                 let func_idx = *self.func_indices.get(name).unwrap() as usize;
                 self.compile_function(func_idx, params, body)?;
             }
@@ -245,7 +299,15 @@ impl WasmCompiler {
         let top_level_stmts: Vec<&Statement> = program
             .statements
             .iter()
-            .filter(|s| !matches!(s, Statement::FnDef { .. }))
+            .filter(|s| {
+                !matches!(
+                    s,
+                    Statement::FnDef { .. }
+                        | Statement::IntentDef { .. }
+                        | Statement::ClassDef { .. }
+                        | Statement::StructDef { .. }
+                )
+            })
             .collect();
 
         if !top_level_stmts.is_empty() && !self.func_indices.contains_key("main") {
@@ -274,21 +336,19 @@ impl WasmCompiler {
         params: &[Param],
         body: &Block,
     ) -> Result<(), String> {
-        let mut local_map = HashMap::new();
-        // Parameters get local indices 0..params.len()
+        let mut ctx = WasmFnCtx::new(params.len() as u32);
         for (i, p) in params.iter().enumerate() {
-            local_map.insert(p.name.clone(), i as u32);
+            ctx.locals.insert(p.name.clone(), i as u32);
         }
 
         let mut code = Vec::new();
-        let mut local_count = params.len() as u32;
 
         for st in &body.statements {
-            self.compile_statement(st, &mut local_map, &mut local_count, &mut code)?;
+            self.compile_statement(st, &mut ctx, &mut code)?;
         }
 
         if let Some(ref res_expr) = body.result {
-            self.compile_expression(res_expr, &mut local_map, &mut local_count, &mut code)?;
+            self.compile_expression(res_expr, &mut ctx, &mut code)?;
         } else if code.is_empty() || *code.last().unwrap() != OP_RETURN {
             // Default return 0 if no explicit return
             code.push(OP_I64_CONST);
@@ -297,7 +357,7 @@ impl WasmCompiler {
 
         code.push(OP_END);
 
-        let extra_locals_count = local_count.saturating_sub(params.len() as u32);
+        let extra_locals_count = ctx.local_count.saturating_sub(params.len() as u32);
         if extra_locals_count > 0 {
             self.functions[func_idx].locals = vec![(extra_locals_count, TYPE_I64)];
         }
@@ -306,51 +366,59 @@ impl WasmCompiler {
         Ok(())
     }
 
-    fn compile_top_level(
-        &mut self,
-        func_idx: usize,
-        stmts: &[&Statement],
-    ) -> Result<(), String> {
-        let mut local_map = HashMap::new();
-        let mut local_count = 0u32;
+    fn compile_top_level(&mut self, func_idx: usize, stmts: &[&Statement]) -> Result<(), String> {
+        let mut ctx = WasmFnCtx::new(0);
         let mut code = Vec::new();
 
         for st in stmts {
-            self.compile_statement(st, &mut local_map, &mut local_count, &mut code)?;
+            self.compile_statement(st, &mut ctx, &mut code)?;
         }
 
         code.push(OP_I64_CONST);
         encode_i64_leb128(0, &mut code);
         code.push(OP_END);
 
-        if local_count > 0 {
-            self.functions[func_idx].locals = vec![(local_count, TYPE_I64)];
+        if ctx.local_count > 0 {
+            self.functions[func_idx].locals = vec![(ctx.local_count, TYPE_I64)];
         }
         self.functions[func_idx].code = code;
 
         Ok(())
     }
 
+    fn compile_block_stmt_and_result(
+        &mut self,
+        block: &Block,
+        ctx: &mut WasmFnCtx,
+        code: &mut Vec<u8>,
+    ) -> Result<(), String> {
+        for st in &block.statements {
+            self.compile_statement(st, ctx, code)?;
+        }
+        if let Some(ref res) = block.result {
+            self.compile_expression(res, ctx, code)?;
+        } else {
+            code.push(OP_I64_CONST);
+            encode_i64_leb128(0, code);
+        }
+        Ok(())
+    }
+
     fn compile_statement(
         &mut self,
         stmt: &Statement,
-        locals: &mut HashMap<String, u32>,
-        local_count: &mut u32,
+        ctx: &mut WasmFnCtx,
         code: &mut Vec<u8>,
     ) -> Result<(), String> {
         match stmt {
-            Statement::Let { name, initializer, .. } => {
-                let slot = if let Some(s) = locals.get(name) {
-                    *s
-                } else {
-                    let s = *local_count;
-                    *local_count += 1;
-                    locals.insert(name.clone(), s);
-                    s
-                };
+            Statement::Pass(_) => {}
+            Statement::Let {
+                name, initializer, ..
+            } => {
+                let slot = ctx.get_or_alloc_local(name);
 
                 if let Some(init) = initializer {
-                    self.compile_expression(init, locals, local_count, code)?;
+                    self.compile_expression(init, ctx, code)?;
                 } else {
                     code.push(OP_I64_CONST);
                     encode_i64_leb128(0, code);
@@ -359,111 +427,425 @@ impl WasmCompiler {
                 code.push(OP_LOCAL_SET);
                 encode_u32_leb128(slot, code);
             }
-            Statement::Assign { target, op, value, .. } => {
-                if let Expr::Ident(name, _) = target {
-                    let slot = if let Some(s) = locals.get(name) {
-                        *s
-                    } else {
-                        let s = *local_count;
-                        *local_count += 1;
-                        locals.insert(name.clone(), s);
-                        s
-                    };
+            Statement::Assign {
+                target, op, value, ..
+            } => match target {
+                Expr::Ident(name, _) => {
+                    let slot = ctx.get_or_alloc_local(name);
 
                     match op {
                         AssignOp::Assign => {
-                            self.compile_expression(value, locals, local_count, code)?;
+                            self.compile_expression(value, ctx, code)?;
                         }
-                        AssignOp::AddAssign => {
+                        AssignOp::AddAssign
+                        | AssignOp::SubAssign
+                        | AssignOp::MulAssign
+                        | AssignOp::DivAssign
+                        | AssignOp::ModAssign => {
                             code.push(OP_LOCAL_GET);
                             encode_u32_leb128(slot, code);
-                            self.compile_expression(value, locals, local_count, code)?;
-                            code.push(OP_I64_ADD);
-                        }
-                        AssignOp::SubAssign => {
-                            code.push(OP_LOCAL_GET);
-                            encode_u32_leb128(slot, code);
-                            self.compile_expression(value, locals, local_count, code)?;
-                            code.push(OP_I64_SUB);
-                        }
-                        AssignOp::MulAssign => {
-                            code.push(OP_LOCAL_GET);
-                            encode_u32_leb128(slot, code);
-                            self.compile_expression(value, locals, local_count, code)?;
-                            code.push(OP_I64_MUL);
-                        }
-                        AssignOp::DivAssign => {
-                            code.push(OP_LOCAL_GET);
-                            encode_u32_leb128(slot, code);
-                            self.compile_expression(value, locals, local_count, code)?;
-                            code.push(OP_I64_DIV_S);
-                        }
-                        AssignOp::ModAssign => {
-                            code.push(OP_LOCAL_GET);
-                            encode_u32_leb128(slot, code);
-                            self.compile_expression(value, locals, local_count, code)?;
-                            code.push(OP_I64_REM_S);
+                            self.compile_expression(value, ctx, code)?;
+                            code.push(assign_op_opcode(*op));
                         }
                     }
 
                     code.push(OP_LOCAL_SET);
                     encode_u32_leb128(slot, code);
                 }
-            }
+                Expr::Index(arr_expr, idx_expr, _) => {
+                    let addr_slot = ctx.alloc_temp();
+                    self.emit_index_addr(arr_expr, idx_expr, ctx, code)?;
+                    code.push(OP_LOCAL_SET);
+                    encode_u32_leb128(addr_slot, code);
+
+                    code.push(OP_LOCAL_GET);
+                    encode_u32_leb128(addr_slot, code);
+                    match op {
+                        AssignOp::Assign => {
+                            self.compile_expression(value, ctx, code)?;
+                        }
+                        AssignOp::AddAssign
+                        | AssignOp::SubAssign
+                        | AssignOp::MulAssign
+                        | AssignOp::DivAssign
+                        | AssignOp::ModAssign => {
+                            code.push(OP_LOCAL_GET);
+                            encode_u32_leb128(addr_slot, code);
+                            code.push(OP_I64_LOAD);
+                            encode_u32_leb128(3, code);
+                            encode_u32_leb128(0, code);
+                            self.compile_expression(value, ctx, code)?;
+                            code.push(assign_op_opcode(*op));
+                        }
+                    }
+                    code.push(OP_I64_STORE);
+                    encode_u32_leb128(3, code);
+                    encode_u32_leb128(0, code);
+                }
+                other => {
+                    return Err(format!("WASM: Unsupported assignment target {:?}", other));
+                }
+            },
             Statement::Return { value, .. } => {
                 if let Some(val) = value {
-                    self.compile_expression(val, locals, local_count, code)?;
+                    self.compile_expression(val, ctx, code)?;
                 } else {
                     code.push(OP_I64_CONST);
                     encode_i64_leb128(0, code);
                 }
                 code.push(OP_RETURN);
             }
-            Statement::While { condition, body, .. } => {
-                // WASM structured loop:
-                // block $exit {
-                //   loop $cont {
-                //     br_if $exit (!condition)
-                //     body...
-                //     br $cont
-                //   }
-                // }
+            Statement::While {
+                condition, body, ..
+            } => {
+                let break_frame = ctx.depth;
                 code.push(OP_BLOCK);
                 code.push(TYPE_EMPTY);
+                ctx.depth += 1;
 
+                let cont_frame = ctx.depth;
                 code.push(OP_LOOP);
                 code.push(TYPE_EMPTY);
+                ctx.depth += 1;
 
-                // Invert condition: condition == 0 -> br $exit (depth 1)
-                self.compile_expression(condition, locals, local_count, code)?;
+                ctx.loop_stack.push((cont_frame, break_frame));
+
+                // Invert condition: condition == 0 -> br $exit
+                self.compile_expression(condition, ctx, code)?;
                 code.push(OP_I64_EQZ);
                 code.push(OP_BR_IF);
-                encode_u32_leb128(1, code); // break to outer block
+                encode_u32_leb128(ctx.depth - 1 - break_frame, code);
 
                 for st in &body.statements {
-                    self.compile_statement(st, locals, local_count, code)?;
+                    self.compile_statement(st, ctx, code)?;
+                }
+                if let Some(ref res) = body.result {
+                    self.compile_expression(res, ctx, code)?;
+                    code.push(OP_DROP);
                 }
 
                 code.push(OP_BR);
-                encode_u32_leb128(0, code); // continue loop
+                encode_u32_leb128(ctx.depth - 1 - cont_frame, code);
+
+                ctx.loop_stack.pop();
+                code.push(OP_END); // end loop
+                ctx.depth -= 1;
+                code.push(OP_END); // end block
+                ctx.depth -= 1;
+            }
+            Statement::For {
+                item, iter, body, ..
+            } => {
+                let (cur_slot, stop_slot, step_slot, inclusive) =
+                    self.compile_for_range_init(item, iter, ctx, code)?;
+
+                let break_frame = ctx.depth;
+                code.push(OP_BLOCK);
+                code.push(TYPE_EMPTY);
+                ctx.depth += 1;
+
+                let header_frame = ctx.depth;
+                code.push(OP_LOOP);
+                code.push(TYPE_EMPTY);
+                ctx.depth += 1;
+
+                // Condition: (step < 0 ? cur >[=] stop : cur <[=] stop)
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(step_slot, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(0, code);
+                code.push(OP_I64_LT_S);
+                code.push(OP_IF);
+                code.push(TYPE_I32);
+                ctx.depth += 1;
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(cur_slot, code);
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(stop_slot, code);
+                code.push(if inclusive { OP_I64_GE_S } else { OP_I64_GT_S });
+                code.push(OP_ELSE);
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(cur_slot, code);
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(stop_slot, code);
+                code.push(if inclusive { OP_I64_LE_S } else { OP_I64_LT_S });
+                code.push(OP_END);
+                ctx.depth -= 1;
+
+                code.push(OP_I32_EQZ);
+                code.push(OP_BR_IF);
+                encode_u32_leb128(ctx.depth - 1 - break_frame, code);
+
+                // Inner block so `continue` jumps straight to the step update
+                let cont_frame = ctx.depth;
+                code.push(OP_BLOCK);
+                code.push(TYPE_EMPTY);
+                ctx.depth += 1;
+
+                ctx.loop_stack.push((cont_frame, break_frame));
+                for st in &body.statements {
+                    self.compile_statement(st, ctx, code)?;
+                }
+                if let Some(ref res) = body.result {
+                    self.compile_expression(res, ctx, code)?;
+                    code.push(OP_DROP);
+                }
+                ctx.loop_stack.pop();
+
+                code.push(OP_END); // end $continue block
+                ctx.depth -= 1;
+
+                // cur = cur + step
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(cur_slot, code);
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(step_slot, code);
+                code.push(OP_I64_ADD);
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(cur_slot, code);
+
+                code.push(OP_BR);
+                encode_u32_leb128(ctx.depth - 1 - header_frame, code);
 
                 code.push(OP_END); // end loop
+                ctx.depth -= 1;
                 code.push(OP_END); // end block
+                ctx.depth -= 1;
+            }
+            Statement::Break(_) => {
+                if let Some(&(_, break_frame)) = ctx.loop_stack.last() {
+                    let rel = ctx.depth - 1 - break_frame;
+                    code.push(OP_BR);
+                    encode_u32_leb128(rel, code);
+                } else {
+                    return Err("WASM: break statement outside of loop".to_string());
+                }
+            }
+            Statement::Continue(_) => {
+                if let Some(&(cont_frame, _)) = ctx.loop_stack.last() {
+                    let rel = ctx.depth - 1 - cont_frame;
+                    code.push(OP_BR);
+                    encode_u32_leb128(rel, code);
+                } else {
+                    return Err("WASM: continue statement outside of loop".to_string());
+                }
             }
             Statement::Expr(expr) => {
-                self.compile_expression(expr, locals, local_count, code)?;
+                self.compile_expression(expr, ctx, code)?;
                 code.push(OP_DROP);
             }
-            _ => {}
+            other => {
+                return Err(format!("WASM: Unsupported statement variant: {:?}", other));
+            }
         }
+        Ok(())
+    }
+
+    fn compile_for_range_init(
+        &mut self,
+        item: &str,
+        iter: &Expr,
+        ctx: &mut WasmFnCtx,
+        code: &mut Vec<u8>,
+    ) -> Result<(u32, u32, u32, bool), String> {
+        let cur_slot = ctx.get_or_alloc_local(item);
+        let stop_slot = ctx.alloc_temp();
+        let step_slot = ctx.alloc_temp();
+        let inclusive;
+
+        match iter {
+            Expr::Binary(start_e, BinaryOp::Range, end_e, _) => {
+                self.compile_expression(start_e, ctx, code)?;
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(cur_slot, code);
+                self.compile_expression(end_e, ctx, code)?;
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(stop_slot, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(1, code);
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(step_slot, code);
+                inclusive = false;
+            }
+            Expr::Binary(start_e, BinaryOp::RangeInclusive, end_e, _) => {
+                self.compile_expression(start_e, ctx, code)?;
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(cur_slot, code);
+                self.compile_expression(end_e, ctx, code)?;
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(stop_slot, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(1, code);
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(step_slot, code);
+                inclusive = true;
+            }
+            Expr::Call(callee, args, _) if matches!(callee.as_ref(), Expr::Ident(name, _) if name == "range") =>
+            {
+                inclusive = false;
+                match args.len() {
+                    1 => {
+                        code.push(OP_I64_CONST);
+                        encode_i64_leb128(0, code);
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(cur_slot, code);
+                        self.compile_expression(&args[0], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(stop_slot, code);
+                        code.push(OP_I64_CONST);
+                        encode_i64_leb128(1, code);
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(step_slot, code);
+                    }
+                    2 => {
+                        self.compile_expression(&args[0], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(cur_slot, code);
+                        self.compile_expression(&args[1], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(stop_slot, code);
+                        code.push(OP_I64_CONST);
+                        encode_i64_leb128(1, code);
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(step_slot, code);
+                    }
+                    3 => {
+                        self.compile_expression(&args[0], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(cur_slot, code);
+                        self.compile_expression(&args[1], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(stop_slot, code);
+                        self.compile_expression(&args[2], ctx, code)?;
+                        code.push(OP_LOCAL_SET);
+                        encode_u32_leb128(step_slot, code);
+                    }
+                    _ => return Err("WASM: range() expects 1, 2, or 3 arguments".to_string()),
+                }
+            }
+            _ => {
+                return Err(
+                    "WASM: 'for' loop requires a range (e.g. a..b, a..=b, or range(...))"
+                        .to_string(),
+                )
+            }
+        }
+
+        Ok((cur_slot, stop_slot, step_slot, inclusive))
+    }
+
+    fn emit_index_addr(
+        &mut self,
+        arr_expr: &Expr,
+        idx_expr: &Expr,
+        ctx: &mut WasmFnCtx,
+        code: &mut Vec<u8>,
+    ) -> Result<(), String> {
+        self.compile_expression(arr_expr, ctx, code)?;
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(8, code);
+        code.push(OP_I64_ADD);
+        self.compile_expression(idx_expr, ctx, code)?;
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(8, code);
+        code.push(OP_I64_MUL);
+        code.push(OP_I64_ADD);
+        Ok(())
+    }
+
+    fn compile_pow(
+        &mut self,
+        left: &Expr,
+        right: &Expr,
+        ctx: &mut WasmFnCtx,
+        code: &mut Vec<u8>,
+    ) -> Result<(), String> {
+        let base_slot = ctx.alloc_temp();
+        let exp_slot = ctx.alloc_temp();
+        let acc_slot = ctx.alloc_temp();
+
+        self.compile_expression(left, ctx, code)?;
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(base_slot, code);
+        self.compile_expression(right, ctx, code)?;
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(exp_slot, code);
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(1, code);
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(acc_slot, code);
+
+        code.push(OP_BLOCK);
+        code.push(TYPE_EMPTY);
+        ctx.depth += 1;
+        code.push(OP_LOOP);
+        code.push(TYPE_EMPTY);
+        ctx.depth += 1;
+
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(exp_slot, code);
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(0, code);
+        code.push(OP_I64_LE_S);
+        code.push(OP_BR_IF);
+        encode_u32_leb128(1, code);
+
+        // if (exp & 1) != 0 { acc *= base }
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(exp_slot, code);
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(1, code);
+        code.push(OP_I64_AND);
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(0, code);
+        code.push(OP_I64_NE);
+        code.push(OP_IF);
+        code.push(TYPE_EMPTY);
+        ctx.depth += 1;
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(acc_slot, code);
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(base_slot, code);
+        code.push(OP_I64_MUL);
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(acc_slot, code);
+        code.push(OP_END);
+        ctx.depth -= 1;
+
+        // base *= base; exp /= 2
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(base_slot, code);
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(base_slot, code);
+        code.push(OP_I64_MUL);
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(base_slot, code);
+
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(exp_slot, code);
+        code.push(OP_I64_CONST);
+        encode_i64_leb128(2, code);
+        code.push(OP_I64_DIV_S);
+        code.push(OP_LOCAL_SET);
+        encode_u32_leb128(exp_slot, code);
+
+        code.push(OP_BR);
+        encode_u32_leb128(0, code);
+
+        code.push(OP_END);
+        ctx.depth -= 1;
+        code.push(OP_END);
+        ctx.depth -= 1;
+
+        code.push(OP_LOCAL_GET);
+        encode_u32_leb128(acc_slot, code);
         Ok(())
     }
 
     fn compile_expression(
         &mut self,
         expr: &Expr,
-        locals: &mut HashMap<String, u32>,
-        local_count: &mut u32,
+        ctx: &mut WasmFnCtx,
         code: &mut Vec<u8>,
     ) -> Result<(), String> {
         match expr {
@@ -495,106 +877,254 @@ impl WasmCompiler {
                 }
             },
             Expr::Ident(name, span) => {
-                if let Some(slot) = locals.get(name) {
+                if let Some(slot) = ctx.locals.get(name) {
                     code.push(OP_LOCAL_GET);
                     encode_u32_leb128(*slot, code);
                 } else {
-                    return Err(format!("{}:{}: Undefined local variable in WASM: {}", span.line, span.col, name));
+                    return Err(format!(
+                        "{}:{}: Undefined local variable in WASM: {}",
+                        span.line, span.col, name
+                    ));
                 }
             }
-            Expr::Binary(left, op, right, _) => {
-                self.compile_expression(left, locals, local_count, code)?;
-                self.compile_expression(right, locals, local_count, code)?;
-
-                match op {
-                    BinaryOp::Add => code.push(OP_I64_ADD),
-                    BinaryOp::Sub => code.push(OP_I64_SUB),
-                    BinaryOp::Mul => code.push(OP_I64_MUL),
-                    BinaryOp::Div => code.push(OP_I64_DIV_S),
-                    BinaryOp::Mod => code.push(OP_I64_REM_S),
-                    BinaryOp::Equal => {
-                        code.push(OP_I64_EQ);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::NotEqual => {
-                        code.push(OP_I64_NE);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::Less => {
-                        code.push(OP_I64_LT_S);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::LessEqual => {
-                        code.push(OP_I64_LE_S);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::Greater => {
-                        code.push(OP_I64_GT_S);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::GreaterEqual => {
-                        code.push(OP_I64_GE_S);
-                        code.push(OP_I64_EXTEND_I32_U);
-                    }
-                    BinaryOp::And => code.push(OP_I64_AND),
-                    BinaryOp::Or => code.push(OP_I64_OR),
-                    _ => code.push(OP_I64_ADD),
+            Expr::Unary(op, inner, _) => match op {
+                UnaryOp::Negate => {
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    self.compile_expression(inner, ctx, code)?;
+                    code.push(OP_I64_SUB);
                 }
+                UnaryOp::Not => {
+                    self.compile_expression(inner, ctx, code)?;
+                    code.push(OP_I64_EQZ);
+                    code.push(OP_I64_EXTEND_I32_U);
+                }
+            },
+            Expr::Binary(left, op, right, _) => match op {
+                BinaryOp::And => {
+                    self.compile_expression(left, ctx, code)?;
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_I64_NE);
+                    code.push(OP_IF);
+                    code.push(TYPE_I64);
+                    ctx.depth += 1;
+                    self.compile_expression(right, ctx, code)?;
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_I64_NE);
+                    code.push(OP_I64_EXTEND_I32_U);
+                    code.push(OP_ELSE);
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_END);
+                    ctx.depth -= 1;
+                }
+                BinaryOp::Or => {
+                    self.compile_expression(left, ctx, code)?;
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_I64_NE);
+                    code.push(OP_IF);
+                    code.push(TYPE_I64);
+                    ctx.depth += 1;
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(1, code);
+                    code.push(OP_ELSE);
+                    self.compile_expression(right, ctx, code)?;
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_I64_NE);
+                    code.push(OP_I64_EXTEND_I32_U);
+                    code.push(OP_END);
+                    ctx.depth -= 1;
+                }
+                BinaryOp::Pow => {
+                    self.compile_pow(left, right, ctx, code)?;
+                }
+                BinaryOp::NullCoalesce => {
+                    let tmp = ctx.alloc_temp();
+                    self.compile_expression(left, ctx, code)?;
+                    code.push(OP_LOCAL_TEE);
+                    encode_u32_leb128(tmp, code);
+                    code.push(OP_I64_CONST);
+                    encode_i64_leb128(0, code);
+                    code.push(OP_I64_NE);
+                    code.push(OP_IF);
+                    code.push(TYPE_I64);
+                    ctx.depth += 1;
+                    code.push(OP_LOCAL_GET);
+                    encode_u32_leb128(tmp, code);
+                    code.push(OP_ELSE);
+                    self.compile_expression(right, ctx, code)?;
+                    code.push(OP_END);
+                    ctx.depth -= 1;
+                }
+                _ => {
+                    self.compile_expression(left, ctx, code)?;
+                    self.compile_expression(right, ctx, code)?;
+
+                    match op {
+                        BinaryOp::Add => code.push(OP_I64_ADD),
+                        BinaryOp::Sub => code.push(OP_I64_SUB),
+                        BinaryOp::Mul => code.push(OP_I64_MUL),
+                        BinaryOp::Div => code.push(OP_I64_DIV_S),
+                        BinaryOp::Mod => code.push(OP_I64_REM_S),
+                        BinaryOp::Equal => {
+                            code.push(OP_I64_EQ);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        BinaryOp::NotEqual => {
+                            code.push(OP_I64_NE);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        BinaryOp::Less => {
+                            code.push(OP_I64_LT_S);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        BinaryOp::LessEqual => {
+                            code.push(OP_I64_LE_S);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        BinaryOp::Greater => {
+                            code.push(OP_I64_GT_S);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        BinaryOp::GreaterEqual => {
+                            code.push(OP_I64_GE_S);
+                            code.push(OP_I64_EXTEND_I32_U);
+                        }
+                        other => {
+                            return Err(format!("WASM: Unsupported binary operator {:?}", other))
+                        }
+                    }
+                }
+            },
+            Expr::Array(elems, _) => {
+                // Linear memory array layout: [len, elem0, elem1, ...] (each i64 = 8 bytes)
+                // Heap bump pointer stored at linear memory address 0, initialized to 32768.
+                let ptr_slot = ctx.alloc_temp();
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(0, code);
+                code.push(OP_I64_LOAD);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
+                code.push(OP_I64_EQZ);
+                code.push(OP_IF);
+                code.push(TYPE_EMPTY);
+                ctx.depth += 1;
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(0, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(32768, code);
+                code.push(OP_I64_STORE);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
+                code.push(OP_END);
+                ctx.depth -= 1;
+
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(0, code);
+                code.push(OP_I64_LOAD);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
+                code.push(OP_LOCAL_SET);
+                encode_u32_leb128(ptr_slot, code);
+
+                let total_bytes = ((1 + elems.len()) * 8) as i64;
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(0, code);
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(ptr_slot, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(total_bytes, code);
+                code.push(OP_I64_ADD);
+                code.push(OP_I64_STORE);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
+
+                // Store length at offset 0
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(ptr_slot, code);
+                code.push(OP_I64_CONST);
+                encode_i64_leb128(elems.len() as i64, code);
+                code.push(OP_I64_STORE);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
+
+                // Store elements at offset 8 * (i + 1)
+                for (i, el) in elems.iter().enumerate() {
+                    code.push(OP_LOCAL_GET);
+                    encode_u32_leb128(ptr_slot, code);
+                    self.compile_expression(el, ctx, code)?;
+                    code.push(OP_I64_STORE);
+                    encode_u32_leb128(3, code);
+                    encode_u32_leb128(((i + 1) * 8) as u32, code);
+                }
+
+                code.push(OP_LOCAL_GET);
+                encode_u32_leb128(ptr_slot, code);
+            }
+            Expr::Index(arr_expr, idx_expr, _) => {
+                self.emit_index_addr(arr_expr, idx_expr, ctx, code)?;
+                code.push(OP_I64_LOAD);
+                encode_u32_leb128(3, code);
+                encode_u32_leb128(0, code);
             }
             Expr::Call(callee, args, span) => {
                 if let Expr::Ident(name, _) = callee.as_ref() {
-                    for arg in args {
-                        self.compile_expression(arg, locals, local_count, code)?;
-                    }
-
-                    if let Some(target_idx) = self.func_indices.get(name) {
+                    if let Some(&target_idx) = self.func_indices.get(name) {
+                        for arg in args {
+                            self.compile_expression(arg, ctx, code)?;
+                        }
                         code.push(OP_CALL);
-                        encode_u32_leb128(*target_idx, code);
+                        encode_u32_leb128(target_idx, code);
+                    } else if name == "len" && args.len() == 1 {
+                        self.compile_expression(&args[0], ctx, code)?;
+                        code.push(OP_I64_LOAD);
+                        encode_u32_leb128(3, code);
+                        encode_u32_leb128(0, code);
                     } else {
-                        return Err(format!("{}:{}: Unknown WASM function '{}'", span.line, span.col, name));
+                        return Err(format!(
+                            "{}:{}: Unknown WASM function '{}'",
+                            span.line, span.col, name
+                        ));
                     }
                 } else {
                     return Err("WASM call currently supports direct identifier calls".to_string());
                 }
             }
-            Expr::If { condition, then_branch, else_branch, .. } => {
-                self.compile_expression(condition, locals, local_count, code)?;
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                self.compile_expression(condition, ctx, code)?;
                 code.push(OP_IF);
                 code.push(TYPE_I64); // returns i64
+                ctx.depth += 1;
 
                 // 1. Then branch
-                for st in &then_branch.statements {
-                    self.compile_statement(st, locals, local_count, code)?;
-                }
-                if let Some(res) = &then_branch.result {
-                    self.compile_expression(res, locals, local_count, code)?;
-                } else {
-                    code.push(OP_I64_CONST);
-                    encode_i64_leb128(0, code);
-                }
+                self.compile_block_stmt_and_result(then_branch, ctx, code)?;
 
                 // 2. Else branch
                 code.push(OP_ELSE);
                 if let Some(eb) = else_branch {
-                    for st in &eb.statements {
-                        self.compile_statement(st, locals, local_count, code)?;
-                    }
-                    if let Some(res) = &eb.result {
-                        self.compile_expression(res, locals, local_count, code)?;
-                    } else {
-                        code.push(OP_I64_CONST);
-                        encode_i64_leb128(0, code);
-                    }
+                    self.compile_block_stmt_and_result(eb, ctx, code)?;
                 } else {
                     code.push(OP_I64_CONST);
                     encode_i64_leb128(0, code);
                 }
 
                 code.push(OP_END);
+                ctx.depth -= 1;
             }
-            _ => {
-                code.push(OP_I64_CONST);
-                encode_i64_leb128(0, code);
+            Expr::Block(block, _) => {
+                self.compile_block_stmt_and_result(block, ctx, code)?;
+            }
+            other => {
+                return Err(format!("WASM: Unsupported expression variant: {:?}", other));
             }
         }
         Ok(())
@@ -640,7 +1170,7 @@ impl WasmCompiler {
             let mut sec_buf = Vec::new();
             encode_u32_leb128(1, &mut sec_buf); // 1 memory declaration
             sec_buf.push(0x01); // flags: has maximum
-            encode_u32_leb128(1, &mut sec_buf);  // min 1 page
+            encode_u32_leb128(1, &mut sec_buf); // min 1 page
             encode_u32_leb128(16, &mut sec_buf); // max 16 pages
             self.write_section(SEC_MEMORY, &sec_buf, &mut wasm);
         }
@@ -696,7 +1226,7 @@ impl WasmCompiler {
             encode_u32_leb128(self.data_segments.len() as u32, &mut sec_buf);
             for (offset, bytes) in &self.data_segments {
                 sec_buf.push(0x00); // segment flags: active, memory index 0
-                // Offset expr: i32.const <offset> end
+                                    // Offset expr: i32.const <offset> end
                 sec_buf.push(OP_I32_CONST);
                 encode_i32_leb128(*offset as i32, &mut sec_buf);
                 sec_buf.push(OP_END);

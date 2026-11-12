@@ -186,3 +186,55 @@ assert(view.contains("Alignment"))
     let res = run_source(source);
     assert!(res.is_ok(), "Error: {:?}", res.err());
 }
+
+#[test]
+fn test_bio_fastq_parsing_filtering_and_six_frame_orf_finder() {
+    let source = r#"
+let fastq = "@read1 HighQual\nATGCGATCGATC\n+\nIIIIIIIIIIII\n@read2 LowQual\nATGC\n+\n!!!!\n"
+let reads = Bio.parse_fastq(fastq)
+assert_eq(reads.len(), 2)
+assert_eq(reads[0].id, "read1")
+assert_eq(reads[0].length, 12)
+assert_eq(reads[0].avg_phred, 40.0)
+assert_eq(reads[1].avg_phred, 0.0)
+
+let filtered = Bio.filter_fastq(reads, 30.0, 8)
+assert_eq(filtered.len(), 1)
+assert_eq(filtered[0].id, "read1")
+
+# Reverse-strand ORF: forward has TTA TTT CAT (reverse complement is ATG AAA TAA -> "MK")
+let rev_gene = Bio.dna("TTATTTCAT")
+let hits = rev_gene.orf_finder(2)
+assert_eq(hits.len(), 1)
+assert_eq(hits[0].strand, "-")
+assert_eq(hits[0].signed_frame, -1)
+assert_eq(hits[0].protein, "MK")
+"#;
+    let res = run_source(source);
+    assert!(res.is_ok(), "Error: {:?}", res.err());
+}
+
+#[test]
+fn test_chem_sdf_v2000_parser_and_smarts_substructure_match() {
+    let source = r#"
+let sdf = "Ethanol\n  AetherChem 3D\n\n  3  2  0  0  0  0            999 V2000\n    0.0000    0.0000    0.0000 C   0  0\n    1.5200    0.0000    0.0000 C   0  0\n    2.1000    1.2000    0.0000 O   0  0\n  1  2  1  0\n  2  3  1  0\nM  END\n> <CHEMBL_ID>\nCHEMBL545\n\n$$$$\n"
+let mols = Chem.parse_sdf(sdf)
+assert_eq(mols.len(), 1)
+let etoh = mols[0]
+assert_eq(etoh.title, "Ethanol")
+assert_eq(etoh.atom_count, 3)
+assert_eq(etoh.bond_count, 2)
+assert_eq(etoh.formula(), "C2H6O")
+assert_eq(etoh.properties["CHEMBL_ID"], "CHEMBL545")
+assert_eq(etoh.has_substructure("CCO"), true)
+assert_eq(etoh.has_substructure("C=O"), false)
+
+let aspirin = Chem.from_smiles("CC(=O)OC1=CC=CC=C1C(=O)O")
+assert_eq(Chem.substructure_match(aspirin, "C(=O)O"), true)
+assert_eq(aspirin.has_substructure("c1ccccc1"), true)
+assert_eq(aspirin.has_substructure("[#6](=O)[#8]"), true)
+assert_eq(aspirin.has_substructure("N#C"), false)
+"#;
+    let res = run_source(source);
+    assert!(res.is_ok(), "Error: {:?}", res.err());
+}

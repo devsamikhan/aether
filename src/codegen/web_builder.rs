@@ -4,9 +4,9 @@
 //! web applications (.html) that execute directly in any modern web browser
 //! (Chrome, Firefox, Safari, Edge, Mobile iOS/Android) without requiring any server.
 
+use crate::syntax::parse;
 use std::fs;
 use std::path::Path;
-use crate::syntax::parse;
 
 pub struct WebBuilder {
     pub app_name: String,
@@ -23,8 +23,13 @@ impl WebBuilder {
 
     /// Compiles an AETHER script into a self-contained, single-file HTML web app
     pub fn build_web_app(&self, source_path: &Path, output_path: &Path) -> Result<(), String> {
-        let source_content = fs::read_to_string(source_path)
-            .map_err(|e| format!("Failed to read source file '{}': {}", source_path.display(), e))?;
+        let source_content = fs::read_to_string(source_path).map_err(|e| {
+            format!(
+                "Failed to read source file '{}': {}",
+                source_path.display(),
+                e
+            )
+        })?;
 
         // 1. Verify syntax
         let program = parse(&source_content)
@@ -275,12 +280,23 @@ impl WebBuilder {
             }
         }
 
-        fs::write(output_path, &html_content)
-            .map_err(|e| format!("Failed to write HTML file to '{}': {}", output_path.display(), e))?;
+        fs::write(output_path, &html_content).map_err(|e| {
+            format!(
+                "Failed to write HTML file to '{}': {}",
+                output_path.display(),
+                e
+            )
+        })?;
 
         let metadata = fs::metadata(output_path).map_err(|e| e.to_string())?;
-        println!("✨ Standalone Web Application successfully generated: {}", output_path.display());
-        println!("   Size: {:.2} KB (Zero external CDN or server dependencies)", metadata.len() as f64 / 1024.0);
+        println!(
+            "✨ Standalone Web Application successfully generated: {}",
+            output_path.display()
+        );
+        println!(
+            "   Size: {:.2} KB (Zero external CDN or server dependencies)",
+            metadata.len() as f64 / 1024.0
+        );
         println!("   Ready to run directly in any browser (Chrome, Edge, Safari, Firefox, iOS, Android)!");
 
         Ok(())

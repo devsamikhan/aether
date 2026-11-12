@@ -23,7 +23,10 @@ intent safe_increment(x):
     let reports = verifier.verify_program(&program);
 
     assert_eq!(reports.len(), 1);
-    assert!(reports[0].is_verified, "Contract should be mathematically proved");
+    assert!(
+        reports[0].is_verified,
+        "Contract should be mathematically proved"
+    );
     assert_eq!(reports[0].function_name, "safe_increment");
     assert!(reports[0].counter_example.is_none());
 }
@@ -43,10 +46,20 @@ intent bad_decrement(x):
     let reports = verifier.verify_program(&program);
 
     assert_eq!(reports.len(), 1);
-    assert!(!reports[0].is_verified, "Contract violation should be caught");
-    assert!(reports[0].counter_example.is_some(), "Counter-example should be generated");
+    assert!(
+        !reports[0].is_verified,
+        "Contract violation should be caught"
+    );
+    assert!(
+        reports[0].counter_example.is_some(),
+        "Counter-example should be generated"
+    );
     let ce = reports[0].counter_example.as_ref().unwrap();
-    assert_eq!(*ce.get("x").unwrap(), 0, "Counter-example input x=0 produces result=-1 violating > 0");
+    assert_eq!(
+        *ce.get("x").unwrap(),
+        0,
+        "Counter-example input x=0 produces result=-1 violating > 0"
+    );
 }
 
 #[test]
@@ -62,7 +75,10 @@ def unsafe_calc(x):
     let reports = verifier.verify_program(&program);
 
     assert_eq!(reports.len(), 1);
-    assert!(!reports[0].vulnerabilities.is_empty(), "Should detect division by zero vulnerability");
+    assert!(
+        !reports[0].vulnerabilities.is_empty(),
+        "Should detect division by zero vulnerability"
+    );
     assert!(reports[0].vulnerabilities[0].contains("Division by Zero"));
 }
 
@@ -80,5 +96,9 @@ assert(reports[0].function == "safe_scale", "Function name matches")
 "#;
 
     let res = run_source(src);
-    assert!(res.is_ok(), "Aether stdlib Proof test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "Aether stdlib Proof test failed: {:?}",
+        res.err()
+    );
 }

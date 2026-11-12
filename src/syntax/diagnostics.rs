@@ -4,8 +4,8 @@
 // Pure Rust Standard Library — Zero External Crates
 // ==============================================================================
 
-use std::collections::HashSet;
 use super::ast::*;
+use std::collections::HashSet;
 
 /// Computes Levenshtein edit distance between two strings.
 pub fn levenshtein_distance(a: &str, b: &str) -> usize {
@@ -28,9 +28,7 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
         curr[0] = i;
         for j in 1..=n {
             let cost = usize::from(a_chars[i - 1] != b_chars[j - 1]);
-            curr[j] = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -112,7 +110,8 @@ pub struct LintWarning {
 }
 
 pub fn lint_source(source: &str) -> Result<Vec<LintWarning>, String> {
-    let program = super::parse(source).map_err(|(e, sp)| format!("{}:{}: {}", sp.line, sp.col, e))?;
+    let program =
+        super::parse(source).map_err(|(e, sp)| format!("{}:{}: {}", sp.line, sp.col, e))?;
     Ok(lint_program(&program))
 }
 
@@ -134,7 +133,10 @@ pub fn lint_program(program: &Program) -> Vec<LintWarning> {
         if !name.starts_with('_') && !used.contains(&name) {
             warnings.push(LintWarning {
                 code: "W001_UNUSED_VAR".to_string(),
-                message: format!("Variable '{}' is declared but never used (prefix with '_' to silence)", name),
+                message: format!(
+                    "Variable '{}' is declared but never used (prefix with '_' to silence)",
+                    name
+                ),
                 line,
             });
         }
@@ -174,7 +176,10 @@ fn lint_statement_list(
                 if outer_scopes.contains(name) && !name.starts_with('_') {
                     warnings.push(LintWarning {
                         code: "W003_SHADOWED_VAR".to_string(),
-                        message: format!("Variable '{}' shadows an existing binding in an outer scope", name),
+                        message: format!(
+                            "Variable '{}' shadows an existing binding in an outer scope",
+                            name
+                        ),
                         line: span.line,
                     });
                 }
@@ -188,10 +193,7 @@ fn lint_statement_list(
                 collect_used_in_expr(value, used);
             }
             Statement::FnDef {
-                name,
-                params,
-                body,
-                ..
+                name, params, body, ..
             } => {
                 used.insert(name.clone());
                 let mut fn_outer = outer_scopes.clone();
@@ -222,7 +224,13 @@ fn lint_statement_list(
                 finally_block,
                 ..
             } => {
-                lint_statement_list(&try_block.statements, declared, used, outer_scopes, warnings);
+                lint_statement_list(
+                    &try_block.statements,
+                    declared,
+                    used,
+                    outer_scopes,
+                    warnings,
+                );
                 for h in handlers {
                     let is_empty = h.body.statements.is_empty()
                         || h.body
@@ -232,7 +240,8 @@ fn lint_statement_list(
                     if is_empty {
                         warnings.push(LintWarning {
                             code: "W004_EMPTY_CATCH".to_string(),
-                            message: "Empty catch/except block silently swallows exceptions".to_string(),
+                            message: "Empty catch/except block silently swallows exceptions"
+                                .to_string(),
                             line: h.span.line,
                         });
                     }
@@ -288,7 +297,10 @@ fn collect_used_in_expr(expr: &Expr, used: &mut HashSet<String>) {
                 collect_used_in_expr(a, used);
             }
         }
-        Expr::Array(items, _) | Expr::Tuple(items, _) | Expr::Set(items, _) | Expr::FString(items, _) => {
+        Expr::Array(items, _)
+        | Expr::Tuple(items, _)
+        | Expr::Set(items, _)
+        | Expr::FString(items, _) => {
             for item in items {
                 collect_used_in_expr(item, used);
             }

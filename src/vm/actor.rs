@@ -634,7 +634,8 @@ pub fn register_actor_module(globals: &mut HashMap<String, Value>) {
     globals.insert("__native_actor".to_string(), Value::map(mod_map));
 }
 
-static REPLY_CHANNELS: OnceLock<Mutex<HashMap<u64, Arc<Mutex<Sender<Value>>>>>> = OnceLock::new();
+type ReplyChannelMap = HashMap<u64, Arc<Mutex<Sender<Value>>>>;
+static REPLY_CHANNELS: OnceLock<Mutex<ReplyChannelMap>> = OnceLock::new();
 static CLUSTER_LISTENERS: OnceLock<Mutex<HashMap<u64, Arc<TcpListener>>>> = OnceLock::new();
 static ACCEPTED_STREAMS: OnceLock<Mutex<HashMap<u64, Vec<TcpStream>>>> = OnceLock::new();
 

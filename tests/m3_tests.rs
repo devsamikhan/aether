@@ -42,7 +42,11 @@ assert(shape["xl"] == 28)
 assert(shape["full"] == 9999)
 "#;
     let res = run_source(source);
-    assert!(res.is_ok(), "M3 typography/shape tokens failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "M3 typography/shape tokens failed: {:?}",
+        res.err()
+    );
 }
 
 #[test]
@@ -104,7 +108,11 @@ assert(pi["component"] == "M3.ProgressIndicator")
 assert(pi["value"] == 0.85)
 "#;
     let res = run_source(source);
-    assert!(res.is_ok(), "M3 component factories test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "M3 component factories test failed: {:?}",
+        res.err()
+    );
 }
 
 #[test]
@@ -123,5 +131,9 @@ let bar = M3.top_app_bar("Aether Mobile", "Connected")
 M3.render_preview(bar)
 "#;
     let res = run_source(source);
-    assert!(res.is_ok(), "M3 render_preview test failed: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "M3 render_preview test failed: {:?}",
+        res.err()
+    );
 }

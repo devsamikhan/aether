@@ -117,8 +117,17 @@ while epoch < 40:
             Value::Bool(b) => b,
             _ => false,
         };
-        assert!(decreased, "Loss should have decreased: initial={}, final={}", initial_loss, final_loss);
-        assert!(final_loss < initial_loss / 2.0, "Loss should reduce by at least 50%: initial={}, final={}", initial_loss, final_loss);
+        assert!(
+            decreased,
+            "Loss should have decreased: initial={}, final={}",
+            initial_loss, final_loss
+        );
+        assert!(
+            final_loss < initial_loss / 2.0,
+            "Loss should reduce by at least 50%: initial={}, final={}",
+            initial_loss,
+            final_loss
+        );
     } else {
         panic!("Expected Array, got {:?}", res);
     }

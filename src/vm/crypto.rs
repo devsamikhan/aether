@@ -146,7 +146,7 @@ pub fn sha1_bytes(input: &[u8]) -> [u8; 20] {
         let mut d = h3;
         let mut e = h4;
 
-        for i in 0..80 {
+        for (i, &w_i) in w.iter().enumerate() {
             let (f, k) = if i < 20 {
                 ((b & c) | ((!b) & d), 0x5a827999u32)
             } else if i < 40 {
@@ -162,7 +162,7 @@ pub fn sha1_bytes(input: &[u8]) -> [u8; 20] {
                 .wrapping_add(f)
                 .wrapping_add(e)
                 .wrapping_add(k)
-                .wrapping_add(w[i]);
+                .wrapping_add(w_i);
             e = d;
             d = c;
             c = b.rotate_left(30);
@@ -433,7 +433,7 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dk_len: usize) -> Vec<u8> {
     let iters = iterations.max(1);
-    let blocks = (dk_len + 31) / 32;
+    let blocks = dk_len.div_ceil(32);
     let mut derived = Vec::with_capacity(blocks * 32);
 
     for block_idx in 1..=(blocks as u32) {

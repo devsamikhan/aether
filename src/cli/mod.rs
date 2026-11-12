@@ -290,7 +290,14 @@ enum Commands {
     Bench,
     /// Perform a safety-checked toolchain self-update
     #[command(visible_aliases = ["update", "upgrade"])]
-    SelfUpdate,
+    SelfUpdate {
+        /// Optional release manifest or binary URL override
+        #[arg(long)]
+        url: Option<String>,
+        /// Only check if a newer release is available without modifying binaries
+        #[arg(long)]
+        check: bool,
+    },
     /// Run interactive guided language tour lessons
     Tour { lesson: Option<String> },
     /// Show AETHER compiler version information
@@ -465,7 +472,7 @@ fn dispatch(cmd: Commands) -> Result<(), String> {
         Commands::Publish => commands::run_publish(),
         Commands::Doctor => commands::run_doctor(),
         Commands::Bench => commands::run_bench(),
-        Commands::SelfUpdate => commands::run_self_update(),
+        Commands::SelfUpdate { url, check } => commands::run_self_update(url.as_deref(), check),
         Commands::Tour { lesson } => commands::run_tour(lesson.as_deref()),
         Commands::Version => commands::print_version(),
     }

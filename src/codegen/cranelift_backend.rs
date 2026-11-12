@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use cranelift_codegen::ir::{
-    types, AbiParam, Block as ClifBlock, BlockArg, InstBuilder, MemFlagsData, Value as ClifValue,
-    condcodes::IntCC,
+    condcodes::IntCC, types, AbiParam, Block as ClifBlock, BlockArg, InstBuilder, MemFlagsData,
+    Value as ClifValue,
 };
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
+use std::collections::HashMap;
 
 use crate::syntax::ast::*;
 
@@ -76,8 +76,15 @@ pub extern "C" fn aether_native_time_ms() -> i64 {
 }
 
 pub extern "C" fn aether_native_contract_violation(contract_type: i64, line: i64) {
-    let name = if contract_type == 0 { "require" } else { "ensure" };
-    eprintln!("\n[CONTRACT VIOLATION] Intent '{}' constraint failed at line {}", name, line);
+    let name = if contract_type == 0 {
+        "require"
+    } else {
+        "ensure"
+    };
+    eprintln!(
+        "\n[CONTRACT VIOLATION] Intent '{}' constraint failed at line {}",
+        name, line
+    );
     std::process::exit(101);
 }
 
@@ -96,24 +103,53 @@ pub struct CraneliftCompiler {
 impl CraneliftCompiler {
     pub fn new() -> Result<Self, String> {
         let mut flag_builder = settings::builder();
-        flag_builder.set("use_colocated_libcalls", "false").map_err(|e| e.to_string())?;
-        flag_builder.set("is_pic", "false").map_err(|e| e.to_string())?;
-        flag_builder.set("opt_level", "speed").map_err(|e| e.to_string())?;
+        flag_builder
+            .set("use_colocated_libcalls", "false")
+            .map_err(|e| e.to_string())?;
+        flag_builder
+            .set("is_pic", "false")
+            .map_err(|e| e.to_string())?;
+        flag_builder
+            .set("opt_level", "speed")
+            .map_err(|e| e.to_string())?;
 
         let isa_builder = cranelift_native::builder().map_err(|e| e.to_string())?;
-        let isa = isa_builder.finish(settings::Flags::new(flag_builder)).map_err(|e| e.to_string())?;
+        let isa = isa_builder
+            .finish(settings::Flags::new(flag_builder))
+            .map_err(|e| e.to_string())?;
 
         let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
 
         // Register runtime symbols
-        builder.symbol("aether_native_print_i64", aether_native_print_i64 as *const u8);
-        builder.symbol("aether_native_println_i64", aether_native_println_i64 as *const u8);
-        builder.symbol("aether_native_print_str", aether_native_print_str as *const u8);
-        builder.symbol("aether_native_println_str", aether_native_println_str as *const u8);
+        builder.symbol(
+            "aether_native_print_i64",
+            aether_native_print_i64 as *const u8,
+        );
+        builder.symbol(
+            "aether_native_println_i64",
+            aether_native_println_i64 as *const u8,
+        );
+        builder.symbol(
+            "aether_native_print_str",
+            aether_native_print_str as *const u8,
+        );
+        builder.symbol(
+            "aether_native_println_str",
+            aether_native_println_str as *const u8,
+        );
         builder.symbol("aether_native_time_ms", aether_native_time_ms as *const u8);
-        builder.symbol("aether_native_contract_violation", aether_native_contract_violation as *const u8);
-        builder.symbol("aether_native_alloc_buffer", aether_native_alloc_buffer as *const u8);
-        builder.symbol("aether_native_free_buffer", aether_native_free_buffer as *const u8);
+        builder.symbol(
+            "aether_native_contract_violation",
+            aether_native_contract_violation as *const u8,
+        );
+        builder.symbol(
+            "aether_native_alloc_buffer",
+            aether_native_alloc_buffer as *const u8,
+        );
+        builder.symbol(
+            "aether_native_free_buffer",
+            aether_native_free_buffer as *const u8,
+        );
 
         let module = JITModule::new(builder);
 
@@ -132,51 +168,79 @@ impl CraneliftCompiler {
     fn register_runtime_declarations(&mut self) -> Result<(), String> {
         let mut sig_i64 = self.module.make_signature();
         sig_i64.params.push(AbiParam::new(types::I64));
-        let fid = self.module.declare_function("aether_native_print_i64", Linkage::Import, &sig_i64)
+        let fid = self
+            .module
+            .declare_function("aether_native_print_i64", Linkage::Import, &sig_i64)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_print_i64".to_string(), fid);
+        self.func_ids
+            .insert("aether_native_print_i64".to_string(), fid);
 
-        let fid2 = self.module.declare_function("aether_native_println_i64", Linkage::Import, &sig_i64)
+        let fid2 = self
+            .module
+            .declare_function("aether_native_println_i64", Linkage::Import, &sig_i64)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_println_i64".to_string(), fid2);
+        self.func_ids
+            .insert("aether_native_println_i64".to_string(), fid2);
 
         let mut sig_str = self.module.make_signature();
         sig_str.params.push(AbiParam::new(types::I64));
         sig_str.params.push(AbiParam::new(types::I64));
-        let fid3 = self.module.declare_function("aether_native_print_str", Linkage::Import, &sig_str)
+        let fid3 = self
+            .module
+            .declare_function("aether_native_print_str", Linkage::Import, &sig_str)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_print_str".to_string(), fid3);
+        self.func_ids
+            .insert("aether_native_print_str".to_string(), fid3);
 
-        let fid4 = self.module.declare_function("aether_native_println_str", Linkage::Import, &sig_str)
+        let fid4 = self
+            .module
+            .declare_function("aether_native_println_str", Linkage::Import, &sig_str)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_println_str".to_string(), fid4);
+        self.func_ids
+            .insert("aether_native_println_str".to_string(), fid4);
 
         let mut sig_time = self.module.make_signature();
         sig_time.returns.push(AbiParam::new(types::I64));
-        let fid5 = self.module.declare_function("aether_native_time_ms", Linkage::Import, &sig_time)
+        let fid5 = self
+            .module
+            .declare_function("aether_native_time_ms", Linkage::Import, &sig_time)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_time_ms".to_string(), fid5);
+        self.func_ids
+            .insert("aether_native_time_ms".to_string(), fid5);
 
         let mut sig_viol = self.module.make_signature();
         sig_viol.params.push(AbiParam::new(types::I64));
         sig_viol.params.push(AbiParam::new(types::I64));
-        let fid6 = self.module.declare_function("aether_native_contract_violation", Linkage::Import, &sig_viol)
+        let fid6 = self
+            .module
+            .declare_function(
+                "aether_native_contract_violation",
+                Linkage::Import,
+                &sig_viol,
+            )
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_contract_violation".to_string(), fid6);
+        self.func_ids
+            .insert("aether_native_contract_violation".to_string(), fid6);
 
         let mut sig_alloc = self.module.make_signature();
         sig_alloc.params.push(AbiParam::new(types::I64));
         sig_alloc.returns.push(AbiParam::new(types::I64));
-        let fid7 = self.module.declare_function("aether_native_alloc_buffer", Linkage::Import, &sig_alloc)
+        let fid7 = self
+            .module
+            .declare_function("aether_native_alloc_buffer", Linkage::Import, &sig_alloc)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_alloc_buffer".to_string(), fid7);
+        self.func_ids
+            .insert("aether_native_alloc_buffer".to_string(), fid7);
 
         let mut sig_free = self.module.make_signature();
         sig_free.params.push(AbiParam::new(types::I64));
         sig_free.params.push(AbiParam::new(types::I64));
-        let fid8 = self.module.declare_function("aether_native_free_buffer", Linkage::Import, &sig_free)
+        let fid8 = self
+            .module
+            .declare_function("aether_native_free_buffer", Linkage::Import, &sig_free)
             .map_err(|e| e.to_string())?;
-        self.func_ids.insert("aether_native_free_buffer".to_string(), fid8);
+        self.func_ids
+            .insert("aether_native_free_buffer".to_string(), fid8);
 
         Ok(())
     }
@@ -190,9 +254,13 @@ impl CraneliftCompiler {
 
         let mut desc = DataDescription::new();
         desc.define(s.as_bytes().to_vec().into_boxed_slice());
-        let data_id = self.module.declare_data(&sym_name, Linkage::Local, true, false)
+        let data_id = self
+            .module
+            .declare_data(&sym_name, Linkage::Local, true, false)
             .map_err(|e| e.to_string())?;
-        self.module.define_data(data_id, &desc).map_err(|e| e.to_string())?;
+        self.module
+            .define_data(data_id, &desc)
+            .map_err(|e| e.to_string())?;
 
         let entry = (data_id, s.len());
         self.string_data.insert(s.to_string(), entry);
@@ -208,7 +276,9 @@ impl CraneliftCompiler {
                         sig.params.push(AbiParam::new(types::I64));
                     }
                     sig.returns.push(AbiParam::new(types::I64));
-                    let func_id = self.module.declare_function(name, Linkage::Local, &sig)
+                    let func_id = self
+                        .module
+                        .declare_function(name, Linkage::Local, &sig)
                         .map_err(|e| e.to_string())?;
                     self.func_ids.insert(name.clone(), func_id);
                 }
@@ -218,7 +288,9 @@ impl CraneliftCompiler {
                         sig.params.push(AbiParam::new(types::I64));
                     }
                     sig.returns.push(AbiParam::new(types::I64));
-                    let func_id = self.module.declare_function(name, Linkage::Local, &sig)
+                    let func_id = self
+                        .module
+                        .declare_function(name, Linkage::Local, &sig)
                         .map_err(|e| e.to_string())?;
                     self.func_ids.insert(name.clone(), func_id);
                 }
@@ -231,11 +303,28 @@ impl CraneliftCompiler {
 
         for stmt in &program.statements {
             match stmt {
-                Statement::FnDef { name, params, body, .. } => {
+                Statement::FnDef {
+                    name, params, body, ..
+                } => {
                     self.compile_fn(name, params, &[], &[], body, &mut ctx, &mut fn_builder_ctx)?;
                 }
-                Statement::IntentDef { name, params, require, ensure, body, .. } => {
-                    self.compile_fn(name, params, require, ensure, body, &mut ctx, &mut fn_builder_ctx)?;
+                Statement::IntentDef {
+                    name,
+                    params,
+                    require,
+                    ensure,
+                    body,
+                    ..
+                } => {
+                    self.compile_fn(
+                        name,
+                        params,
+                        require,
+                        ensure,
+                        body,
+                        &mut ctx,
+                        &mut fn_builder_ctx,
+                    )?;
                 }
                 _ => {}
             }
@@ -244,7 +333,8 @@ impl CraneliftCompiler {
         let main_func_id = {
             let mut sig = self.module.make_signature();
             sig.returns.push(AbiParam::new(types::I64));
-            self.module.declare_function("aether_main", Linkage::Export, &sig)
+            self.module
+                .declare_function("aether_main", Linkage::Export, &sig)
                 .map_err(|e| e.to_string())?
         };
 
@@ -265,7 +355,8 @@ impl CraneliftCompiler {
                 match stmt {
                     Statement::FnDef { .. } | Statement::IntentDef { .. } => {}
                     _ => {
-                        let (val_opt, ret) = self.compile_stmt(stmt, &mut builder, &mut var_scope)?;
+                        let (val_opt, ret) =
+                            self.compile_stmt(stmt, &mut builder, &mut var_scope)?;
                         if let Some(v) = val_opt {
                             last_val = v;
                         }
@@ -283,10 +374,14 @@ impl CraneliftCompiler {
             builder.finalize(target_config);
         }
 
-        self.module.define_function(main_func_id, &mut ctx).map_err(|e| e.to_string())?;
+        self.module
+            .define_function(main_func_id, &mut ctx)
+            .map_err(|e| e.to_string())?;
         self.module.clear_context(&mut ctx);
 
-        self.module.finalize_definitions().map_err(|e| e.to_string())?;
+        self.module
+            .finalize_definitions()
+            .map_err(|e| e.to_string())?;
 
         let code_ptr = self.module.get_finalized_function(main_func_id);
         let main_fn: extern "C" fn() -> i64 = unsafe { std::mem::transmute(code_ptr) };
@@ -295,6 +390,7 @@ impl CraneliftCompiler {
         Ok(exit_code)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compile_fn(
         &mut self,
         name: &str,
@@ -334,14 +430,21 @@ impl CraneliftCompiler {
                 let cond_val = self.compile_expr(req_expr, &mut builder, &mut var_scope)?;
                 let ok_block = builder.create_block();
                 let fail_block = builder.create_block();
-                builder.ins().brif(cond_val, ok_block, &no_args, fail_block, &no_args);
+                builder
+                    .ins()
+                    .brif(cond_val, ok_block, &no_args, fail_block, &no_args);
 
                 builder.switch_to_block(fail_block);
                 builder.seal_block(fail_block);
                 let zero = builder.ins().iconst(types::I64, 0);
-                let line = builder.ins().iconst(types::I64, req_expr.span().line as i64);
-                let viol_fid = *self.func_ids.get("aether_native_contract_violation").unwrap();
-                let local_viol = self.module.declare_func_in_func(viol_fid, &mut builder.func);
+                let line = builder
+                    .ins()
+                    .iconst(types::I64, req_expr.span().line as i64);
+                let viol_fid = *self
+                    .func_ids
+                    .get("aether_native_contract_violation")
+                    .unwrap();
+                let local_viol = self.module.declare_func_in_func(viol_fid, builder.func);
                 builder.ins().call(local_viol, &[zero, line]);
                 builder.ins().return_(&[zero]);
 
@@ -378,14 +481,21 @@ impl CraneliftCompiler {
                     let cond_val = self.compile_expr(ens_expr, &mut builder, &mut var_scope)?;
                     let ok_block = builder.create_block();
                     let fail_block = builder.create_block();
-                    builder.ins().brif(cond_val, ok_block, &no_args, fail_block, &no_args);
+                    builder
+                        .ins()
+                        .brif(cond_val, ok_block, &no_args, fail_block, &no_args);
 
                     builder.switch_to_block(fail_block);
                     builder.seal_block(fail_block);
                     let one = builder.ins().iconst(types::I64, 1);
-                    let line = builder.ins().iconst(types::I64, ens_expr.span().line as i64);
-                    let viol_fid = *self.func_ids.get("aether_native_contract_violation").unwrap();
-                    let local_viol = self.module.declare_func_in_func(viol_fid, &mut builder.func);
+                    let line = builder
+                        .ins()
+                        .iconst(types::I64, ens_expr.span().line as i64);
+                    let viol_fid = *self
+                        .func_ids
+                        .get("aether_native_contract_violation")
+                        .unwrap();
+                    let local_viol = self.module.declare_func_in_func(viol_fid, builder.func);
                     builder.ins().call(local_viol, &[one, line]);
                     builder.ins().return_(&[final_res]);
 
@@ -398,7 +508,9 @@ impl CraneliftCompiler {
             builder.finalize(target_config);
         }
 
-        self.module.define_function(func_id, ctx).map_err(|e| e.to_string())?;
+        self.module
+            .define_function(func_id, ctx)
+            .map_err(|e| e.to_string())?;
         self.module.clear_context(ctx);
         Ok(())
     }
@@ -412,7 +524,9 @@ impl CraneliftCompiler {
         let no_args: [BlockArg; 0] = [];
 
         match stmt {
-            Statement::Let { name, initializer, .. } => {
+            Statement::Let {
+                name, initializer, ..
+            } => {
                 let init_val = if let Some(init) = initializer {
                     self.compile_expr(init, builder, scope)?
                 } else {
@@ -422,7 +536,9 @@ impl CraneliftCompiler {
                 builder.def_var(var, init_val);
                 Ok((None, false))
             }
-            Statement::Assign { target, op, value, .. } => {
+            Statement::Assign {
+                target, op, value, ..
+            } => {
                 let rhs_val = self.compile_expr(value, builder, scope)?;
                 match target {
                     Expr::Ident(name, _) => {
@@ -471,33 +587,62 @@ impl CraneliftCompiler {
                         let final_val = match op {
                             AssignOp::Assign => rhs_val,
                             AssignOp::AddAssign => {
-                                let cur = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                                let cur = builder.ins().load(
+                                    types::I64,
+                                    MemFlagsData::trusted(),
+                                    addr,
+                                    0,
+                                );
                                 builder.ins().iadd(cur, rhs_val)
                             }
                             AssignOp::SubAssign => {
-                                let cur = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                                let cur = builder.ins().load(
+                                    types::I64,
+                                    MemFlagsData::trusted(),
+                                    addr,
+                                    0,
+                                );
                                 builder.ins().isub(cur, rhs_val)
                             }
                             AssignOp::MulAssign => {
-                                let cur = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                                let cur = builder.ins().load(
+                                    types::I64,
+                                    MemFlagsData::trusted(),
+                                    addr,
+                                    0,
+                                );
                                 builder.ins().imul(cur, rhs_val)
                             }
                             AssignOp::DivAssign => {
-                                let cur = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                                let cur = builder.ins().load(
+                                    types::I64,
+                                    MemFlagsData::trusted(),
+                                    addr,
+                                    0,
+                                );
                                 builder.ins().sdiv(cur, rhs_val)
                             }
                             AssignOp::ModAssign => {
-                                let cur = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                                let cur = builder.ins().load(
+                                    types::I64,
+                                    MemFlagsData::trusted(),
+                                    addr,
+                                    0,
+                                );
                                 builder.ins().srem(cur, rhs_val)
                             }
                         };
-                        builder.ins().store(MemFlagsData::trusted(), final_val, addr, 0);
+                        builder
+                            .ins()
+                            .store(MemFlagsData::trusted(), final_val, addr, 0);
                     }
                     _ => {}
                 }
                 Ok((None, false))
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 let header_block = builder.create_block();
                 let body_block = builder.create_block();
                 let exit_block = builder.create_block();
@@ -506,7 +651,9 @@ impl CraneliftCompiler {
                 builder.switch_to_block(header_block);
 
                 let cond_val = self.compile_expr(condition, builder, scope)?;
-                builder.ins().brif(cond_val, body_block, &no_args, exit_block, &no_args);
+                builder
+                    .ins()
+                    .brif(cond_val, body_block, &no_args, exit_block, &no_args);
 
                 builder.seal_block(body_block);
                 builder.switch_to_block(body_block);
@@ -532,7 +679,9 @@ impl CraneliftCompiler {
 
                 Ok((None, false))
             }
-            Statement::For { item, iter, body, .. } => {
+            Statement::For {
+                item, iter, body, ..
+            } => {
                 let (start_val, stop_val, step_val) = match iter {
                     Expr::Call(callee, args, _) if matches!(callee.as_ref(), Expr::Ident(name, _) if name == "range") => {
                         match args.len() {
@@ -578,8 +727,12 @@ impl CraneliftCompiler {
                 builder.switch_to_block(header_block);
 
                 let cur_item = builder.use_var(item_var);
-                let cond = builder.ins().icmp(IntCC::SignedLessThan, cur_item, stop_val);
-                builder.ins().brif(cond, body_block, &no_args, exit_block, &no_args);
+                let cond = builder
+                    .ins()
+                    .icmp(IntCC::SignedLessThan, cur_item, stop_val);
+                builder
+                    .ins()
+                    .brif(cond, body_block, &no_args, exit_block, &no_args);
 
                 builder.seal_block(body_block);
                 builder.switch_to_block(body_block);
@@ -628,9 +781,7 @@ impl CraneliftCompiler {
                     Err("Cannot use 'continue' outside of loop".to_string())
                 }
             }
-            Statement::Pass(_) => {
-                Ok((None, false))
-            }
+            Statement::Pass(_) => Ok((None, false)),
             Statement::Return { value, .. } => {
                 let ret_val = if let Some(expr) = value {
                     self.compile_expr(expr, builder, scope)?
@@ -663,7 +814,7 @@ impl CraneliftCompiler {
                 Literal::Bool(b) => Ok(builder.ins().iconst(types::I64, if *b { 1 } else { 0 })),
                 Literal::String(s) => {
                     let (data_id, _) = self.get_or_create_string(s)?;
-                    let local_data = self.module.declare_data_in_func(data_id, &mut builder.func);
+                    let local_data = self.module.declare_data_in_func(data_id, builder.func);
                     let ptr = builder.ins().symbol_value(types::I64, local_data);
                     Ok(ptr)
                 }
@@ -713,7 +864,10 @@ impl CraneliftCompiler {
                     }
                     BinaryOp::And => builder.ins().band(l, r),
                     BinaryOp::Or => builder.ins().bor(l, r),
-                    BinaryOp::In | BinaryOp::NullCoalesce | BinaryOp::Range | BinaryOp::RangeInclusive => builder.ins().iconst(types::I64, 0),
+                    BinaryOp::In
+                    | BinaryOp::NullCoalesce
+                    | BinaryOp::Range
+                    | BinaryOp::RangeInclusive => builder.ins().iconst(types::I64, 0),
                 };
                 Ok(val)
             }
@@ -736,8 +890,10 @@ impl CraneliftCompiler {
                             if args.is_empty() {
                                 if is_newline {
                                     let zero = builder.ins().iconst(types::I64, 0);
-                                    let fid = *self.func_ids.get("aether_native_println_str").unwrap();
-                                    let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                                    let fid =
+                                        *self.func_ids.get("aether_native_println_str").unwrap();
+                                    let local_fid =
+                                        self.module.declare_func_in_func(fid, builder.func);
                                     builder.ins().call(local_fid, &[zero, zero]);
                                 }
                                 return Ok(builder.ins().iconst(types::I64, 0));
@@ -746,11 +902,16 @@ impl CraneliftCompiler {
                             for (i, arg) in args.iter().enumerate() {
                                 if i > 0 {
                                     let (space_id, space_len) = self.get_or_create_string(" ")?;
-                                    let local_space = self.module.declare_data_in_func(space_id, &mut builder.func);
-                                    let space_ptr = builder.ins().symbol_value(types::I64, local_space);
-                                    let space_len_val = builder.ins().iconst(types::I64, space_len as i64);
-                                    let fid_print = *self.func_ids.get("aether_native_print_str").unwrap();
-                                    let local_print = self.module.declare_func_in_func(fid_print, &mut builder.func);
+                                    let local_space =
+                                        self.module.declare_data_in_func(space_id, builder.func);
+                                    let space_ptr =
+                                        builder.ins().symbol_value(types::I64, local_space);
+                                    let space_len_val =
+                                        builder.ins().iconst(types::I64, space_len as i64);
+                                    let fid_print =
+                                        *self.func_ids.get("aether_native_print_str").unwrap();
+                                    let local_print =
+                                        self.module.declare_func_in_func(fid_print, builder.func);
                                     builder.ins().call(local_print, &[space_ptr, space_len_val]);
                                 }
 
@@ -759,19 +920,30 @@ impl CraneliftCompiler {
 
                                 if let Expr::Literal(Literal::String(s), _) = arg {
                                     let (data_id, len) = self.get_or_create_string(s)?;
-                                    let local_data = self.module.declare_data_in_func(data_id, &mut builder.func);
+                                    let local_data =
+                                        self.module.declare_data_in_func(data_id, builder.func);
                                     let ptr = builder.ins().symbol_value(types::I64, local_data);
                                     let len_val = builder.ins().iconst(types::I64, len as i64);
 
-                                    let target_fn = if should_nl { "aether_native_println_str" } else { "aether_native_print_str" };
+                                    let target_fn = if should_nl {
+                                        "aether_native_println_str"
+                                    } else {
+                                        "aether_native_print_str"
+                                    };
                                     let fid = *self.func_ids.get(target_fn).unwrap();
-                                    let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                                    let local_fid =
+                                        self.module.declare_func_in_func(fid, builder.func);
                                     builder.ins().call(local_fid, &[ptr, len_val]);
                                 } else {
                                     let val = self.compile_expr(arg, builder, scope)?;
-                                    let target_fn = if should_nl { "aether_native_println_i64" } else { "aether_native_print_i64" };
+                                    let target_fn = if should_nl {
+                                        "aether_native_println_i64"
+                                    } else {
+                                        "aether_native_print_i64"
+                                    };
                                     let fid = *self.func_ids.get(target_fn).unwrap();
-                                    let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                                    let local_fid =
+                                        self.module.declare_func_in_func(fid, builder.func);
                                     builder.ins().call(local_fid, &[val]);
                                 }
                             }
@@ -779,7 +951,7 @@ impl CraneliftCompiler {
                         }
                         "clock" | "time_ms" => {
                             let fid = *self.func_ids.get("aether_native_time_ms").unwrap();
-                            let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                            let local_fid = self.module.declare_func_in_func(fid, builder.func);
                             let call_inst = builder.ins().call(local_fid, &[]);
                             let res = builder.inst_results(call_inst)[0];
                             return Ok(res);
@@ -790,8 +962,10 @@ impl CraneliftCompiler {
                             } else {
                                 builder.ins().iconst(types::I64, 0)
                             };
-                            let alloc_fid = *self.func_ids.get("aether_native_alloc_buffer").unwrap();
-                            let local_alloc = self.module.declare_func_in_func(alloc_fid, &mut builder.func);
+                            let alloc_fid =
+                                *self.func_ids.get("aether_native_alloc_buffer").unwrap();
+                            let local_alloc =
+                                self.module.declare_func_in_func(alloc_fid, builder.func);
                             let call_inst = builder.ins().call(local_alloc, &[size_val]);
                             let res = builder.inst_results(call_inst)[0];
                             return Ok(res);
@@ -808,7 +982,8 @@ impl CraneliftCompiler {
                                 builder.ins().iconst(types::I64, 0)
                             };
                             let free_fid = *self.func_ids.get("aether_native_free_buffer").unwrap();
-                            let local_free = self.module.declare_func_in_func(free_fid, &mut builder.func);
+                            let local_free =
+                                self.module.declare_func_in_func(free_fid, builder.func);
                             builder.ins().call(local_free, &[ptr_val, size_val]);
                             return Ok(builder.ins().iconst(types::I64, 0));
                         }
@@ -826,7 +1001,7 @@ impl CraneliftCompiler {
                     if let Expr::Ident(base_name, _) = base.as_ref() {
                         if base_name == "Sys" && method == "time_ms" {
                             let fid = *self.func_ids.get("aether_native_time_ms").unwrap();
-                            let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                            let local_fid = self.module.declare_func_in_func(fid, builder.func);
                             let call_inst = builder.ins().call(local_fid, &[]);
                             let res = builder.inst_results(call_inst)[0];
                             return Ok(res);
@@ -840,7 +1015,7 @@ impl CraneliftCompiler {
                         for a in args {
                             arg_vals.push(self.compile_expr(a, builder, scope)?);
                         }
-                        let local_fid = self.module.declare_func_in_func(fid, &mut builder.func);
+                        let local_fid = self.module.declare_func_in_func(fid, builder.func);
                         let call_inst = builder.ins().call(local_fid, &arg_vals);
                         let res = builder.inst_results(call_inst)[0];
                         return Ok(res);
@@ -849,21 +1024,24 @@ impl CraneliftCompiler {
 
                 Ok(builder.ins().iconst(types::I64, 0))
             }
-            Expr::Pipe(left, right, span) => {
-                match right.as_ref() {
-                    Expr::Call(callee, args, call_span) => {
-                        let mut new_args = vec![*left.clone()];
-                        new_args.extend(args.clone());
-                        let call_expr = Expr::Call(callee.clone(), new_args, *call_span);
-                        self.compile_expr(&call_expr, builder, scope)
-                    }
-                    _ => {
-                        let call_expr = Expr::Call(right.clone(), vec![*left.clone()], *span);
-                        self.compile_expr(&call_expr, builder, scope)
-                    }
+            Expr::Pipe(left, right, span) => match right.as_ref() {
+                Expr::Call(callee, args, call_span) => {
+                    let mut new_args = vec![*left.clone()];
+                    new_args.extend(args.clone());
+                    let call_expr = Expr::Call(callee.clone(), new_args, *call_span);
+                    self.compile_expr(&call_expr, builder, scope)
                 }
-            }
-            Expr::If { condition, then_branch, else_branch, .. } => {
+                _ => {
+                    let call_expr = Expr::Call(right.clone(), vec![*left.clone()], *span);
+                    self.compile_expr(&call_expr, builder, scope)
+                }
+            },
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+                ..
+            } => {
                 let cond_val = self.compile_expr(condition, builder, scope)?;
 
                 let then_block = builder.create_block();
@@ -871,7 +1049,9 @@ impl CraneliftCompiler {
                 let merge_block = builder.create_block();
                 builder.append_block_param(merge_block, types::I64);
 
-                builder.ins().brif(cond_val, then_block, &no_args, else_block, &no_args);
+                builder
+                    .ins()
+                    .brif(cond_val, then_block, &no_args, else_block, &no_args);
 
                 // Then
                 builder.switch_to_block(then_block);
@@ -954,12 +1134,20 @@ impl CraneliftCompiler {
                             let next_arm_block = builder.create_block();
                             let lit_val = match lit {
                                 Literal::Int(i) => builder.ins().iconst(types::I64, *i),
-                                Literal::Bool(b) => builder.ins().iconst(types::I64, if *b { 1 } else { 0 }),
+                                Literal::Bool(b) => {
+                                    builder.ins().iconst(types::I64, if *b { 1 } else { 0 })
+                                }
                                 _ => builder.ins().iconst(types::I64, 0),
                             };
                             let cmp = builder.ins().icmp(IntCC::Equal, target_val, lit_val);
                             let arm_body_block = builder.create_block();
-                            builder.ins().brif(cmp, arm_body_block, &no_args, next_arm_block, &no_args);
+                            builder.ins().brif(
+                                cmp,
+                                arm_body_block,
+                                &no_args,
+                                next_arm_block,
+                                &no_args,
+                            );
 
                             builder.switch_to_block(arm_body_block);
                             builder.seal_block(arm_body_block);
@@ -970,17 +1158,36 @@ impl CraneliftCompiler {
                         }
                         MatchPattern::Range(start, end) => {
                             let next_arm_block = builder.create_block();
-                            let s_int = match start { Literal::Int(i) => *i, _ => 0 };
-                            let e_int = match end { Literal::Int(i) => *i, _ => 0 };
+                            let s_int = match start {
+                                Literal::Int(i) => *i,
+                                _ => 0,
+                            };
+                            let e_int = match end {
+                                Literal::Int(i) => *i,
+                                _ => 0,
+                            };
                             let s_val = builder.ins().iconst(types::I64, s_int);
                             let e_val = builder.ins().iconst(types::I64, e_int);
 
-                            let cmp_ge = builder.ins().icmp(IntCC::SignedGreaterThanOrEqual, target_val, s_val);
-                            let cmp_le = builder.ins().icmp(IntCC::SignedLessThanOrEqual, target_val, e_val);
+                            let cmp_ge = builder.ins().icmp(
+                                IntCC::SignedGreaterThanOrEqual,
+                                target_val,
+                                s_val,
+                            );
+                            let cmp_le =
+                                builder
+                                    .ins()
+                                    .icmp(IntCC::SignedLessThanOrEqual, target_val, e_val);
                             let in_range = builder.ins().band(cmp_ge, cmp_le);
 
                             let arm_body_block = builder.create_block();
-                            builder.ins().brif(in_range, arm_body_block, &no_args, next_arm_block, &no_args);
+                            builder.ins().brif(
+                                in_range,
+                                arm_body_block,
+                                &no_args,
+                                next_arm_block,
+                                &no_args,
+                            );
 
                             builder.switch_to_block(arm_body_block);
                             builder.seal_block(arm_body_block);
@@ -1020,8 +1227,12 @@ impl CraneliftCompiler {
                         }
                     }
                     let (v, ret) = self.compile_stmt(s, builder, scope)?;
-                    if let Some(val) = v { last_val = Some(val); }
-                    if ret { break; }
+                    if let Some(val) = v {
+                        last_val = Some(val);
+                    }
+                    if ret {
+                        break;
+                    }
                 }
                 if let Some(res) = &block.result {
                     last_val = Some(self.compile_expr(res, builder, scope)?);
@@ -1034,14 +1245,16 @@ impl CraneliftCompiler {
                 let eight = builder.ins().iconst(types::I64, 8);
                 let offset = builder.ins().imul(idx_val, eight);
                 let addr = builder.ins().iadd(obj_ptr, offset);
-                let val = builder.ins().load(types::I64, MemFlagsData::trusted(), addr, 0);
+                let val = builder
+                    .ins()
+                    .load(types::I64, MemFlagsData::trusted(), addr, 0);
                 Ok(val)
             }
             Expr::Array(elements, _) => {
                 let count = elements.len() as i64;
                 let size_val = builder.ins().iconst(types::I64, count);
                 let alloc_fid = *self.func_ids.get("aether_native_alloc_buffer").unwrap();
-                let local_alloc = self.module.declare_func_in_func(alloc_fid, &mut builder.func);
+                let local_alloc = self.module.declare_func_in_func(alloc_fid, builder.func);
                 let call_inst = builder.ins().call(local_alloc, &[size_val]);
                 let buf_ptr = builder.inst_results(call_inst)[0];
 
@@ -1049,7 +1262,9 @@ impl CraneliftCompiler {
                     let elem_val = self.compile_expr(elem, builder, scope)?;
                     let offset = builder.ins().iconst(types::I64, (i * 8) as i64);
                     let addr = builder.ins().iadd(buf_ptr, offset);
-                    builder.ins().store(MemFlagsData::trusted(), elem_val, addr, 0);
+                    builder
+                        .ins()
+                        .store(MemFlagsData::trusted(), elem_val, addr, 0);
                 }
                 Ok(buf_ptr)
             }

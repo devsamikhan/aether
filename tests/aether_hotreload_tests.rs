@@ -20,7 +20,9 @@ def calculate(x):
     return x + 10
 "#;
     let program1 = aether::syntax::parse(v1_source).unwrap();
-    let fn1 = BytecodeCompiler::new("<main>", 0).compile(&program1).unwrap();
+    let fn1 = BytecodeCompiler::new("<main>", 0)
+        .compile(&program1)
+        .unwrap();
     vm.interpret(fn1).unwrap();
 
     // Verify initial calculation: 5 + 10 = 15
@@ -67,7 +69,9 @@ def secret_sauce():
     return 42
 "#;
     let program = aether::syntax::parse(working_source).unwrap();
-    let compiled = BytecodeCompiler::new("<main>", 0).compile(&program).unwrap();
+    let compiled = BytecodeCompiler::new("<main>", 0)
+        .compile(&program)
+        .unwrap();
     vm.interpret(compiled).unwrap();
 
     // Verify working state
@@ -115,7 +119,9 @@ class PaymentGateway:
         return 0.50
 "#;
     let report = hot_reload(&mut vm, v2, None).expect("Hot reload failed");
-    assert!(report.classes_updated.contains(&"PaymentGateway".to_string()));
+    assert!(report
+        .classes_updated
+        .contains(&"PaymentGateway".to_string()));
 
     // Verify original class Arc was patched in-place
     let current_class_arc = match vm.globals.get("PaymentGateway").unwrap() {

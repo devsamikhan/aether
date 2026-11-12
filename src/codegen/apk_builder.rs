@@ -4,9 +4,9 @@
 //! applications into standalone, installable Android APKs (.apk) and complete
 //! Android Studio / Gradle project scaffolds.
 
+use crate::syntax::parse;
 use std::fs;
 use std::path::Path;
-use crate::syntax::parse;
 
 // =========================================================================
 // 1. Standalone Cryptographic & Hashing Utilities (Pure Rust, Zero Deps)
@@ -72,7 +72,7 @@ pub fn calculate_sha1(data: &[u8]) -> [u8; 20] {
         let mut d = h3;
         let mut e = h4;
 
-        for i in 0..80 {
+        for (i, &w_i) in w.iter().enumerate() {
             let (f, k) = match i {
                 0..=19 => ((b & c) | ((!b) & d), 0x5A827999),
                 20..=39 => (b ^ c ^ d, 0x6ED9EBA1),
@@ -85,7 +85,7 @@ pub fn calculate_sha1(data: &[u8]) -> [u8; 20] {
                 .wrapping_add(f)
                 .wrapping_add(e)
                 .wrapping_add(k)
-                .wrapping_add(w[i]);
+                .wrapping_add(w_i);
             e = d;
             d = c;
             c = b.rotate_left(30);
@@ -169,7 +169,10 @@ impl ZipWriter {
     /// Adds a file entry to the ZIP archive (Stored / Uncompressed format)
     pub fn add_file(&mut self, name: &str, content: &[u8]) {
         if self.entries.iter().any(|e| e.name == name) {
-            eprintln!("[ZipWriter] Warning: duplicate file entry '{}' skipped", name);
+            eprintln!(
+                "[ZipWriter] Warning: duplicate file entry '{}' skipped",
+                name
+            );
             return;
         }
 
@@ -260,8 +263,10 @@ impl ZipWriter {
             self.buffer.extend_from_slice(&0x6000u16.to_le_bytes()); // Mod time
             self.buffer.extend_from_slice(&0x5D44u16.to_le_bytes()); // Mod date
             self.buffer.extend_from_slice(&entry.crc32.to_le_bytes()); // CRC-32
-            self.buffer.extend_from_slice(&entry.compressed_size.to_le_bytes());
-            self.buffer.extend_from_slice(&entry.uncompressed_size.to_le_bytes());
+            self.buffer
+                .extend_from_slice(&entry.compressed_size.to_le_bytes());
+            self.buffer
+                .extend_from_slice(&entry.uncompressed_size.to_le_bytes());
             self.buffer.extend_from_slice(&name_len.to_le_bytes());
             self.buffer.extend_from_slice(&0u16.to_le_bytes()); // Extra field len
             self.buffer.extend_from_slice(&0u16.to_le_bytes()); // Comment len
@@ -341,7 +346,7 @@ impl ApkConfig {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("AetherApp");
-        
+
         let mut clean_name = String::new();
         for part in stem.split('_') {
             if !part.is_empty() {
@@ -445,7 +450,8 @@ pub fn generate_binary_manifest(config: &ApkConfig) -> Vec<u8> {
     }
 
     let string_pool_header_size = 28u32;
-    let string_pool_size = string_pool_header_size + (str_offsets.len() as u32 * 4) + (str_data.len() as u32);
+    let string_pool_size =
+        string_pool_header_size + (str_offsets.len() as u32 * 4) + (str_data.len() as u32);
 
     let mut pool_chunk = Vec::new();
     pool_chunk.extend_from_slice(&0x0001u16.to_le_bytes()); // RES_STRING_POOL_TYPE
@@ -539,7 +545,7 @@ pub fn generate_binary_manifest(config: &ApkConfig) -> Vec<u8> {
 /// Generates human-readable XML manifest for inspection and Gradle export
 pub fn generate_text_manifest(config: &ApkConfig) -> String {
     format!(
-r#"<?xml version="1.0" encoding="utf-8"?>
+        r#"<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{package_name}"
     android:versionCode="{version_code}"
@@ -743,7 +749,7 @@ pub fn generate_launcher_icon() -> Vec<u8> {
     zlib_stream.extend_from_slice(&[0x78, 0x01]); // ZLIB header (deflate, default compression)
 
     for chunk in raw_pixels.chunks(65535) {
-        let is_last = (chunk.len() as usize) == raw_pixels.len();
+        let is_last = chunk.len() == raw_pixels.len();
         zlib_stream.push(if is_last { 0x01 } else { 0x00 });
         let len = chunk.len() as u16;
         let nlen = !len;
@@ -892,17 +898,23 @@ fn generate_self_signed_cert_rsa(sf_bytes: &[u8]) -> Vec<u8> {
 
     // PKCS#7 ContentInfo Header (OID: signedData 1.2.840.113549.1.7.2)
     rsa.extend_from_slice(&[0x30, 0x82, 0x01, 0x40]); // SEQUENCE
-    rsa.extend_from_slice(&[0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02]); // OID: signedData
+    rsa.extend_from_slice(&[
+        0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02,
+    ]); // OID: signedData
     rsa.extend_from_slice(&[0xA0, 0x82, 0x01, 0x2F]); // [0] EXPLICIT
     rsa.extend_from_slice(&[0x30, 0x82, 0x01, 0x2B]); // SEQUENCE SignedData
     rsa.extend_from_slice(&[0x02, 0x01, 0x01]); // Version 1
 
     // DigestAlgorithms (SHA-1)
     rsa.extend_from_slice(&[0x31, 0x0B]); // SET
-    rsa.extend_from_slice(&[0x30, 0x09, 0x06, 0x05, 0x2B, 0x0E, 0x03, 0x02, 0x1A, 0x05, 0x00]); // OID: SHA-1
+    rsa.extend_from_slice(&[
+        0x30, 0x09, 0x06, 0x05, 0x2B, 0x0E, 0x03, 0x02, 0x1A, 0x05, 0x00,
+    ]); // OID: SHA-1
 
     // ContentInfo: data
-    rsa.extend_from_slice(&[0x30, 0x0B, 0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x01]);
+    rsa.extend_from_slice(&[
+        0x30, 0x0B, 0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x01,
+    ]);
 
     // Certificates [0]
     rsa.extend_from_slice(&[0xA0, 0x81, 0x88]);
@@ -914,12 +926,14 @@ fn generate_self_signed_cert_rsa(sf_bytes: &[u8]) -> Vec<u8> {
     rsa.extend_from_slice(&[0x31, 0x6E]); // SET of SignerInfo
     rsa.extend_from_slice(&[0x30, 0x6C]);
     rsa.extend_from_slice(&[0x02, 0x01, 0x01]); // Version 1
-    // IssuerAndSerialNumber
+                                                // IssuerAndSerialNumber
     rsa.extend_from_slice(&[0x30, 0x1A]);
     rsa.extend_from_slice(b"CN=AETHER Developer,O=AETHER");
     rsa.extend_from_slice(&[0x02, 0x01, 0x01]); // Serial 1
-    // DigestAlgorithm SHA-1
-    rsa.extend_from_slice(&[0x30, 0x09, 0x06, 0x05, 0x2B, 0x0E, 0x03, 0x02, 0x1A, 0x05, 0x00]);
+                                                // DigestAlgorithm SHA-1
+    rsa.extend_from_slice(&[
+        0x30, 0x09, 0x06, 0x05, 0x2B, 0x0E, 0x03, 0x02, 0x1A, 0x05, 0x00,
+    ]);
     // EncryptedDigest
     rsa.extend_from_slice(&[0x04, 0x14]); // OCTET STRING 20 bytes
     rsa.extend_from_slice(&sf_sha1);
@@ -942,8 +956,13 @@ impl ApkBuilder {
 
     /// Compiles an AETHER script and packages it into an installable Android APK
     pub fn build_apk(&self, source_path: &Path, output_path: &Path) -> Result<(), String> {
-        let source_content = fs::read_to_string(source_path)
-            .map_err(|e| format!("Failed to read source file '{}': {}", source_path.display(), e))?;
+        let source_content = fs::read_to_string(source_path).map_err(|e| {
+            format!(
+                "Failed to read source file '{}': {}",
+                source_path.display(),
+                e
+            )
+        })?;
 
         // 1. Verify syntax
         let program = parse(&source_content)
@@ -958,7 +977,8 @@ impl ApkBuilder {
 
         // 2. Compile to Bytecode
         let compiler = crate::vm::compiler::BytecodeCompiler::new("main", 0);
-        let compiled_func = compiler.compile(&program)
+        let compiled_func = compiler
+            .compile(&program)
             .map_err(|e| format!("Bytecode Compilation Error: {}", e))?;
         let bytecode_bytes = compiled_func.chunk.code;
 
@@ -1036,26 +1056,51 @@ impl ApkBuilder {
         fs::write(output_path, &apk_bytes)
             .map_err(|e| format!("Failed to write APK to '{}': {}", output_path.display(), e))?;
 
-        println!("✨ Android APK successfully generated: {}", output_path.display());
+        println!(
+            "✨ Android APK successfully generated: {}",
+            output_path.display()
+        );
         println!("   📦 Package:      {}", self.config.package_name);
         println!("   🏷️  App Name:     {}", self.config.app_name);
-        println!("   📱 Target SDK:   Android 14 (API {}) | Min: API {}", self.config.target_sdk, self.config.min_sdk);
-        println!("   ⚖️  Size:         {:.2} KB", apk_bytes.len() as f64 / 1024.0);
+        println!(
+            "   📱 Target SDK:   Android 14 (API {}) | Min: API {}",
+            self.config.target_sdk, self.config.min_sdk
+        );
+        println!(
+            "   ⚖️  Size:         {:.2} KB",
+            apk_bytes.len() as f64 / 1024.0
+        );
         println!("   🔑 Signature:    V1 Signed (Self-signed debug keystore)");
-        println!("   🚀 To Install:   adb install -r {}", output_path.display());
+        println!(
+            "   🚀 To Install:   adb install -r {}",
+            output_path.display()
+        );
 
         Ok(())
     }
 
     /// Scaffolds a full modern Gradle / Android Studio project
-    pub fn export_android_project(&self, source_path: &Path, output_dir: &Path) -> Result<(), String> {
-        let source_content = fs::read_to_string(source_path)
-            .map_err(|e| format!("Failed to read source file '{}': {}", source_path.display(), e))?;
+    pub fn export_android_project(
+        &self,
+        source_path: &Path,
+        output_dir: &Path,
+    ) -> Result<(), String> {
+        let source_content = fs::read_to_string(source_path).map_err(|e| {
+            format!(
+                "Failed to read source file '{}': {}",
+                source_path.display(),
+                e
+            )
+        })?;
 
         fs::create_dir_all(output_dir).map_err(|e| e.to_string())?;
         let app_dir = output_dir.join("app");
         let src_dir = app_dir.join("src").join("main");
-        let java_dir = src_dir.join("java").join("com").join("aether").join("runtime");
+        let java_dir = src_dir
+            .join("java")
+            .join("com")
+            .join("aether")
+            .join("runtime");
         let res_dir = src_dir.join("res").join("values");
         let assets_dir = src_dir.join("assets");
 
@@ -1093,7 +1138,8 @@ include(":app")
 "#,
             self.config.app_name
         );
-        fs::write(output_dir.join("settings.gradle.kts"), settings_gradle).map_err(|e| e.to_string())?;
+        fs::write(output_dir.join("settings.gradle.kts"), settings_gradle)
+            .map_err(|e| e.to_string())?;
 
         // 3. app/build.gradle.kts
         let app_gradle = format!(
@@ -1214,7 +1260,10 @@ class MainActivity : AppCompatActivity() {{
 "#;
         fs::write(res_dir.join("colors.xml"), colors_xml).map_err(|e| e.to_string())?;
 
-        println!("✨ Android Studio / Gradle Project Scaffolding Generated: {}", output_dir.display());
+        println!(
+            "✨ Android Studio / Gradle Project Scaffolding Generated: {}",
+            output_dir.display()
+        );
         println!("   🎨 Google Material 3 Theme & Colors: Theme.Material3.DayNight.NoActionBar");
         println!("   Open this folder directly in Android Studio or compile with './gradlew assembleDebug'");
 

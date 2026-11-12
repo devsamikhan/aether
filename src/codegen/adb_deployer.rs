@@ -88,7 +88,10 @@ impl AdbDeployer {
         if let Some(id) = preferred_id {
             devices
                 .into_iter()
-                .find(|d| d.id.eq_ignore_ascii_case(id) || d.model.to_lowercase().contains(&id.to_lowercase()))
+                .find(|d| {
+                    d.id.eq_ignore_ascii_case(id)
+                        || d.model.to_lowercase().contains(&id.to_lowercase())
+                })
                 .ok_or_else(|| format!("Specified device '{}' not found in connected devices.", id))
         } else if devices.len() == 1 {
             Ok(devices[0].clone())
@@ -115,22 +118,39 @@ impl AdbDeployer {
         setup_live_reload_port: Option<u16>,
     ) -> Result<DeployReport, String> {
         if !apk_path.exists() {
-            return Err(format!("Target APK file '{}' does not exist.", apk_path.display()));
+            return Err(format!(
+                "Target APK file '{}' does not exist.",
+                apk_path.display()
+            ));
         }
 
         let device = Self::select_device(device_id)?;
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("📱 AETHER 1-CLICK MOBILE DEPLOYER");
-        println!("Target Device: {} ({}) [{}]", device.model, device.product, device.id);
-        println!("Target APK:    {} ({} KB)", apk_path.display(), apk_path.metadata().map(|m| m.len() / 1024).unwrap_or(0));
-        println!("================================================================================");
+        println!(
+            "Target Device: {} ({}) [{}]",
+            device.model, device.product, device.id
+        );
+        println!(
+            "Target APK:    {} ({} KB)",
+            apk_path.display(),
+            apk_path.metadata().map(|m| m.len() / 1024).unwrap_or(0)
+        );
+        println!(
+            "================================================================================"
+        );
 
         // 1. Setup reverse port forwarding for Live Hot-Reload if requested
         let mut reverse_ok = false;
         if let Some(port) = setup_live_reload_port {
             let port_str = format!("tcp:{}", port);
-            print!("  [1/3] Reverse port-forwarding {} -> mobile localhost... ", port);
+            print!(
+                "  [1/3] Reverse port-forwarding {} -> mobile localhost... ",
+                port
+            );
             let rev_res = Command::new("adb")
                 .args(["-s", &device.id, "reverse", &port_str, &port_str])
                 .output();
@@ -145,16 +165,28 @@ impl AdbDeployer {
         // 2. Install APK with replace (-r) and downgrade permissions (-d)
         print!("  [2/3] Installing APK onto {}... ", device.model);
         let install_res = Command::new("adb")
-            .args(["-s", &device.id, "install", "-r", "-d", &apk_path.to_string_lossy()])
+            .args([
+                "-s",
+                &device.id,
+                "install",
+                "-r",
+                "-d",
+                &apk_path.to_string_lossy(),
+            ])
             .output()
             .map_err(|e| format!("Failed to invoke 'adb install': {}", e))?;
 
         let install_out = String::from_utf8_lossy(&install_res.stdout);
         let install_err = String::from_utf8_lossy(&install_res.stderr);
 
-        if !install_res.status.success() || (!install_out.contains("Success") && !install_err.contains("Success")) {
+        if !install_res.status.success()
+            || (!install_out.contains("Success") && !install_err.contains("Success"))
+        {
             println!("FAILED ❌");
-            return Err(format!("ADB installation failed:\n{}{}", install_out, install_err));
+            return Err(format!(
+                "ADB installation failed:\n{}{}",
+                install_out, install_err
+            ));
         }
         println!("SUCCESS ✅");
 
@@ -176,9 +208,13 @@ impl AdbDeployer {
             }
         }
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("✨ App is now LIVE on your {}!", device.model);
-        println!("================================================================================\n");
+        println!(
+            "================================================================================\n"
+        );
 
         Ok(DeployReport {
             device,

@@ -84,7 +84,8 @@ fn test_aetherdb_file_persistence_and_wal_recovery() {
     let _ = std::fs::remove_file(&db_path);
     let _ = std::fs::remove_file(format!("{}.wal", db_str));
 
-    let script1 = format!(r#"
+    let script1 = format!(
+        r#"
 h = db.open("{db_str}")
 db.insert(h, "items", {{"title": "Note 1", "score": 90}})
 db.insert(h, "items", {{"title": "Note 2", "score": 80}})
@@ -92,19 +93,24 @@ db.insert(h, "items", {{"title": "Note 2", "score": 80}})
 db.update(h, "items", {{"title": "Note 1"}}, {{"score": 95}})
 # Close compacts database snapshot
 db.close(h)
-"#, db_str = db_str);
+"#,
+        db_str = db_str
+    );
 
     let _ = run_source(&script1).expect("Script 1 failed");
 
     // Reopen database from disk and verify persisted + replayed state
-    let script2 = format!(r#"
+    let script2 = format!(
+        r#"
 h2 = db.open("{db_str}")
 docs = db.find(h2, "items")
 count = db.count(h2, "items")
 note1 = db.find_one(h2, "items", {{"title": "Note 1"}})
 db.close(h2)
 [count, note1["score"]]
-"#, db_str = db_str);
+"#,
+        db_str = db_str
+    );
 
     let res = run_source(&script2).expect("Script 2 failed");
     if let Value::Array(arr) = res {

@@ -15,7 +15,8 @@ fn test_dataframe_native_columnar_memory_and_types() {
     assert_eq!(col_int.min(), Value::Int(10));
     assert_eq!(col_int.max(), Value::Int(30));
 
-    let col_float = TypedColumn::from_values(&[Value::Float(1.5), Value::Float(2.5), Value::Float(6.0)]);
+    let col_float =
+        TypedColumn::from_values(&[Value::Float(1.5), Value::Float(2.5), Value::Float(6.0)]);
     assert_eq!(col_float.type_name(), "float64");
     assert_eq!(col_float.sum(), Value::Float(10.0));
 
@@ -27,8 +28,18 @@ fn test_dataframe_native_columnar_memory_and_types() {
 #[test]
 fn test_dataframe_sorting_and_filtering() {
     let mut map = HashMap::new();
-    map.insert("name".to_string(), Value::array(vec![Value::string("Alice"), Value::string("Bob"), Value::string("Charlie")]));
-    map.insert("score".to_string(), Value::array(vec![Value::Int(88), Value::Int(95), Value::Int(72)]));
+    map.insert(
+        "name".to_string(),
+        Value::array(vec![
+            Value::string("Alice"),
+            Value::string("Bob"),
+            Value::string("Charlie"),
+        ]),
+    );
+    map.insert(
+        "score".to_string(),
+        Value::array(vec![Value::Int(88), Value::Int(95), Value::Int(72)]),
+    );
 
     let df = NativeDataFrame::from_map(map);
     assert_eq!(df.row_count, 3);
@@ -79,14 +90,30 @@ fn test_dataframe_group_by_and_aggregations() {
 fn test_dataframe_relational_joins() {
     // Left: Users
     let mut left_map = HashMap::new();
-    left_map.insert("id".to_string(), Value::array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]));
-    left_map.insert("name".to_string(), Value::array(vec![Value::string("Alice"), Value::string("Bob"), Value::string("Carol")]));
+    left_map.insert(
+        "id".to_string(),
+        Value::array(vec![Value::Int(1), Value::Int(2), Value::Int(3)]),
+    );
+    left_map.insert(
+        "name".to_string(),
+        Value::array(vec![
+            Value::string("Alice"),
+            Value::string("Bob"),
+            Value::string("Carol"),
+        ]),
+    );
     let left_df = NativeDataFrame::from_map(left_map);
 
     // Right: Transactions
     let mut right_map = HashMap::new();
-    right_map.insert("id".to_string(), Value::array(vec![Value::Int(1), Value::Int(2)]));
-    right_map.insert("amount".to_string(), Value::array(vec![Value::Float(500.0), Value::Float(750.0)]));
+    right_map.insert(
+        "id".to_string(),
+        Value::array(vec![Value::Int(1), Value::Int(2)]),
+    );
+    right_map.insert(
+        "amount".to_string(),
+        Value::array(vec![Value::Float(500.0), Value::Float(750.0)]),
+    );
     let right_df = NativeDataFrame::from_map(right_map);
 
     let joined = left_df.join(&right_df, "id", "inner").expect("Join failed");
@@ -96,7 +123,8 @@ fn test_dataframe_relational_joins() {
 
 #[test]
 fn test_dataframe_csv_roundtrip_parsing() {
-    let csv_data = "id,name,active,rate\n1,Alpha,true,99.5\n2,Beta,false,84.0\n3,Gamma,true,105.25\n";
+    let csv_data =
+        "id,name,active,rate\n1,Alpha,true,99.5\n2,Beta,false,84.0\n3,Gamma,true,105.25\n";
     let df = NativeDataFrame::from_csv(csv_data).expect("Failed to parse CSV");
     assert_eq!(df.row_count, 3);
     assert_eq!(df.column_names.len(), 4);

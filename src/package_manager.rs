@@ -67,7 +67,9 @@ impl AetherManifest {
                         _ => {}
                     },
                     "dependencies" => {
-                        manifest.dependencies.insert(key.to_string(), val.to_string());
+                        manifest
+                            .dependencies
+                            .insert(key.to_string(), val.to_string());
                     }
                     _ => {}
                 }
@@ -86,7 +88,8 @@ impl AetherManifest {
             out.push_str(&format!("description = \"{}\"\n", self.description));
         }
         if !self.authors.is_empty() {
-            let authors_formatted: Vec<String> = self.authors.iter().map(|a| format!("\"{}\"", a)).collect();
+            let authors_formatted: Vec<String> =
+                self.authors.iter().map(|a| format!("\"{}\"", a)).collect();
             out.push_str(&format!("authors = [{}]\n", authors_formatted.join(", ")));
         }
         out.push('\n');
@@ -206,9 +209,20 @@ impl AetherPackageManager {
         let manifest = AetherManifest::load_from_file(self.manifest_path())
             .map_err(|e| format!("Failed to read aether.toml: {}", e))?;
 
+        let locked_hashes = self.read_lock_hashes();
         let mut installed = Vec::new();
         for (name, ver) in &manifest.dependencies {
             let dep = self.resolve_package(name, ver, None)?;
+            if let Some(expected_hash) = locked_hashes.get(name) {
+                if let Some(actual_hash) = &dep.checksum {
+                    if expected_hash != "none" && actual_hash != expected_hash {
+                        return Err(format!(
+                            "Lockfile SHA-256 mismatch for '{}' ({}): expected {}, got {}",
+                            name, ver, expected_hash, actual_hash
+                        ));
+                    }
+                }
+            }
             self.update_lockfile(&dep)?;
             installed.push(dep);
         }
@@ -221,7 +235,20 @@ impl AetherPackageManager {
         self.add(pkg_spec)
     }
 
-    /// Resolves, vendors or caches a package
+    fn read_lock_hashes(&self) -> BTreeMap<String, String> {
+        let mut map = BTreeMap::new();
+        if let Ok(content) = fs::read_to_string(self.lock_path()) {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    map.insert(parts[0].to_string(), parts[3].to_string());
+                }
+            }
+        }
+        map
+    }
+
+    /// Resolves, fetches (HTTP/HTTPS, Git, local path, or stdlib), caches, and vendors a package
     fn resolve_package(
         &self,
         name: &str,
@@ -229,25 +256,61 @@ impl AetherPackageManager {
         source: Option<&str>,
     ) -> Result<PackageDependency, String> {
         let pkg_dir = self.packages_cache_dir().join(name).join(version);
-        fs::create_dir_all(&pkg_dir)
-            .map_err(|e| format!("Failed to create package cache directory '{:?}': {}", pkg_dir, e))?;
+        fs::create_dir_all(&pkg_dir).map_err(|e| {
+            format!(
+                "Failed to create package cache directory '{:?}': {}",
+                pkg_dir, e
+            )
+        })?;
 
-        // If package not populated, create standard package entrypoint
         let entrypoint = pkg_dir.join("lib.ae");
-        if !entrypoint.exists() {
-            let stub_code = format!(
-                "# AETHER Package: {} (v{})\n\
-                # Auto-resolved via AetherPM Decentralized Registry\n\
-                \n\
-                class {}:\n\
-                    def __init__(self):\n\
-                        self.version = \"{}\"\n\
-                        self.name = \"{}\"\n\
-                ",
-                name, version, sanitize_identifier(name), version, name
-            );
-            fs::write(&entrypoint, stub_code)
-                .map_err(|e| format!("Failed to write package stub: {}", e))?;
+        let mut resolved_source = source.map(|s| s.to_string());
+
+        if let Some(src) = source {
+            if src.starts_with("http://") || src.starts_with("https://") {
+                if src.ends_with(".git") {
+                    clone_git_package(src, &pkg_dir)?;
+                } else {
+                    let resp = crate::vm::net::http_fetch_raw("GET", src, "", None)?;
+                    if !(200..300).contains(&resp.status) {
+                        return Err(format!(
+                            "Failed to download package '{}' from '{}' (HTTP {})",
+                            name, src, resp.status
+                        ));
+                    }
+                    fs::write(&entrypoint, &resp.body)
+                        .map_err(|e| format!("Failed to cache downloaded package: {}", e))?;
+                }
+            } else if let Some(local_path) = resolve_local_source(src) {
+                copy_local_package(&local_path, &pkg_dir)?;
+            } else if let Some(git_url) = normalize_git_source(src) {
+                clone_git_package(&git_url, &pkg_dir)?;
+                resolved_source = Some(git_url);
+            } else {
+                return Err(format!(
+                    "Unresolvable package source '{}' for '{}'",
+                    src, name
+                ));
+            }
+        } else if !entrypoint.exists() {
+            if let Some(stdlib_file) = find_stdlib_module(name) {
+                fs::copy(&stdlib_file, &entrypoint)
+                    .map_err(|e| format!("Failed to copy stdlib module '{}': {}", name, e))?;
+                resolved_source = Some("stdlib".to_string());
+            } else {
+                let stub_code = format!(
+                    "# AETHER Package: {} (v{})\n\
+                    # Local offline scaffold generated by AetherPM (pass a Git URL, HTTP URL, or local path for remote sources)\n\
+                    \n\
+                    class {}:\n\
+                        def __init__(self):\n\
+                            self.version = \"{}\"\n\
+                            self.name = \"{}\"\n",
+                    name, version, sanitize_identifier(name), version, name
+                );
+                fs::write(&entrypoint, stub_code)
+                    .map_err(|e| format!("Failed to write package stub: {}", e))?;
+            }
         }
 
         // Calculate cryptographic SHA256 checksum
@@ -256,8 +319,9 @@ impl AetherPackageManager {
         // Vendor into project's aether_modules directory
         let modules_dir = self.base_dir.join("aether_modules").join(name);
         if let Err(e) = fs::create_dir_all(&modules_dir) {
-            eprintln!("[AetherPM ⚠️] Warning: Could not create aether_modules: {}", e);
+            eprintln!("[AetherPM WARN] Could not create aether_modules: {}", e);
         } else {
+            copy_dir_ae_files(&pkg_dir, &modules_dir);
             let target_entry = modules_dir.join("lib.ae");
             if let Ok(content) = fs::read(&entrypoint) {
                 let _ = fs::write(target_entry, content);
@@ -267,7 +331,7 @@ impl AetherPackageManager {
         Ok(PackageDependency {
             name: name.to_string(),
             version: version.to_string(),
-            source: source.map(|s| s.to_string()),
+            source: resolved_source,
             checksum: Some(checksum),
         })
     }
@@ -322,34 +386,55 @@ impl AetherPackageManager {
         fs::create_dir_all(&dist_dir)
             .map_err(|e| format!("Failed to create dist directory: {}", e))?;
 
-        let package_archive = dist_dir.join(format!("{}-{}.aepkg", manifest.name, manifest.version));
+        let package_archive =
+            dist_dir.join(format!("{}-{}.aepkg", manifest.name, manifest.version));
         let src_dir = self.base_dir.join("src");
 
-        let mut manifest_summary = format!(
-            "AETHER Package Archive: {}@{}\nChecksum verification ready.",
-            manifest.name, manifest.version
-        );
-
+        let mut source_entries = serde_json::Map::new();
         if src_dir.exists() {
-            manifest_summary.push_str("\nIncluded sources in package payload.");
+            collect_ae_bundle_sources(&src_dir, &src_dir, &mut source_entries);
         }
+        let manifest_raw = fs::read_to_string(self.manifest_path()).unwrap_or_default();
+        let archive_json = serde_json::json!({
+            "format": "aepkg-v1",
+            "name": manifest.name,
+            "version": manifest.version,
+            "description": manifest.description,
+            "manifest": manifest_raw,
+            "files": source_entries,
+        });
+        let serialized = serde_json::to_string_pretty(&archive_json)
+            .map_err(|e| format!("Failed to serialize package archive: {}", e))?;
 
-        fs::write(&package_archive, &manifest_summary)
+        fs::write(&package_archive, serialized)
             .map_err(|e| format!("Failed to generate package archive: {}", e))?;
 
         let checksum = compute_file_sha256(&package_archive)?;
 
         // Register in global registry cache: ~/.aether/packages/<name>/<version>/
-        let global_cache = self.packages_cache_dir().join(&manifest.name).join(&manifest.version);
-        if let Ok(_) = fs::create_dir_all(&global_cache) {
-            let _ = fs::copy(&package_archive, global_cache.join(format!("{}-{}.aepkg", manifest.name, manifest.version)));
+        let global_cache = self
+            .packages_cache_dir()
+            .join(&manifest.name)
+            .join(&manifest.version);
+        if fs::create_dir_all(&global_cache).is_ok() {
+            let _ = fs::copy(
+                &package_archive,
+                global_cache.join(format!("{}-{}.aepkg", manifest.name, manifest.version)),
+            );
+            if src_dir.exists() {
+                copy_dir_ae_files(&src_dir, &global_cache);
+            }
             let entrypoint = global_cache.join("lib.ae");
             if !entrypoint.exists() {
                 let main_ae = src_dir.join("main.ae");
                 if main_ae.exists() {
                     let _ = fs::copy(main_ae, &entrypoint);
                 } else {
-                    let stub = format!("# Package: {}\nclass {}:\n    pass\n", manifest.name, sanitize_identifier(&manifest.name));
+                    let stub = format!(
+                        "# Package: {}\nclass {}:\n    pass\n",
+                        manifest.name,
+                        sanitize_identifier(&manifest.name)
+                    );
                     let _ = fs::write(&entrypoint, stub);
                 }
             }
@@ -475,24 +560,202 @@ pub fn sha256_digest(data: &[u8]) -> String {
 }
 
 fn parse_package_spec(spec: &str) -> (String, String, Option<String>) {
-    let parts: Vec<&str> = spec.split('@').collect();
-    let raw_name = parts[0];
-    let version = if parts.len() > 1 {
-        parts[1].to_string()
+    let trimmed = spec.trim();
+    let (raw_source, version) = if let Some((left, right)) = trimmed.rsplit_once('@') {
+        if !right.is_empty() && !right.contains('/') && !right.contains('\\') {
+            (left, right.to_string())
+        } else {
+            (trimmed, "1.0.0".to_string())
+        }
     } else {
-        "1.0.0".to_string()
+        (trimmed, "1.0.0".to_string())
     };
 
-    if raw_name.contains('/') {
-        let name = raw_name
-            .split('/')
-            .last()
+    if raw_source.starts_with("http://")
+        || raw_source.starts_with("https://")
+        || raw_source.starts_with("file://")
+        || raw_source.starts_with("git+")
+        || raw_source.starts_with("./")
+        || raw_source.starts_with("../")
+        || raw_source.contains('/')
+        || raw_source.contains('\\')
+    {
+        let last_seg = raw_source
+            .rsplit(['/', '\\'])
+            .next()
             .unwrap_or("package")
             .trim_end_matches(".git")
-            .to_string();
-        (name, version, Some(raw_name.to_string()))
+            .trim_end_matches(".ae");
+        let clean_name = if last_seg.is_empty() {
+            "package"
+        } else {
+            last_seg
+        };
+        (
+            clean_name.to_string(),
+            version,
+            Some(raw_source.to_string()),
+        )
     } else {
-        (raw_name.to_string(), version, None)
+        (raw_source.to_string(), version, None)
+    }
+}
+
+fn normalize_git_source(src: &str) -> Option<String> {
+    let clean = src.strip_prefix("git+").unwrap_or(src);
+    if clean.ends_with(".git") || clean.starts_with("git://") {
+        return Some(clean.to_string());
+    }
+    if clean.contains('/')
+        && !clean.starts_with('.')
+        && !clean.starts_with("file://")
+        && !clean.starts_with('/')
+    {
+        let segs: Vec<&str> = clean.split('/').collect();
+        if segs.len() == 2 && !segs[0].contains(':') {
+            return Some(format!("https://github.com/{}/{}.git", segs[0], segs[1]));
+        }
+        if clean.starts_with("github.com/") || clean.starts_with("gitlab.com/") {
+            return Some(format!("https://{}.git", clean.trim_end_matches('/')));
+        }
+    }
+    None
+}
+
+fn resolve_local_source(src: &str) -> Option<PathBuf> {
+    let stripped = src.strip_prefix("file://").unwrap_or(src);
+    let p = PathBuf::from(stripped);
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+fn find_stdlib_module(name: &str) -> Option<PathBuf> {
+    let file_name = format!("{}.ae", name);
+    let workspace_lib = Path::new("libraries").join(&file_name);
+    if workspace_lib.is_file() {
+        return Some(workspace_lib);
+    }
+    let home_lib = crate::toolchain::get_aether_lib_dir().join(&file_name);
+    if home_lib.is_file() {
+        return Some(home_lib);
+    }
+    None
+}
+
+fn clone_git_package(git_url: &str, pkg_dir: &Path) -> Result<(), String> {
+    let staging = pkg_dir.join("_git_checkout");
+    if staging.exists() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    let output = std::process::Command::new("git")
+        .args(["clone", "--depth", "1", git_url])
+        .arg(&staging)
+        .output()
+        .map_err(|e| format!("Failed to invoke git clone for '{}': {}", git_url, e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = fs::remove_dir_all(&staging);
+        return Err(format!("git clone '{}' failed: {}", git_url, stderr.trim()));
+    }
+
+    copy_dir_ae_files(&staging, pkg_dir);
+    let entrypoint = pkg_dir.join("lib.ae");
+    if !entrypoint.exists() {
+        for candidate in ["src/main.ae", "src/lib.ae", "main.ae"] {
+            let cand = staging.join(candidate);
+            if cand.is_file() {
+                let _ = fs::copy(cand, &entrypoint);
+                break;
+            }
+        }
+    }
+    let _ = fs::remove_dir_all(&staging);
+    if !entrypoint.exists() {
+        return Err(format!(
+            "Cloned repository '{}' contained no `.ae` entrypoint",
+            git_url
+        ));
+    }
+    Ok(())
+}
+
+fn copy_local_package(local_path: &Path, pkg_dir: &Path) -> Result<(), String> {
+    let entrypoint = pkg_dir.join("lib.ae");
+    if local_path.is_file() {
+        fs::copy(local_path, &entrypoint).map_err(|e| {
+            format!(
+                "Failed to copy package file '{}': {}",
+                local_path.display(),
+                e
+            )
+        })?;
+        return Ok(());
+    }
+    if local_path.is_dir() {
+        copy_dir_ae_files(local_path, pkg_dir);
+        if !entrypoint.exists() {
+            for candidate in ["src/lib.ae", "src/main.ae", "main.ae"] {
+                let cand = local_path.join(candidate);
+                if cand.is_file() {
+                    let _ = fs::copy(cand, &entrypoint);
+                    break;
+                }
+            }
+        }
+        if !entrypoint.exists() {
+            return Err(format!(
+                "Local package directory '{}' contains no `.ae` entrypoint",
+                local_path.display()
+            ));
+        }
+        return Ok(());
+    }
+    Err(format!(
+        "Local package path '{}' not found",
+        local_path.display()
+    ))
+}
+
+fn copy_dir_ae_files(src: &Path, dst: &Path) {
+    if let Ok(entries) = fs::read_dir(src) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("ae") {
+                if let Some(name) = p.file_name() {
+                    let _ = fs::copy(&p, dst.join(name));
+                }
+            } else if p.is_dir() && p.file_name().and_then(|s| s.to_str()) == Some("src") {
+                copy_dir_ae_files(&p, dst);
+            }
+        }
+    }
+}
+
+fn collect_ae_bundle_sources(
+    base: &Path,
+    current: &Path,
+    out: &mut serde_json::Map<String, serde_json::Value>,
+) {
+    if let Ok(entries) = fs::read_dir(current) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                collect_ae_bundle_sources(base, &p, out);
+            } else if p.extension().and_then(|s| s.to_str()) == Some("ae") {
+                if let Ok(content) = fs::read_to_string(&p) {
+                    let rel = p
+                        .strip_prefix(base)
+                        .unwrap_or(&p)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.insert(rel, serde_json::Value::String(content));
+                }
+            }
+        }
     }
 }
 

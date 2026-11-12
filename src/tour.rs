@@ -94,10 +94,20 @@ pub fn run_tour_lesson(lesson_id: usize) -> Result<(), String> {
     let lesson = TOUR_LESSONS
         .iter()
         .find(|l| l.id == lesson_id)
-        .ok_or_else(|| format!("Lesson {} not found. Valid lessons: 1 to {}", lesson_id, TOUR_LESSONS.len()))?;
+        .ok_or_else(|| {
+            format!(
+                "Lesson {} not found. Valid lessons: 1 to {}",
+                lesson_id,
+                TOUR_LESSONS.len()
+            )
+        })?;
 
     println!("================================================================================");
-    println!("🎓 TOUR LESSON {}: {}", lesson.id, lesson.title.to_uppercase());
+    println!(
+        "🎓 TOUR LESSON {}: {}",
+        lesson.id,
+        lesson.title.to_uppercase()
+    );
     println!("Category: {}", lesson.category);
     println!("Concept:  {}", lesson.description);
     println!("================================================================================");
@@ -119,9 +129,15 @@ pub fn run_tour_lesson(lesson_id: usize) -> Result<(), String> {
     println!("  Execution Latency: {:.2}ms", elapsed);
 
     println!("\n================================================================================");
-    println!("✨ LESSON {} COMPLETED SUCCESSFULLY! [VERIFIED ✅]", lesson.id);
+    println!(
+        "✨ LESSON {} COMPLETED SUCCESSFULLY! [VERIFIED ✅]",
+        lesson.id
+    );
     if lesson.id < TOUR_LESSONS.len() {
-        println!("Next Step: Type 'aether tour {}' to proceed to the next lesson!", lesson.id + 1);
+        println!(
+            "Next Step: Type 'aether tour {}' to proceed to the next lesson!",
+            lesson.id + 1
+        );
     } else {
         println!("🎉 CONGRATULATIONS! You have completed the entire Tour of AETHER 2.0!");
     }

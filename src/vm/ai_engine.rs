@@ -77,7 +77,7 @@ pub fn generate_embedding(text: &str) -> Vec<f64> {
         let word_bytes = word.as_bytes();
         let word_hash = hash_djb2(word_bytes);
 
-        for dim in 0..EMBEDDING_DIM {
+        for (dim, slot) in vec.iter_mut().enumerate().take(EMBEDDING_DIM) {
             // Positional sinusoidal wave encoding
             let freq = 1.0 / (10000.0f64.powf((dim as f64) / (EMBEDDING_DIM as f64)));
             let pos_enc = (pos as f64 * freq).sin();
@@ -86,7 +86,7 @@ pub fn generate_embedding(text: &str) -> Vec<f64> {
             let h_proj = (((word_hash.wrapping_mul((dim + 1) as u64) >> 16) & 0xFFF) as f64
                 - 2048.0)
                 / 2048.0;
-            vec[dim] += h_proj + pos_enc * 0.2;
+            *slot += h_proj + pos_enc * 0.2;
         }
 
         // Character n-gram subword hashing

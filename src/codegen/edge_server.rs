@@ -53,9 +53,14 @@ impl EdgeServer {
     pub fn new(config: EdgeServerConfig) -> Self {
         // Initialize default AI Assistant with knowledge
         let mut agent = LocalAgent::new("AetherEdge-Assistant", "Edge Microservices Orchestrator");
-        agent.add_knowledge("AETHER Edge runtime executes sub-millisecond cloud microservices natively.");
-        agent.add_knowledge("AETHER incorporates pure-Rust in-memory columnar SQL and 128-D vector embeddings.");
-        agent.add_knowledge("AETHER scripts run serverless functions with zero cold-start latency.");
+        agent.add_knowledge(
+            "AETHER Edge runtime executes sub-millisecond cloud microservices natively.",
+        );
+        agent.add_knowledge(
+            "AETHER incorporates pure-Rust in-memory columnar SQL and 128-D vector embeddings.",
+        );
+        agent
+            .add_knowledge("AETHER scripts run serverless functions with zero cold-start latency.");
 
         // Initialize default in-memory tables
         let mut tables = HashMap::new();
@@ -86,12 +91,19 @@ impl EdgeServer {
         let local_url = format!("http://localhost:{}", self.config.port);
         let network_url = format!("http://{}:{}", self.config.host, self.config.port);
 
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("🌐 AETHER EDGE: ZERO-DEPENDENCY MICROSERVICES & SERVERLESS RUNTIME");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("  Listening:   {}", network_url);
         println!("  Local Host:  {}", local_url);
-        println!("  Workers:     {} parallel worker threads", self.config.thread_pool_size);
+        println!(
+            "  Workers:     {} parallel worker threads",
+            self.config.thread_pool_size
+        );
         if let Some(ref dir) = self.config.static_dir {
             println!("  Static Root: {}", dir.display());
         } else {
@@ -100,14 +112,18 @@ impl EdgeServer {
         if let Some(ref script) = self.config.script_path {
             println!("  Script Hook: {}", script.display());
         }
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
         println!("  REST Microservice Endpoints:");
         println!("    • GET  /api/health   -> Node health check, uptime, memory, version");
         println!("    • POST /api/chat     -> On-device 128-D RAG AI inference engine");
         println!("    • POST /api/query    -> In-memory columnar SQL execution engine");
         println!("    • POST /api/eval     -> Zero cold-start AETHER serverless script eval");
         println!("    • GET  /api/metrics  -> Real-time throughput, latency, request stats");
-        println!("================================================================================");
+        println!(
+            "================================================================================"
+        );
         println!("✨ AETHER Edge Server is live. Press Ctrl+C to stop.\n");
 
         if self.config.auto_open_browser {
@@ -115,7 +131,9 @@ impl EdgeServer {
             thread::spawn(move || {
                 thread::sleep(std::time::Duration::from_millis(350));
                 if cfg!(windows) {
-                    let _ = std::process::Command::new("cmd").args(["/C", "start", &u]).spawn();
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "start", &u])
+                        .spawn();
                 } else if cfg!(target_os = "macos") {
                     let _ = std::process::Command::new("open").arg(&u).spawn();
                 } else {
@@ -136,7 +154,15 @@ impl EdgeServer {
 
                     thread::spawn(move || {
                         total_reqs.fetch_add(1, Ordering::SeqCst);
-                        let _ = handle_edge_request(stream, start_t, &total_reqs, agent, tables, static_dir, port);
+                        let _ = handle_edge_request(
+                            stream,
+                            start_t,
+                            &total_reqs,
+                            agent,
+                            tables,
+                            static_dir,
+                            port,
+                        );
                     });
                 }
                 Err(e) => eprintln!("[EdgeServer ⚠️] Connection error: {}", e),
@@ -206,7 +232,11 @@ fn handle_edge_request(
         ("GET", "/api/metrics") => {
             let uptime = start_time.elapsed().as_secs();
             let count = total_reqs.load(Ordering::SeqCst);
-            let rps = if uptime > 0 { count as f64 / uptime as f64 } else { count as f64 };
+            let rps = if uptime > 0 {
+                count as f64 / uptime as f64
+            } else {
+                count as f64
+            };
             let json = format!(
                 r#"{{"uptime_seconds":{},"total_requests":{},"requests_per_sec":{:.2},"active_threads":8,"memory_allocator":"pure_rust_mimalloc_zero_leak"}}"#,
                 uptime, count, rps
@@ -217,7 +247,8 @@ fn handle_edge_request(
         // 3. AI Inference & Contextual RAG
         ("POST", "/api/chat") => {
             let start = Instant::now();
-            let prompt = extract_json_string(body, "prompt").unwrap_or_else(|| "Hello AETHER".to_string());
+            let prompt =
+                extract_json_string(body, "prompt").unwrap_or_else(|| "Hello AETHER".to_string());
             let mut agent = ai_agent.lock().unwrap();
             let response = agent.chat(&prompt);
             let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
@@ -249,14 +280,23 @@ fn handle_edge_request(
                             if c_idx > 0 {
                                 rows_json.push(',');
                             }
-                            let val = df.columns.get(col_name).and_then(|col| col.get(r)).unwrap_or(crate::vm::Value::Nil);
-                            rows_json.push_str(&format!("{}:{}", escape_json(col_name), val_to_json(&val)));
+                            let val = df
+                                .columns
+                                .get(col_name)
+                                .and_then(|col| col.get(r))
+                                .unwrap_or(crate::vm::Value::Nil);
+                            rows_json.push_str(&format!(
+                                "{}:{}",
+                                escape_json(col_name),
+                                val_to_json(&val)
+                            ));
                         }
                         rows_json.push('}');
                     }
                     rows_json.push(']');
 
-                    let cols_json: Vec<String> = df.column_names.iter().map(|c| escape_json(c)).collect();
+                    let cols_json: Vec<String> =
+                        df.column_names.iter().map(|c| escape_json(c)).collect();
                     let json = format!(
                         r#"{{"status":"ok","query":{},"row_count":{},"columns":[{}],"rows":{}}}"#,
                         escape_json(&query_str),
@@ -267,7 +307,11 @@ fn handle_edge_request(
                     send_http(&mut stream, 200, "application/json", json.as_bytes())
                 }
                 Err(e) => {
-                    let err_json = format!(r#"{{"status":"error","query":{},"error":{}}}"#, escape_json(&query_str), escape_json(&e));
+                    let err_json = format!(
+                        r#"{{"status":"error","query":{},"error":{}}}"#,
+                        escape_json(&query_str),
+                        escape_json(&e)
+                    );
                     send_http(&mut stream, 400, "application/json", err_json.as_bytes())
                 }
             }
@@ -304,7 +348,12 @@ fn handle_edge_request(
             }
             // Serve built-in Edge Microservice Dashboard
             let dashboard = get_dashboard_html(port);
-            send_http(&mut stream, 200, "text/html; charset=utf-8", dashboard.as_bytes())
+            send_http(
+                &mut stream,
+                200,
+                "text/html; charset=utf-8",
+                dashboard.as_bytes(),
+            )
         }
 
         ("GET", static_path) => {
@@ -378,10 +427,10 @@ fn extract_json_string(body: &str, key: &str) -> Option<String> {
     let colon_pos = body[key_pos + pattern.len()..].find(':')? + key_pos + pattern.len();
     let rest = body[colon_pos + 1..].trim();
 
-    if rest.starts_with('"') {
+    if let Some(stripped) = rest.strip_prefix('"') {
         let mut out = String::new();
         let mut escaped = false;
-        for ch in rest[1..].chars() {
+        for ch in stripped.chars() {
             if escaped {
                 match ch {
                     'n' => out.push('\n'),
@@ -402,7 +451,7 @@ fn extract_json_string(body: &str, key: &str) -> Option<String> {
         }
         Some(out)
     } else {
-        let end_idx = rest.find(|c| c == ',' || c == '}' || c == '\n').unwrap_or(rest.len());
+        let end_idx = rest.find([',', '}', '\n']).unwrap_or(rest.len());
         Some(rest[..end_idx].trim().to_string())
     }
 }
@@ -456,7 +505,8 @@ fn get_mime_type(path: &Path) -> &'static str {
 }
 
 fn get_dashboard_html(port: u16) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -585,5 +635,7 @@ fn get_dashboard_html(port: u16) -> String {
     testHealth();
   </script>
 </body>
-</html>"#, port)
+</html>"#,
+        port
+    )
 }

@@ -68,30 +68,30 @@ pub enum TokenKind {
     Not,
 
     // Operators
-    Plus,       // +
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Percent,    // %
-    Power,      // ^
-    Pipe,       // |
-    PipeRight,  // |> (Pipeline Operator)
-    Arrow,      // ->
-    FatArrow,   // =>
+    Plus,      // +
+    Minus,     // -
+    Star,      // *
+    Slash,     // /
+    Percent,   // %
+    Power,     // ^
+    Pipe,      // |
+    PipeRight, // |> (Pipeline Operator)
+    Arrow,     // ->
+    FatArrow,  // =>
 
     // Comparison & Assignment
-    Assign,       // =
-    PlusAssign,   // +=
-    MinusAssign,  // -=
-    StarAssign,   // *=
-    SlashAssign,  // /=
+    Assign,        // =
+    PlusAssign,    // +=
+    MinusAssign,   // -=
+    StarAssign,    // *=
+    SlashAssign,   // /=
     PercentAssign, // %=
-    EqualEqual,   // ==
-    NotEqual,     // !=
-    Less,         // <
-    LessEqual,    // <=
-    Greater,      // >
-    GreaterEqual, // >=
+    EqualEqual,    // ==
+    NotEqual,      // !=
+    Less,          // <
+    LessEqual,     // <=
+    Greater,       // >
+    GreaterEqual,  // >=
 
     // Punctuation
     Dot,              // .

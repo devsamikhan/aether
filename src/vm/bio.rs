@@ -713,7 +713,7 @@ impl PackedDna {
     pub fn from_str(seq: &str) -> Result<Self, String> {
         let clean = seq.trim().to_ascii_uppercase();
         let len = clean.len();
-        let num_bytes = (len + 3) / 4;
+        let num_bytes = len.div_ceil(4);
         let mut bytes = vec![0u8; num_bytes];
 
         for (i, ch) in clean.chars().enumerate() {
@@ -757,6 +757,7 @@ impl PackedDna {
         }
     }
 
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         let mut s = String::with_capacity(self.len);
         for i in 0..self.len {
@@ -783,7 +784,7 @@ impl PackedDna {
     /// In 2-bit encoding, complement is bitwise NOT:
     /// A (00) -> T (11), C (01) -> G (10), G (10) -> C (01), T (11) -> A (00).
     pub fn reverse_complement(&self) -> Self {
-        let num_bytes = (self.len + 3) / 4;
+        let num_bytes = self.len.div_ceil(4);
         let mut bytes = vec![0u8; num_bytes];
 
         for i in 0..self.len {
@@ -978,11 +979,11 @@ pub fn needleman_wunsch(
 
     let mut dp = vec![vec![0i32; m + 1]; n + 1];
 
-    for i in 0..=n {
-        dp[i][0] = i as i32 * gap_pen;
+    for (i, row) in dp.iter_mut().enumerate().take(n + 1) {
+        row[0] = i as i32 * gap_pen;
     }
-    for j in 0..=m {
-        dp[0][j] = j as i32 * gap_pen;
+    for (j, cell) in dp[0].iter_mut().enumerate().take(m + 1) {
+        *cell = j as i32 * gap_pen;
     }
 
     for i in 1..=n {
@@ -1333,7 +1334,7 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
                 if trimmed.is_empty() {
                     continue;
                 }
-                if trimmed.starts_with('>') {
+                if let Some(header) = trimmed.strip_prefix('>') {
                     if !current_id.is_empty() && !current_seq.is_empty() {
                         if let Ok(dna) = PackedDna::from_str(&current_seq) {
                             let mut rec = HashMap::new();
@@ -1346,7 +1347,6 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
                             records.push(Value::map(rec));
                         }
                     }
-                    let header = &trimmed[1..];
                     let mut parts = header.splitn(2, ' ');
                     current_id = parts.next().unwrap_or("").to_string();
                     current_desc = parts.next().unwrap_or("").to_string();
@@ -1732,5 +1732,223 @@ pub fn register_bio_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // Bio.parse_fastq(fastq_text)
+    bio.insert(
+        "parse_fastq".to_string(),
+        Value::Native("Bio.parse_fastq".into(), |args| {
+            if args.is_empty() {
+                return Err("Bio.parse_fastq(fastq_text) requires 1 argument".into());
+            }
+            let text = format!("{}", args[0]);
+            let reads = parse_fastq_records(&text)?;
+            Ok(Value::array(reads))
+        }),
+    );
+
+    // Bio.filter_fastq(reads_or_text, [min_avg_phred=20.0, min_len=1])
+    bio.insert(
+        "filter_fastq".to_string(),
+        Value::Native("Bio.filter_fastq".into(), |args| {
+            if args.is_empty() {
+                return Err(
+                    "Bio.filter_fastq(reads_or_text, [min_avg_phred, min_len]) requires at least 1 argument"
+                        .into(),
+                );
+            }
+            let reads = match &args[0] {
+                Value::Array(arr) => arr.lock().clone(),
+                other => parse_fastq_records(&format!("{}", other))?,
+            };
+            let min_phred = if args.len() > 1 {
+                match &args[1] {
+                    Value::Float(f) => *f,
+                    Value::Int(i) => *i as f64,
+                    _ => 20.0,
+                }
+            } else {
+                20.0
+            };
+            let min_len = if args.len() > 2 {
+                match &args[2] {
+                    Value::Int(i) => (*i).max(0) as usize,
+                    Value::Float(f) => (*f).max(0.0) as usize,
+                    _ => 1,
+                }
+            } else {
+                1
+            };
+
+            let mut filtered = Vec::new();
+            for item in reads {
+                if let Value::Map(m) = &item {
+                    let map = m.lock();
+                    let avg_q = match map.get("avg_phred") {
+                        Some(Value::Float(f)) => *f,
+                        Some(Value::Int(i)) => *i as f64,
+                        _ => 0.0,
+                    };
+                    let len = match map.get("length") {
+                        Some(Value::Int(i)) => *i as usize,
+                        _ => 0,
+                    };
+                    drop(map);
+                    if avg_q >= min_phred && len >= min_len {
+                        filtered.push(item);
+                    }
+                }
+            }
+            Ok(Value::array(filtered))
+        }),
+    );
+
+    // Bio.orf_finder(dna_or_str, [min_aa_len=10]) - 6-frame (+ and - strand) ORF scanner
+    bio.insert(
+        "orf_finder".to_string(),
+        Value::Native("Bio.orf_finder".into(), |args| {
+            if args.is_empty() {
+                return Err(
+                    "Bio.orf_finder(dna, [min_aa_len]) requires at least 1 argument".into(),
+                );
+            }
+            let dna = match &args[0] {
+                Value::Map(m) if m.lock().contains_key("_bio_dna") => extract_dna(&args[0])?,
+                other => Arc::new(PackedDna::from_str(&format!("{}", other))?),
+            };
+            let min_aa_len = if args.len() > 1 {
+                match &args[1] {
+                    Value::Int(i) if *i > 0 => *i as usize,
+                    _ => 1,
+                }
+            } else {
+                10
+            };
+
+            let mut all_orfs = Vec::new();
+            for mut rec in dna.find_orfs(min_aa_len) {
+                let frame_idx = match rec.get("frame") {
+                    Some(Value::Int(f)) => *f,
+                    _ => 0,
+                };
+                let aa_len = match rec.get("codons") {
+                    Some(Value::Int(c)) => *c,
+                    _ => 0,
+                };
+                rec.insert("strand".to_string(), Value::string("+"));
+                rec.insert("signed_frame".to_string(), Value::Int(frame_idx + 1));
+                rec.insert("aa_len".to_string(), Value::Int(aa_len));
+                all_orfs.push(Value::map(rec));
+            }
+
+            let rev_dna = dna.reverse_complement();
+            for mut rec in rev_dna.find_orfs(min_aa_len) {
+                let frame_idx = match rec.get("frame") {
+                    Some(Value::Int(f)) => *f,
+                    _ => 0,
+                };
+                let aa_len = match rec.get("codons") {
+                    Some(Value::Int(c)) => *c,
+                    _ => 0,
+                };
+                rec.insert("strand".to_string(), Value::string("-"));
+                rec.insert("signed_frame".to_string(), Value::Int(-(frame_idx + 1)));
+                rec.insert("aa_len".to_string(), Value::Int(aa_len));
+                all_orfs.push(Value::map(rec));
+            }
+
+            Ok(Value::array(all_orfs))
+        }),
+    );
+
     globals.insert("Bio".to_string(), Value::map(bio));
+}
+
+fn parse_fastq_records(text: &str) -> Result<Vec<Value>, String> {
+    let non_empty: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    if non_empty.is_empty() {
+        return Ok(Vec::new());
+    }
+    if !non_empty.len().is_multiple_of(4) {
+        return Err(format!(
+            "BioError: Invalid FASTQ format (expected multiple of 4 non-empty lines, got {})",
+            non_empty.len()
+        ));
+    }
+
+    let mut records = Vec::with_capacity(non_empty.len() / 4);
+    for chunk in non_empty.chunks(4) {
+        let header_line = chunk[0];
+        let seq_line = chunk[1];
+        let plus_line = chunk[2];
+        let qual_line = chunk[3];
+
+        if !header_line.starts_with('@') {
+            return Err(format!(
+                "BioError: FASTQ record header must start with '@', got '{}'",
+                header_line
+            ));
+        }
+        if !plus_line.starts_with('+') {
+            return Err(format!(
+                "BioError: FASTQ separator line must start with '+', got '{}'",
+                plus_line
+            ));
+        }
+        if seq_line.len() != qual_line.len() {
+            return Err(format!(
+                "BioError: FASTQ sequence length ({}) does not match quality length ({})",
+                seq_line.len(),
+                qual_line.len()
+            ));
+        }
+
+        let header = &header_line[1..];
+        let mut parts = header.splitn(2, ' ');
+        let id = parts.next().unwrap_or("").to_string();
+        let desc = parts.next().unwrap_or("").to_string();
+
+        let mut phred_vals = Vec::with_capacity(qual_line.len());
+        let mut sum_q: u64 = 0;
+        let mut min_q: i64 = i64::MAX;
+        for b in qual_line.bytes() {
+            let q = b.saturating_sub(33) as i64;
+            sum_q += q as u64;
+            if q < min_q {
+                min_q = q;
+            }
+            phred_vals.push(Value::Int(q));
+        }
+        let avg_phred = if qual_line.is_empty() {
+            0.0
+        } else {
+            ((sum_q as f64 / qual_line.len() as f64) * 100.0).round() / 100.0
+        };
+        if min_q == i64::MAX {
+            min_q = 0;
+        }
+
+        let seq_val = match PackedDna::from_str(seq_line) {
+            Ok(dna) => wrap_dna_handle(dna),
+            Err(_) => Value::string(seq_line.to_string()),
+        };
+
+        let mut rec = HashMap::new();
+        rec.insert("id".to_string(), Value::string(id));
+        rec.insert("description".to_string(), Value::string(desc));
+        rec.insert("sequence".to_string(), seq_val);
+        rec.insert(
+            "raw_sequence".to_string(),
+            Value::string(seq_line.to_string()),
+        );
+        rec.insert("quality".to_string(), Value::string(qual_line.to_string()));
+        rec.insert("phred_scores".to_string(), Value::array(phred_vals));
+        rec.insert("avg_phred".to_string(), Value::Float(avg_phred));
+        rec.insert("min_phred".to_string(), Value::Int(min_q));
+        rec.insert("length".to_string(), Value::Int(seq_line.len() as i64));
+        records.push(Value::map(rec));
+    }
+    Ok(records)
 }

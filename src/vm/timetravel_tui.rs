@@ -158,7 +158,7 @@ pub fn render_tui_frame(session: &TimeTravelSession, cursor_step: u64, show_diff
         Ansi::RESET
     ));
     let mut ribbon = String::new();
-    let start_step = if active_step > 5 { active_step - 5 } else { 0 };
+    let start_step = active_step.saturating_sub(5);
     let end_step = (start_step + 10).min(max_step);
 
     if start_step > 0 {
@@ -428,9 +428,7 @@ pub fn run_interactive_tui<R: BufRead, W: Write>(
         let cmd = line.trim().to_lowercase();
         match cmd.as_str() {
             "h" | "p" | "prev" | "back" | "rewind" | "left" => {
-                if cursor_step > 0 {
-                    cursor_step -= 1;
-                }
+                cursor_step = cursor_step.saturating_sub(1);
             }
             "l" | "n" | "next" | "forward" | "redo" | "right" => {
                 let max_step = {

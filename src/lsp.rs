@@ -1,11 +1,12 @@
 // ==============================================================================
-// AETHER 2.0 Language Server Protocol (LSP) Engine
+// AETHER Language Server Protocol (LSP) Engine
 // JSON-RPC 2.0 Language Server for VS Code, Cursor & Modern IDEs
-// Pure Rust Standard Library (Zero Third-Party Crates)
 // ==============================================================================
 
-use std::collections::HashMap;
+use serde_json::{json, Value as JsonValue};
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Read, Write};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct LspDiagnostic {
@@ -36,37 +37,37 @@ impl AetherLanguageServer {
     pub fn analyze(&self, source: &str) -> Vec<LspDiagnostic> {
         let mut diagnostics = Vec::new();
 
-        // 1. Syntax Parsing Pass + Semantic Type & Security Checks
         match crate::syntax::parse(source) {
             Ok(program) => {
-                // Static Type & Trait Completeness Check
                 let mut checker = crate::types::checker::TypeChecker::new();
-                if let Err(type_errs) = checker.check_program(&program) {
-                    for msg in type_errs {
+                if let Err(type_errs) = checker.check_program_with_spans(&program) {
+                    for err in type_errs {
                         diagnostics.push(LspDiagnostic {
-                            line: 0,
-                            col: 0,
-                            message: format!("Type error: {}", msg),
-                            severity: 2, // Warning
+                            line: err.line.saturating_sub(1),
+                            col: err.col.saturating_sub(1),
+                            message: format!("Type error: {}", err.message),
+                            severity: 2,
                         });
                     }
                 }
-                // Static Security Taint & Vulnerability Check
                 for finding in crate::vm::security::scan_program_security(&program) {
                     diagnostics.push(LspDiagnostic {
                         line: finding.line.saturating_sub(1),
                         col: 0,
-                        message: format!("[{}] {}: {}", finding.severity, finding.category, finding.message),
+                        message: format!(
+                            "[{}] {}: {}",
+                            finding.severity, finding.category, finding.message
+                        ),
                         severity: 2,
                     });
                 }
             }
             Err((err_msg, span)) => {
                 diagnostics.push(LspDiagnostic {
-                    line: if span.line > 0 { span.line - 1 } else { 0 },
-                    col: if span.col > 0 { span.col - 1 } else { 0 },
+                    line: span.line.saturating_sub(1),
+                    col: span.col.saturating_sub(1),
                     message: format!("Syntax error: {}", err_msg),
-                    severity: 1, // Error
+                    severity: 1,
                 });
             }
         }
@@ -84,7 +85,50 @@ impl AetherLanguageServer {
                 * `AI.similarity(v1, v2)`: Cosine similarity (-1.0 to 1.0)\n\
                 * `AI.rag_search(query, docs, top_k)`: Fast vector retrieval\n\
                 * `AI.Agent(name, role)`: Creates local intelligent agent\n\
-                * `AI.chat(prompt)`: Chats with default on-device agent".to_string(),
+                * `AI.chat(prompt)`: Chats with default on-device agent"
+                    .to_string(),
+            ),
+            "Bio" => Some(
+                "### AETHER Bioinformatics Engine\n\
+                2-bit packed DNA sequences, translation, Needleman-Wunsch alignment, FASTA/FASTQ parsing, and ORF finder.\n\
+                * `Bio.dna(seq)`: Compact 2-bit packed DNA sequence\n\
+                * `Bio.parse_fasta(text)` / `Bio.parse_fastq(text)`\n\
+                * `Bio.align(seq1, seq2, match, mismatch, gap)`\n\
+                * `Bio.orf_finder(dna, min_aa_len)`"
+                    .to_string(),
+            ),
+            "Chem" => Some(
+                "### AETHER Cheminformatics Engine\n\
+                SMILES/SDF molecule parsing, physicochemical descriptors, Lipinski Ro5, Morgan fingerprints, Tanimoto, and affinity prediction.\n\
+                * `Chem.from_smiles(smiles)` / `Chem.parse_sdf(sdf_text)`\n\
+                * `Chem.tanimoto_similarity(fp1, fp2)`\n\
+                * `Chem.predict_binding_affinity(mol_or_fp, weights, bias)`\n\
+                * `Chem.substructure_match(mol, smarts)`"
+                    .to_string(),
+            ),
+            "Http" | "Net" => Some(
+                "### AETHER HTTP/HTTPS & TLS Client/Server Engine\n\
+                Pure-Rust DNS resolution, rustls TLS verification, chunked transfer decoding, and redirects.\n\
+                * `Http.get(url, [headers])` / `Http.post(url, body, [headers])`\n\
+                * `Http.listen(host, port)` / `Http.accept(server_id)`"
+                    .to_string(),
+            ),
+            "WebSocket" => Some(
+                "### AETHER WebSocket Client & Server Engine\n\
+                RFC 6455 framed full-duplex sockets supporting `ws://` and `wss://` TLS.\n\
+                * `WebSocket.connect(url)` / `WebSocket.upgrade(req)`\n\
+                * `WebSocket.send(ws_id, data)` / `WebSocket.recv(ws_id)`"
+                    .to_string(),
+            ),
+            "Json" => Some(
+                "### AETHER JSON Engine\n\
+                * `Json.parse(str)` / `Json.stringify(val)`"
+                    .to_string(),
+            ),
+            "File" => Some(
+                "### AETHER File System Engine\n\
+                * `File.read(path)` / `File.write(path, content)` / `File.exists(path)`"
+                    .to_string(),
             ),
             "AetherBridge" => Some(
                 "### AetherBridge Native Mobile & Web Substrate\n\
@@ -94,14 +138,16 @@ impl AetherLanguageServer {
                 * `AetherBridge.scheduleAlarm(title, timeMs)`: Native exact OS alarm\n\
                 * `AetherBridge.showNotification(title, body)`: System push notifications\n\
                 * `AetherBridge.pickFile(accept)`: Native file picker\n\
-                * `AetherBridge.isDarkMode()`: System theme detection".to_string(),
+                * `AetherBridge.isDarkMode()`: System theme detection"
+                    .to_string(),
             ),
             "DB" => Some(
                 "### AETHER Embedded Relational SQL Engine\n\
                 In-memory or file-backed ACID relational tables with high-speed query execution:\n\
                 * `DB.open(path)`: Opens SQLite or in-memory DB\n\
                 * `db.execute(sql)`: Executes DDL/DML statements\n\
-                * `db.query(sql)`: Returns array of result rows as maps".to_string(),
+                * `db.query(sql)`: Returns array of result rows as maps"
+                    .to_string(),
             ),
             "fn" | "def" => Some(
                 "### Function Declaration\n\
@@ -109,40 +155,49 @@ impl AetherLanguageServer {
                 ```aether\n\
                 fn calculate_total(price: Float, qty: Int) -> Float:\n\
                     price * qty\n\
-                ```".to_string(),
-            ),
-            "let" => Some(
-                "### Variable Binding\n\
-                Binds an immutable variable. Use `let mut` for mutable variables.".to_string(),
-            ),
-            "intent" => Some(
-                "### AETHER Intent Contract\n\
-                Declarative specification block bounding execution constraints and invariant schemas.\n\
-                ```aether\n\
-                intent TransferFunds {\n\
-                    schema { amount: Float }\n\
-                    invariants { require(amount > 0.0); }\n\
-                }\n\
                 ```"
                 .to_string(),
             ),
+            "let" => Some(
+                "### Variable Binding\n\
+                Binds an immutable variable. Use `let mut` for mutable variables."
+                    .to_string(),
+            ),
+            "match" => Some(
+                "### Pattern Matching\n\
+                Matches literals, integer ranges (`a..b`), enum variants, structs, and optional `if` guards."
+                    .to_string(),
+            ),
+            "test" => Some(
+                "### AETHER Native Test Block\n\
+                Declares an in-language VM test executed by `aether test`."
+                    .to_string(),
+            ),
+            "intent" => Some(
+                "### AETHER Intent Contract\n\
+                Declarative specification block bounding execution constraints and invariant schemas."
+                    .to_string(),
+            ),
             "require" => Some(
                 "### Intent Precondition Invariant\n\
-                Asserts constraints that must hold prior to intent function execution.".to_string(),
+                Asserts constraints that must hold prior to intent function execution."
+                    .to_string(),
             ),
             "ensure" => Some(
                 "### Intent Postcondition Invariant\n\
-                Asserts constraints that must hold upon function return.".to_string(),
+                Asserts constraints that must hold upon function return."
+                    .to_string(),
             ),
             "M3" => Some(
                 "### Google Material 3 UI Engine\n\
-                Generates dynamic color harmonies, surface elevations, and responsive card widgets.".to_string(),
+                Generates dynamic color harmonies, surface elevations, and responsive card widgets."
+                    .to_string(),
             ),
             "QuantumSimulator" | "qubit" => Some(
                 "### AETHER Quantum State Vector Simulator\n\
                 Native Unitary Matrix simulation engine with Bloch sphere projections.\n\
-                * `sim.hadamard(target)`: Applies Hadamard gate (Superposition)\n\
-                * `sim.cnot(control, target)`: Entangles two qubits (Bell State)\n\
+                * `sim.hadamard(target)`: Applies Hadamard gate\n\
+                * `sim.cnot(control, target)`: Entangles two qubits\n\
                 * `sim.measure_all()`: Collapses quantum wave function"
                     .to_string(),
             ),
@@ -163,15 +218,30 @@ impl AetherLanguageServer {
             ),
             "LiveReloader" => Some(
                 "### AetherLive Zero-Downtime Hot Code Reloader\n\
-                BEAM-grade live code swapping preserving process heap state and active socket connections."
+                Live code swapping preserving process heap state."
                     .to_string(),
             ),
             "spawn" | "fiber" => Some(
                 "### Fiber Concurrency\n\
-                Lightweight M:N green thread scheduled across work-stealing threadpools."
+                Lightweight green thread scheduled across work-stealing threadpools."
                     .to_string(),
             ),
-            _ => None,
+            other => {
+                // Fall back to user-defined declarations across open workspace docs
+                for (uri, doc) in &self.documents {
+                    if let Some((line_idx, _)) = find_definition_in_doc(doc, other) {
+                        if let Some(sig_line) = doc.lines().nth(line_idx) {
+                            return Some(format!(
+                                "```aether\n{}\n```\n*Defined in `{}` (line {})*",
+                                sig_line.trim(),
+                                uri,
+                                line_idx + 1
+                            ));
+                        }
+                    }
+                }
+                None
+            }
         }
     }
 
@@ -182,21 +252,22 @@ impl AetherLanguageServer {
         let mut stdout = io::stdout();
 
         loop {
-            // Read HTTP-like Header: Content-Length: <N>\r\n\r\n
             let mut line = String::new();
             let mut content_length: usize = 0;
 
             loop {
                 line.clear();
                 if handle.read_line(&mut line)? == 0 {
-                    return Ok(()); // EOF
+                    return Ok(());
                 }
                 let trimmed = line.trim();
                 if trimmed.is_empty() {
                     break;
                 }
-                if let Some(stripped) = trimmed.strip_prefix("Content-Length:") {
-                    content_length = stripped.trim().parse::<usize>().unwrap_or(0);
+                if let Some((k, v)) = trimmed.split_once(':') {
+                    if k.trim().eq_ignore_ascii_case("Content-Length") {
+                        content_length = v.trim().parse::<usize>().unwrap_or(0);
+                    }
                 }
             }
 
@@ -204,12 +275,10 @@ impl AetherLanguageServer {
                 continue;
             }
 
-            // Read JSON Payload
             let mut buffer = vec![0u8; content_length];
             handle.read_exact(&mut buffer)?;
             let payload = String::from_utf8_lossy(&buffer);
 
-            // Handle JSON-RPC Message
             if let Some(response) = self.handle_jsonrpc(&payload) {
                 let resp_bytes = response.as_bytes();
                 write!(
@@ -223,255 +292,529 @@ impl AetherLanguageServer {
         }
     }
 
-    /// Parses and routes JSON-RPC 2.0 messages
+    /// Parses and routes JSON-RPC 2.0 messages using `serde_json`
     pub fn handle_jsonrpc(&mut self, payload: &str) -> Option<String> {
-        let (id, method) = parse_jsonrpc_request(payload)?;
+        let msg: JsonValue = serde_json::from_str(payload).ok()?;
+        let method = msg.get("method")?.as_str()?;
+        let id = msg.get("id").cloned().unwrap_or(JsonValue::Null);
+        let params = msg.get("params").cloned().unwrap_or(JsonValue::Null);
 
-        match method.as_str() {
-            "initialize" => {
-                let result = "{\"capabilities\":{\
-                    \"textDocumentSync\":1,\
-                    \"hoverProvider\":true,\
-                    \"definitionProvider\":true,\
-                    \"completionProvider\":{\"triggerCharacters\":[\".\",\":\"]}\
-                }}";
-                Some(format_jsonrpc_response(id, result))
-            }
+        match method {
+            "initialize" => Some(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": {
+                        "capabilities": {
+                            "textDocumentSync": 1,
+                            "hoverProvider": true,
+                            "definitionProvider": true,
+                            "documentSymbolProvider": true,
+                            "completionProvider": {
+                                "triggerCharacters": [".", ":"]
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            ),
             "initialized" => None,
-            "shutdown" => Some(format_jsonrpc_response(id, "null")),
+            "shutdown" => Some(json!({"jsonrpc": "2.0", "id": id, "result": null}).to_string()),
             "textDocument/didOpen" => {
-                if let Some((uri, text)) = extract_document_open(payload) {
-                    let diags = self.analyze(&text);
-                    self.documents.insert(uri.clone(), text);
-                    Some(format_publish_diagnostics(&uri, &diags))
-                } else {
-                    None
-                }
+                let uri = params
+                    .pointer("/textDocument/uri")
+                    .or_else(|| params.get("uri"))
+                    .and_then(|v| v.as_str())?
+                    .to_string();
+                let text = params
+                    .pointer("/textDocument/text")
+                    .or_else(|| params.get("text"))
+                    .and_then(|v| v.as_str())?
+                    .to_string();
+                let diags = self.analyze(&text);
+                self.documents.insert(uri.clone(), text);
+                Some(format_publish_diagnostics(&uri, &diags))
             }
             "textDocument/didChange" => {
-                if let Some((uri, text)) = extract_document_change(payload) {
-                    let diags = self.analyze(&text);
-                    self.documents.insert(uri.clone(), text);
-                    Some(format_publish_diagnostics(&uri, &diags))
-                } else {
-                    None
+                let uri = params
+                    .pointer("/textDocument/uri")
+                    .or_else(|| params.get("uri"))
+                    .and_then(|v| v.as_str())?
+                    .to_string();
+                let text = params
+                    .pointer("/contentChanges/0/text")
+                    .or_else(|| params.pointer("/textDocument/text"))
+                    .or_else(|| params.get("text"))
+                    .and_then(|v| v.as_str())?
+                    .to_string();
+                let diags = self.analyze(&text);
+                self.documents.insert(uri.clone(), text);
+                Some(format_publish_diagnostics(&uri, &diags))
+            }
+            "textDocument/didClose" => {
+                if let Some(uri) = params
+                    .pointer("/textDocument/uri")
+                    .or_else(|| params.get("uri"))
+                    .and_then(|v| v.as_str())
+                {
+                    self.documents.remove(uri);
+                    return Some(
+                        json!({
+                            "jsonrpc": "2.0",
+                            "method": "textDocument/publishDiagnostics",
+                            "params": {
+                                "uri": uri,
+                                "diagnostics": []
+                            }
+                        })
+                        .to_string(),
+                    );
                 }
+                None
             }
             "textDocument/hover" => {
-                let mut word_opt = extract_hover_word(payload);
-                if word_opt.is_none() {
-                    if let Some(uri) = extract_json_string(payload, "uri") {
-                        if let Some(doc) = self.documents.get(&uri) {
-                            if let Some((line, char_idx)) = extract_position(payload) {
-                                word_opt = get_word_at_position(doc, line, char_idx);
-                            }
-                        }
-                    }
-                }
+                let word = params
+                    .get("word")
+                    .and_then(|w| w.as_str())
+                    .map(|s| s.to_string())
+                    .or_else(|| self.word_from_params(&params));
 
-                if let Some(word) = word_opt {
-                    if let Some(docs) = self.get_hover(&word) {
-                        let res = format!(
-                            "{{\"contents\":{{\"kind\":\"markdown\",\"value\":{}}}}}",
-                            escape_json(&docs)
+                if let Some(w) = word {
+                    if let Some(docs) = self.get_hover(&w) {
+                        return Some(
+                            json!({
+                                "jsonrpc": "2.0",
+                                "id": id,
+                                "result": {
+                                    "contents": {
+                                        "kind": "markdown",
+                                        "value": docs
+                                    }
+                                }
+                            })
+                            .to_string(),
                         );
-                        return Some(format_jsonrpc_response(id, &res));
                     }
                 }
-                Some(format_jsonrpc_response(id, "{\"contents\":[]}"))
+                Some(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {"contents": []}
+                    })
+                    .to_string(),
+                )
             }
             "textDocument/definition" => {
-                if let Some(uri) = extract_json_string(payload, "uri") {
-                    if let Some(doc) = self.documents.get(&uri) {
-                        if let Some((line, char_idx)) = extract_position(payload) {
-                            if let Some(word) = get_word_at_position(doc, line, char_idx) {
-                                if let Some((def_line, def_col)) = find_definition_in_doc(doc, &word) {
-                                    let res = format!(
-                                        "{{\"uri\":\"{}\",\"range\":{{\"start\":{{\"line\":{},\"character\":{}}},\"end\":{{\"line\":{},\"character\":{}}}}}}}",
-                                        uri, def_line, def_col, def_line, def_col + word.len()
-                                    );
-                                    return Some(format_jsonrpc_response(id, &res));
+                let uri = params
+                    .pointer("/textDocument/uri")
+                    .or_else(|| params.get("uri"))
+                    .and_then(|v| v.as_str());
+                let pos = extract_json_position(&params);
+                if let (Some(doc_uri), Some((line, col))) = (uri, pos) {
+                    if let Some(doc) = self.documents.get(doc_uri) {
+                        if let Some(word) = get_word_at_position(doc, line, col) {
+                            // 1. Search current open document
+                            if let Some((def_line, def_col)) = find_definition_in_doc(doc, &word) {
+                                return Some(definition_location_json(
+                                    &id,
+                                    doc_uri,
+                                    def_line,
+                                    def_col,
+                                    word.len(),
+                                ));
+                            }
+                            // 2. Search other open workspace documents
+                            for (other_uri, other_doc) in &self.documents {
+                                if other_uri != doc_uri {
+                                    if let Some((def_line, def_col)) =
+                                        find_definition_in_doc(other_doc, &word)
+                                    {
+                                        return Some(definition_location_json(
+                                            &id,
+                                            other_uri,
+                                            def_line,
+                                            def_col,
+                                            word.len(),
+                                        ));
+                                    }
+                                }
+                            }
+                            // 3. Search imported `.ae` files referenced by this document
+                            for import_path in collect_imported_ae_paths(doc_uri, doc) {
+                                if let Ok(ext_src) = std::fs::read_to_string(&import_path) {
+                                    if let Some((def_line, def_col)) =
+                                        find_definition_in_doc(&ext_src, &word)
+                                    {
+                                        let target_uri = path_to_file_uri(&import_path);
+                                        return Some(definition_location_json(
+                                            &id,
+                                            &target_uri,
+                                            def_line,
+                                            def_col,
+                                            word.len(),
+                                        ));
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                Some(format_jsonrpc_response(id, "null"))
+                Some(json!({"jsonrpc": "2.0", "id": id, "result": null}).to_string())
+            }
+            "textDocument/documentSymbol" => {
+                let mut symbols = Vec::new();
+                if let Some(uri) = params
+                    .pointer("/textDocument/uri")
+                    .or_else(|| params.get("uri"))
+                    .and_then(|v| v.as_str())
+                {
+                    if let Some(doc) = self.documents.get(uri) {
+                        for (line_idx, name, kind) in extract_document_symbols(doc) {
+                            symbols.push(json!({
+                                "name": name,
+                                "kind": kind,
+                                "location": {
+                                    "uri": uri,
+                                    "range": {
+                                        "start": {"line": line_idx, "character": 0},
+                                        "end": {"line": line_idx, "character": name.len()}
+                                    }
+                                }
+                            }));
+                        }
+                    }
+                }
+                Some(json!({"jsonrpc": "2.0", "id": id, "result": symbols}).to_string())
             }
             "textDocument/completion" => {
-                let mut items: Vec<String> = Vec::new();
-
-                // Check for module member completion (e.g. AI. or AetherBridge.)
-                if payload.contains("\"AI.\"") || payload.contains("AI.") {
-                    items.push("{\"label\":\"embed\",\"kind\":2,\"detail\":\"AI.embed(text) -> 128-D Dense Vector\"}".to_string());
-                    items.push("{\"label\":\"similarity\",\"kind\":2,\"detail\":\"AI.similarity(v1, v2) -> Float Cosine\"}".to_string());
-                    items.push("{\"label\":\"rag_search\",\"kind\":2,\"detail\":\"AI.rag_search(query, docs, top_k) -> Array\"}".to_string());
-                    items.push("{\"label\":\"chat\",\"kind\":2,\"detail\":\"AI.chat(prompt) -> String Offline LLM Reply\"}".to_string());
-                    items.push("{\"label\":\"Agent\",\"kind\":7,\"detail\":\"AI.Agent(name, role) -> Local Intelligent Agent\"}".to_string());
-                } else if payload.contains("AetherBridge.") {
-                    items.push("{\"label\":\"getLocation\",\"kind\":2,\"detail\":\"AetherBridge.getLocation() -> Promise<Location>\"}".to_string());
-                    items.push("{\"label\":\"scanQR\",\"kind\":2,\"detail\":\"AetherBridge.scanQR() -> Promise<QRResult>\"}".to_string());
-                    items.push("{\"label\":\"scheduleAlarm\",\"kind\":2,\"detail\":\"AetherBridge.scheduleAlarm(title, timeMs)\"}".to_string());
-                    items.push("{\"label\":\"showNotification\",\"kind\":2,\"detail\":\"AetherBridge.showNotification(title, body)\"}".to_string());
-                    items.push("{\"label\":\"pickFile\",\"kind\":2,\"detail\":\"AetherBridge.pickFile(accept) -> Promise<File>\"}".to_string());
-                    items.push("{\"label\":\"isDarkMode\",\"kind\":2,\"detail\":\"AetherBridge.isDarkMode() -> Promise<Bool>\"}".to_string());
-                } else if payload.contains("DB.") {
-                    items.push("{\"label\":\"open\",\"kind\":2,\"detail\":\"DB.open(path) -> DatabaseHandle\"}".to_string());
-                    items.push("{\"label\":\"execute\",\"kind\":2,\"detail\":\"db.execute(sql) -> Result\"}".to_string());
-                    items.push("{\"label\":\"query\",\"kind\":2,\"detail\":\"db.query(sql) -> Array<Map>\"}".to_string());
-                } else {
-                    // Core Keywords
-                    let kws = [
-                        ("fn", 14, "Function Declaration"),
-                        ("let", 14, "Immutable Variable"),
-                        ("mut", 14, "Mutable Variable Modifier"),
-                        ("intent", 14, "Formal Contract Invariant Block"),
-                        ("require", 14, "Intent Precondition Requirement"),
-                        ("ensure", 14, "Intent Postcondition Guarantee"),
-                        ("struct", 7, "Custom Composite Struct Type"),
-                        ("match", 14, "Pattern Matching Expression"),
-                        ("spawn", 14, "Spawn Concurrent M:N Green Fiber"),
-                        ("channel", 14, "Thread-Safe Channel Primitive"),
-                        ("return", 14, "Return Value from Function"),
-                        ("AI", 9, "Native On-Device AI & Embeddings Module"),
-                        ("AetherBridge", 9, "Hardware Bridge & Native Mobile API"),
-                        ("DB", 9, "Embedded Relational SQL & DataFrame Engine"),
-                        ("M3", 9, "Google Material 3 Dynamic UI Engine"),
-                        ("Sys", 9, "Operating System Primitives"),
-                        ("Mobile", 9, "Mobile Haptics & Notification Substrate"),
-                    ];
-                    for (lbl, kind, detail) in kws {
-                        items.push(format!("{{\"label\":\"{}\",\"kind\":{},\"detail\":\"{}\"}}", lbl, kind, detail));
-                    }
-
-                    // Dynamically scan cached documents for user functions & variables
-                    for doc in self.documents.values() {
-                        for line in doc.lines() {
-                            let trimmed = line.trim();
-                            if let Some(rest) = trimmed.strip_prefix("fn ").or_else(|| trimmed.strip_prefix("def ")) {
-                                let name = rest.split('(').next().unwrap_or("").trim();
-                                if !name.is_empty() {
-                                    items.push(format!("{{\"label\":\"{}\",\"kind\":3,\"detail\":\"User Function\"}}", name));
-                                }
-                            } else if let Some(rest) = trimmed.strip_prefix("let ") {
-                                let name = rest.split('=').next().unwrap_or("").trim().trim_start_matches("mut ").trim();
-                                if !name.is_empty() {
-                                    items.push(format!("{{\"label\":\"{}\",\"kind\":6,\"detail\":\"Local Variable\"}}", name));
-                                }
-                            }
+                let items = self.build_completion_items(&params, payload);
+                Some(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {
+                            "isIncomplete": false,
+                            "items": items
                         }
-                    }
-                }
-
-                let completions = format!("{{\"isIncomplete\":false,\"items\":[{}]}}", items.join(","));
-                Some(format_jsonrpc_response(id, &completions))
+                    })
+                    .to_string(),
+                )
             }
             _ => None,
         }
     }
-}
 
-// ==============================================================================
-// Pure JSON Helpers (Zero External Dependency)
-// ==============================================================================
-
-fn parse_jsonrpc_request(payload: &str) -> Option<(String, String)> {
-    let method = extract_json_string(payload, "method")?;
-    let id = extract_json_raw(payload, "id").unwrap_or_else(|| "null".to_string());
-    Some((id, method))
-}
-
-fn format_jsonrpc_response(id: String, result_json: &str) -> String {
-    format!(
-        "{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}",
-        id, result_json
-    )
-}
-
-fn format_publish_diagnostics(uri: &str, diags: &[LspDiagnostic]) -> String {
-    let mut items = Vec::new();
-    for d in diags {
-        items.push(format!(
-            "{{\"range\":{{\"start\":{{\"line\":{},\"character\":{}}},\"end\":{{\"line\":{},\"character\":{}}}}},\"severity\":{},\"message\":{}}}",
-            d.line, d.col, d.line, d.col + 5, d.severity, escape_json(&d.message)
-        ));
+    fn word_from_params(&self, params: &JsonValue) -> Option<String> {
+        let uri = params
+            .pointer("/textDocument/uri")
+            .or_else(|| params.get("uri"))
+            .and_then(|v| v.as_str())?;
+        let doc = self.documents.get(uri)?;
+        let (line, ch) = extract_json_position(params)?;
+        get_word_at_position(doc, line, ch)
     }
-    format!(
-        "{{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{{\"uri\":\"{}\",\"diagnostics\":[{}]}}}}",
-        uri, items.join(",")
-    )
-}
 
-fn extract_json_string(json: &str, key: &str) -> Option<String> {
-    let pattern = format!("\"{}\":", key);
-    let start_idx = json.find(&pattern)? + pattern.len();
-    let rest = json[start_idx..].trim_start();
-    if rest.starts_with('"') {
-        let inside = &rest[1..];
-        let end_idx = inside.find('"')?;
-        Some(inside[..end_idx].to_string())
-    } else {
-        None
-    }
-}
+    fn build_completion_items(&self, params: &JsonValue, raw_payload: &str) -> Vec<JsonValue> {
+        let prefix = self
+            .member_prefix_at_cursor(params)
+            .unwrap_or_else(|| detect_member_prefix_fallback(raw_payload));
 
-fn extract_json_raw(json: &str, key: &str) -> Option<String> {
-    let pattern = format!("\"{}\":", key);
-    let start_idx = json.find(&pattern)? + pattern.len();
-    let rest = json[start_idx..].trim_start();
-    let mut end = 0;
-    for c in rest.chars() {
-        if c == ',' || c == '}' || c == ']' {
-            break;
+        if let Some(ns) = prefix.as_deref() {
+            return member_completions(ns);
         }
-        end += c.len_utf8();
+
+        let kws = [
+            ("fn", 14, "Function Declaration"),
+            ("def", 14, "Pythonic Function Declaration"),
+            ("let", 14, "Immutable Variable"),
+            ("mut", 14, "Mutable Variable Modifier"),
+            ("intent", 14, "Formal Contract Invariant Block"),
+            ("require", 14, "Intent Precondition Requirement"),
+            ("ensure", 14, "Intent Postcondition Guarantee"),
+            ("struct", 7, "Custom Composite Struct Type"),
+            ("class", 7, "Object-Oriented Class Definition"),
+            ("enum", 10, "Algebraic Data Type Enum"),
+            ("trait", 8, "Interface Trait Definition"),
+            ("match", 14, "Pattern Matching Expression"),
+            ("test", 14, "Native Test Block"),
+            ("try", 14, "Exception Handling Block"),
+            ("catch", 14, "Exception Handler"),
+            ("spawn", 14, "Spawn Concurrent Green Fiber"),
+            ("return", 14, "Return Value from Function"),
+            ("Bio", 9, "Bioinformatics & Sequence Alignment Module"),
+            ("Chem", 9, "Cheminformatics & Drug Discovery Module"),
+            ("Http", 9, "Pure-Rust HTTP/HTTPS Client & Server"),
+            ("WebSocket", 9, "RFC 6455 WebSocket Module"),
+            ("Json", 9, "JSON Parser & Serializer"),
+            ("File", 9, "File System I/O Module"),
+            ("AI", 9, "Native On-Device AI & Embeddings Module"),
+            ("AetherBridge", 9, "Hardware Bridge & Native Mobile API"),
+            ("DB", 9, "Embedded Relational SQL & DataFrame Engine"),
+            ("Tensor", 9, "Native Tensor & Autograd Engine"),
+            ("Graph", 9, "Knowledge Graph Traversal Engine"),
+            ("M3", 9, "Material 3 Dynamic UI Engine"),
+        ];
+
+        let mut items: Vec<JsonValue> = kws
+            .iter()
+            .map(|(lbl, kind, detail)| json!({"label": lbl, "kind": kind, "detail": detail}))
+            .collect();
+
+        let mut seen: HashSet<String> = kws.iter().map(|(l, _, _)| (*l).to_string()).collect();
+        for doc in self.documents.values() {
+            for (_, name, kind) in extract_document_symbols(doc) {
+                if seen.insert(name.clone()) {
+                    items.push(json!({"label": name, "kind": kind, "detail": "Workspace Symbol"}));
+                }
+            }
+            for line in doc.lines() {
+                if let Some(rest) = line.trim().strip_prefix("let ") {
+                    let var_name = rest
+                        .split('=')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .trim_start_matches("mut ")
+                        .trim();
+                    if !var_name.is_empty() && seen.insert(var_name.to_string()) {
+                        items.push(
+                            json!({"label": var_name, "kind": 6, "detail": "Local Variable"}),
+                        );
+                    }
+                }
+            }
+        }
+        items
     }
-    Some(rest[..end].trim().to_string())
+
+    fn member_prefix_at_cursor(&self, params: &JsonValue) -> Option<Option<String>> {
+        let uri = params
+            .pointer("/textDocument/uri")
+            .or_else(|| params.get("uri"))
+            .and_then(|v| v.as_str())?;
+        let doc = self.documents.get(uri)?;
+        let (line_idx, col) = extract_json_position(params)?;
+        let line = doc.lines().nth(line_idx)?;
+        let up_to_cursor: String = line.chars().take(col).collect();
+        let trimmed = up_to_cursor.trim_end();
+        if let Some(before_dot) = trimmed.strip_suffix('.') {
+            let ns: String = before_dot
+                .chars()
+                .rev()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
+            if !ns.is_empty() {
+                return Some(Some(ns));
+            }
+        }
+        Some(None)
+    }
 }
 
-fn extract_document_open(payload: &str) -> Option<(String, String)> {
-    let uri = extract_json_string(payload, "uri")?;
-    let text = extract_json_string(payload, "text")?;
-    Some((uri, text))
-}
-
-fn extract_document_change(payload: &str) -> Option<(String, String)> {
-    let uri = extract_json_string(payload, "uri")?;
-    let text = extract_json_string(payload, "text")?;
-    Some((uri, text))
-}
-
-fn extract_hover_word(payload: &str) -> Option<String> {
-    // If exact word is present in params or fallback
-    for kw in &["intent", "QuantumSimulator", "Tensor", "Graph", "LiveReloader", "spawn"] {
-        if payload.contains(kw) {
-            return Some((*kw).to_string());
+fn detect_member_prefix_fallback(raw_payload: &str) -> Option<String> {
+    for ns in [
+        "Bio",
+        "Chem",
+        "Http",
+        "WebSocket",
+        "Json",
+        "File",
+        "AI",
+        "AetherBridge",
+        "DB",
+    ] {
+        if raw_payload.contains(&format!("{}.", ns)) {
+            return Some(ns.to_string());
         }
     }
     None
 }
 
-fn escape_json(s: &str) -> String {
-    let mut out = String::from("\"");
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-    out
+fn member_completions(ns: &str) -> Vec<JsonValue> {
+    let entries: &[(&str, usize, &str)] = match ns {
+        "Bio" => &[
+            ("dna", 2, "Bio.dna(seq) -> PackedDna"),
+            ("gc_content", 2, "Bio.gc_content(dna) -> Float"),
+            (
+                "reverse_complement",
+                2,
+                "Bio.reverse_complement(dna) -> PackedDna",
+            ),
+            (
+                "parse_fasta",
+                2,
+                "Bio.parse_fasta(text) -> Array<FastaRecord>",
+            ),
+            (
+                "parse_fastq",
+                2,
+                "Bio.parse_fastq(text) -> Array<FastqRead>",
+            ),
+            (
+                "filter_fastq",
+                2,
+                "Bio.filter_fastq(reads, min_phred, min_len) -> Array<FastqRead>",
+            ),
+            (
+                "align",
+                2,
+                "Bio.align(seq1, seq2, [match, mismatch, gap]) -> Alignment",
+            ),
+            (
+                "orf_finder",
+                2,
+                "Bio.orf_finder(dna, [min_aa_len]) -> Array<OrfHit>",
+            ),
+            ("parse_pdb", 2, "Bio.parse_pdb(pdb_text) -> Structure"),
+        ],
+        "Chem" => &[
+            ("from_smiles", 2, "Chem.from_smiles(smiles) -> Molecule"),
+            (
+                "parse_sdf",
+                2,
+                "Chem.parse_sdf(sdf_text) -> Array<SdfMolecule>",
+            ),
+            (
+                "substructure_match",
+                2,
+                "Chem.substructure_match(mol_or_smiles, pattern) -> Bool",
+            ),
+            (
+                "tanimoto_similarity",
+                2,
+                "Chem.tanimoto_similarity(fp1, fp2) -> Float",
+            ),
+            (
+                "predict_binding_affinity",
+                2,
+                "Chem.predict_binding_affinity(mol_or_fp, weights, bias) -> AffinityResult",
+            ),
+        ],
+        "Http" => &[
+            ("get", 2, "Http.get(url, [headers]) -> Response"),
+            ("post", 2, "Http.post(url, body, [headers]) -> Response"),
+            (
+                "request",
+                2,
+                "Http.request(method, url, body, [headers]) -> Response",
+            ),
+            ("listen", 2, "Http.listen(host, port) -> server_id"),
+            (
+                "accept",
+                2,
+                "Http.accept(server_id, [timeout_ms]) -> Request",
+            ),
+        ],
+        "WebSocket" => &[
+            ("connect", 2, "WebSocket.connect(url) -> ws_id"),
+            ("upgrade", 2, "WebSocket.upgrade(req) -> ws_id"),
+            ("send", 2, "WebSocket.send(ws_id, data) -> Bool"),
+            ("recv", 2, "WebSocket.recv(ws_id, [timeout_ms]) -> Frame"),
+            ("close", 2, "WebSocket.close(ws_id) -> Bool"),
+        ],
+        "Json" => &[
+            ("parse", 2, "Json.parse(json_str) -> Value"),
+            ("stringify", 2, "Json.stringify(val) -> String"),
+        ],
+        "File" => &[
+            ("read", 2, "File.read(path) -> String"),
+            ("write", 2, "File.write(path, content) -> Bool"),
+            ("exists", 2, "File.exists(path) -> Bool"),
+        ],
+        "AI" => &[
+            ("embed", 2, "AI.embed(text) -> 128-D Dense Vector"),
+            ("similarity", 2, "AI.similarity(v1, v2) -> Float Cosine"),
+            (
+                "rag_search",
+                2,
+                "AI.rag_search(query, docs, top_k) -> Array",
+            ),
+            ("chat", 2, "AI.chat(prompt) -> String"),
+            ("Agent", 7, "AI.Agent(name, role) -> Local Agent"),
+        ],
+        "AetherBridge" => &[
+            ("getLocation", 2, "AetherBridge.getLocation() -> Location"),
+            ("scanQR", 2, "AetherBridge.scanQR() -> QRResult"),
+            (
+                "scheduleAlarm",
+                2,
+                "AetherBridge.scheduleAlarm(title, timeMs)",
+            ),
+            (
+                "showNotification",
+                2,
+                "AetherBridge.showNotification(title, body)",
+            ),
+            ("pickFile", 2, "AetherBridge.pickFile(accept) -> File"),
+            ("isDarkMode", 2, "AetherBridge.isDarkMode() -> Bool"),
+        ],
+        "DB" => &[
+            ("open", 2, "DB.open(path) -> DatabaseHandle"),
+            ("execute", 2, "db.execute(sql) -> Result"),
+            ("query", 2, "db.query(sql) -> Array<Map>"),
+        ],
+        _ => &[],
+    };
+    entries
+        .iter()
+        .map(|(lbl, kind, detail)| json!({"label": lbl, "kind": kind, "detail": detail}))
+        .collect()
 }
 
-fn extract_position(payload: &str) -> Option<(usize, usize)> {
-    let line_str = extract_json_raw(payload, "line")?;
-    let char_str = extract_json_raw(payload, "character")?;
-    let line = line_str.parse::<usize>().ok()?;
-    let character = char_str.parse::<usize>().ok()?;
+fn format_publish_diagnostics(uri: &str, diags: &[LspDiagnostic]) -> String {
+    let entries: Vec<JsonValue> = diags
+        .iter()
+        .map(|d| {
+            json!({
+                "range": {
+                    "start": {"line": d.line, "character": d.col},
+                    "end": {"line": d.line, "character": d.col + 5}
+                },
+                "severity": d.severity,
+                "message": d.message
+            })
+        })
+        .collect();
+    json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+            "uri": uri,
+            "diagnostics": entries
+        }
+    })
+    .to_string()
+}
+
+fn definition_location_json(
+    id: &JsonValue,
+    uri: &str,
+    line: usize,
+    col: usize,
+    word_len: usize,
+) -> String {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": {
+            "uri": uri,
+            "range": {
+                "start": {"line": line, "character": col},
+                "end": {"line": line, "character": col + word_len}
+            }
+        }
+    })
+    .to_string()
+}
+
+fn extract_json_position(params: &JsonValue) -> Option<(usize, usize)> {
+    let pos = params.get("position").unwrap_or(params);
+    let line = pos.get("line")?.as_u64()? as usize;
+    let character = pos.get("character")?.as_u64()? as usize;
     Some((line, character))
 }
 
@@ -505,28 +848,78 @@ fn get_word_at_position(doc: &str, target_line: usize, target_col: usize) -> Opt
     }
 }
 
+fn extract_document_symbols(doc: &str) -> Vec<(usize, String, usize)> {
+    let mut out = Vec::new();
+    for (line_idx, line) in doc.lines().enumerate() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed
+            .strip_prefix("fn ")
+            .or_else(|| trimmed.strip_prefix("def "))
+        {
+            let name = rest.split('(').next().unwrap_or("").trim();
+            if !name.is_empty() {
+                out.push((line_idx, name.to_string(), 12));
+            }
+        } else if let Some(rest) = trimmed
+            .strip_prefix("struct ")
+            .or_else(|| trimmed.strip_prefix("class "))
+        {
+            let name = rest.split([':', '{', '(']).next().unwrap_or("").trim();
+            if !name.is_empty() {
+                out.push((line_idx, name.to_string(), 23));
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("enum ") {
+            let name = rest.split(['<', '{', ':']).next().unwrap_or("").trim();
+            if !name.is_empty() {
+                out.push((line_idx, name.to_string(), 10));
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("intent ") {
+            let name = rest.split(['{', ':']).next().unwrap_or("").trim();
+            if !name.is_empty() {
+                out.push((line_idx, name.to_string(), 11));
+            }
+        }
+    }
+    out
+}
+
 fn find_definition_in_doc(doc: &str, word: &str) -> Option<(usize, usize)> {
     for (line_idx, line) in doc.lines().enumerate() {
         let trimmed = line.trim();
-        // fn foo(...) or def foo(...)
-        if let Some(rest) = trimmed.strip_prefix("fn ").or_else(|| trimmed.strip_prefix("def ")) {
+        if let Some(rest) = trimmed
+            .strip_prefix("fn ")
+            .or_else(|| trimmed.strip_prefix("def "))
+        {
             let func_name = rest.split('(').next().unwrap_or("").trim();
             if func_name == word {
                 let col = line.find(word).unwrap_or(0);
                 return Some((line_idx, col));
             }
         }
-        // struct Foo
-        if let Some(rest) = trimmed.strip_prefix("struct ") {
-            let struct_name = rest.split_whitespace().next().unwrap_or("").trim_end_matches('{').trim();
-            if struct_name == word {
+        if let Some(rest) = trimmed
+            .strip_prefix("struct ")
+            .or_else(|| trimmed.strip_prefix("class "))
+            .or_else(|| trimmed.strip_prefix("enum "))
+            .or_else(|| trimmed.strip_prefix("intent "))
+        {
+            let decl_name = rest
+                .split([':', '{', '(', '<', ' '])
+                .next()
+                .unwrap_or("")
+                .trim();
+            if decl_name == word {
                 let col = line.find(word).unwrap_or(0);
                 return Some((line_idx, col));
             }
         }
-        // let foo = ... or let mut foo = ...
         if let Some(rest) = trimmed.strip_prefix("let ") {
-            let var_name = rest.split('=').next().unwrap_or("").trim().trim_start_matches("mut ").trim();
+            let var_name = rest
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches("mut ")
+                .trim();
             if var_name == word {
                 let col = line.find(word).unwrap_or(0);
                 return Some((line_idx, col));
@@ -536,3 +929,53 @@ fn find_definition_in_doc(doc: &str, word: &str) -> Option<(usize, usize)> {
     None
 }
 
+fn collect_imported_ae_paths(current_uri: &str, doc: &str) -> Vec<PathBuf> {
+    let base_dir = file_uri_to_path(current_uri)
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let mut paths = Vec::new();
+    for line in doc.lines() {
+        let trimmed = line.trim();
+        let mod_name = if let Some(rest) = trimmed.strip_prefix("from ") {
+            rest.split_whitespace().next()
+        } else if let Some(rest) = trimmed.strip_prefix("import ") {
+            rest.split([';', ' ']).next()
+        } else {
+            None
+        };
+        if let Some(name) = mod_name {
+            let file_name = if name.ends_with(".ae") {
+                name.to_string()
+            } else {
+                format!("{}.ae", name.trim_end_matches(';'))
+            };
+            for candidate in [
+                base_dir.join(&file_name),
+                Path::new("libraries").join(&file_name),
+            ] {
+                if candidate.is_file() {
+                    paths.push(candidate);
+                }
+            }
+        }
+    }
+    paths
+}
+
+fn file_uri_to_path(uri: &str) -> Option<PathBuf> {
+    let stripped = uri
+        .strip_prefix("file:///")
+        .or_else(|| uri.strip_prefix("file://"))?;
+    Some(PathBuf::from(stripped))
+}
+
+fn path_to_file_uri(path: &Path) -> String {
+    let abs = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let norm = abs.to_string_lossy().replace('\\', "/");
+    if norm.starts_with('/') {
+        format!("file://{}", norm)
+    } else {
+        format!("file:///{}", norm.trim_start_matches("//?/"))
+    }
+}
