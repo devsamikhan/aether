@@ -378,6 +378,7 @@ pub fn run_build(
     name: Option<&str>,
     package: Option<&str>,
     release: bool,
+    assets: &[String],
 ) -> Result<(), String> {
     let src_path = match source {
         Some(s) => PathBuf::from(s),
@@ -449,7 +450,7 @@ pub fn run_build(
         }
     });
     let builder = aether::codegen::aot_builder::AotBuilder::new(release);
-    builder.build_executable(&src_path, &out_exe)
+    builder.build_executable_with_assets(&src_path, &out_exe, assets)
 }
 
 pub fn run_compile(script: &str, out: Option<&str>) -> Result<(), String> {

@@ -251,6 +251,12 @@ fn lint_statement_list(
                     lint_statement_list(&fb.statements, declared, used, outer_scopes, warnings);
                 }
             }
+            Statement::Sandbox { config, body, .. } => {
+                if let Some(cfg) = config {
+                    collect_used_in_expr(cfg, used);
+                }
+                lint_statement_list(&body.statements, declared, used, outer_scopes, warnings);
+            }
             Statement::Return { value, .. } => {
                 if let Some(v) = value {
                     collect_used_in_expr(v, used);

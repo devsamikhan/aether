@@ -1,0 +1,44 @@
+# ==============================================================================
+# Example 50: Unified Neuro-Symbolic Engine
+# SQL + Vector + Knowledge Graph + Formal Proof Verification in One Runtime
+# ==============================================================================
+
+from aether_neuro import NeuroSymbolicEngine
+
+print("==================================================================")
+print("   AETHER Unified Neuro-Symbolic Engine (SQL+Vector+Graph+Proof)")
+print("==================================================================")
+
+let engine = NeuroSymbolicEngine()
+
+# 1. Knowledge Graph + Vector Semantic Store
+engine.add_entity("aether_vm", "AETHER VM executes bytecode with capability security")
+engine.add_entity("wgpu_backend", "wgpu runs cross-platform Vulkan DX12 Metal compute shaders")
+engine.add_entity("local_llm", "LocalLLM runs quantized GGUF transformers offline with KV cache")
+engine.add_relation("aether_vm", "wgpu_backend", "accelerates_via", 1.0)
+engine.add_relation("aether_vm", "local_llm", "hosts", 1.0)
+
+# 2. In-Memory Relational SQL Store
+engine.register_sql_table("benchmarks", {
+    "engine": ["cpu_gemm", "wgpu_vulkan_gemm"],
+    "gflops": [0.63, 9.49]
+})
+let sql_out = engine.query_sql("SELECT engine, gflops FROM benchmarks WHERE gflops > 5.0")
+print("[1] SQL High-Throughput Engines:", sql_out["columns"]["engine"], "->", sql_out["columns"]["gflops"])
+
+# 3. Hybrid Vector + Multi-Hop Graph Retrieval
+let ctx = engine.retrieve_hybrid("Vulkan compute shaders GPU", 1, 2)
+print("[2] Hybrid GraphRAG Context Entities:", len(ctx))
+for item in ctx:
+    print("    -", item["entity"], "(", item["source"], ")")
+
+# 4. Formal Symbolic Proof Contract Verification
+let contract = "
+intent safe_scale(n):
+    require n > 0
+    ensure result >= 2
+    return n + 1
+"
+let proof = engine.verify_contract(contract)
+print("[3] Formal Proof Verified:", proof["all_verified"])
+print("==================================================================")

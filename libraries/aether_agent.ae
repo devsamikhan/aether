@@ -176,3 +176,94 @@ class Agent:
             "args": nil,
             "response": "Processed goal: " + str(goal)
         }
+
+
+# ==============================================================================
+# RewindableAgent — Time-Travel AI Agent Runtime
+# Synchronizes TimeTravel State History + LocalLLM KV-Cache Snapshots +
+# First-Class Capability Sandboxing for Untrusted Tool Execution
+# ==============================================================================
+
+class RewindableAgent:
+    def __init__(self, name, llm=nil):
+        self.name = name
+        self.llm = llm
+        self.session_id = TimeTravel.create_session()
+        self.kv_checkpoints = {}
+        self.turn = 0
+        TimeTravel.record(self.session_id, "agent_name", name)
+        TimeTravel.record(self.session_id, "turn", 0)
+
+    def set(self, key, value):
+        return TimeTravel.record(self.session_id, key, value)
+
+    def state(self):
+        return TimeTravel.get_state(self.session_id)
+
+    def get(self, key, default_val=nil):
+        let st = self.state()
+        if st.contains(key):
+            return st[key]
+        return default_val
+
+    def checkpoint(self, label):
+        let step = TimeTravel.checkpoint(self.session_id, label)
+        if self.llm != nil:
+            let snap_id = self.llm.snapshot_cache()
+            self.kv_checkpoints[label] = snap_id
+        return step
+
+    def rewind_to(self, label):
+        let step = TimeTravel.restore(self.session_id, label)
+        if self.llm != nil and self.kv_checkpoints.contains(label):
+            self.llm.restore_cache(self.kv_checkpoints[label])
+        let st = self.state()
+        if st.contains("turn"):
+            self.turn = st["turn"]
+        return step
+
+    def branch_from(self, label, branch_name):
+        self.rewind_to(label)
+        return TimeTravel.branch(self.session_id, branch_name)
+
+    def ask(self, prompt_or_tokens, opts=nil):
+        if self.llm == nil:
+            raise "RewindableAgent.ask requires an attached LocalLLM instance"
+        let run_opts = {"max_tokens": 16, "temperature": 0.0, "reset_cache": false}
+        if opts != nil:
+            for k in opts.keys():
+                run_opts[k] = opts[k]
+        let res = self.llm.generate(prompt_or_tokens, run_opts)
+        self.turn = self.turn + 1
+        TimeTravel.record(self.session_id, "turn", self.turn)
+        TimeTravel.record(self.session_id, "last_response_text", res["text"])
+        TimeTravel.record(self.session_id, "last_response_tokens", res["tokens"])
+        return res
+
+    def ask_schema(self, prompt_or_tokens, schema, opts=nil):
+        if self.llm == nil:
+            raise "RewindableAgent.ask_schema requires an attached LocalLLM instance"
+        let run_opts = {"temperature": 0.0, "reset_cache": false}
+        if opts != nil:
+            for k in opts.keys():
+                run_opts[k] = opts[k]
+        let res = self.llm.generate_schema(prompt_or_tokens, schema, run_opts)
+        self.turn = self.turn + 1
+        TimeTravel.record(self.session_id, "turn", self.turn)
+        TimeTravel.record(self.session_id, "last_structured_json", res["json"])
+        return res
+
+    def run_safe_tool(self, tool_code, policy=nil):
+        let effective_policy = {"fuel": 50000, "fs_read": false, "fs_write": false, "net": false, "ffi": false, "env": false}
+        if policy != nil:
+            for k in policy.keys():
+                effective_policy[k] = policy[k]
+        let out = Sandbox.run(tool_code, effective_policy)
+        self.turn = self.turn + 1
+        TimeTravel.record(self.session_id, "turn", self.turn)
+        TimeTravel.record(self.session_id, "last_tool_ok", out["ok"])
+        TimeTravel.record(self.session_id, "last_tool_value", out["value"])
+        return out
+
+    def history(self):
+        return TimeTravel.history(self.session_id)

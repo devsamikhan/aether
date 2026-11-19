@@ -136,6 +136,11 @@ pub enum Statement {
         body: Block,
         span: Span,
     },
+    Sandbox {
+        config: Option<Expr>,
+        body: Block,
+        span: Span,
+    },
     Expr(Expr),
 }
 
@@ -193,6 +198,7 @@ impl Statement {
             Statement::TypeAlias { span, .. } => *span,
             Statement::Decorated { span, .. } => *span,
             Statement::With { span, .. } => *span,
+            Statement::Sandbox { span, .. } => *span,
             Statement::Expr(expr) => expr.span(),
         }
     }

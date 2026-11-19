@@ -1,0 +1,59 @@
+# ==============================================================================
+# Example 49: Future-Language Showcase
+# First-Class Capability Sandboxes + GPU LoRA Fine-Tuning + Time-Travel Agent
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_nn import LoRALinear, AdamW, mse_loss, set_device
+from aether_agent import RewindableAgent
+
+print("==================================================================")
+print("   AETHER Future Stack: Sandbox + GPU LoRA + Time-Travel Agent")
+print("==================================================================")
+
+# 1. First-Class Capability Sandbox (Zero-Container Untrusted Execution)
+let blocked_io = false
+try:
+    sandbox(fuel=25000, fs_read=false, fs_write=false, net=false):
+        File.read("Cargo.toml")
+except e:
+    blocked_io = true
+print("[1] First-Class `sandbox(...)` blocked unauthorized FS read:", blocked_io)
+
+let agent = RewindableAgent("AetherAutonomous")
+let tool_out = agent.run_safe_tool("let x = 21\nx * 2", {"fuel": 10000, "fs_read": false})
+print("    Sandboxed Agent Tool Output:", tool_out["value"], "| ok:", tool_out["ok"])
+
+# 2. Time-Travel State Checkpointing & Branch Replay
+agent.set("strategy", "baseline")
+agent.checkpoint("cp_start")
+agent.set("strategy", "failed_experiment")
+agent.branch_from("cp_start", "optimized_branch")
+print("[2] Time-Travel Rewound Strategy:", agent.get("strategy"))
+
+# 3. Vendor-Free GPU Autograd + LoRA Fine-Tuning (Vulkan/DX12/Metal)
+let dev = set_device("gpu")
+let base_w = Tensor([
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0]
+])
+let lora = LoRALinear(base_w, 2, 4.0)
+let x = Tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
+let target = Tensor([[2.0, 0.0, 0.0, 0.0], [0.0, 2.0, 0.0, 0.0]])
+let opt = AdamW(lora.parameters(), 0.08)
+
+let step = 0
+let loss_val = 0.0
+while step < 30:
+    opt.zero_grad()
+    let loss = mse_loss(lora.forward(x), target)
+    loss_val = loss.item()
+    loss.backward()
+    opt.step()
+    step = step + 1
+
+print("[3] LoRA Fine-Tuning Device:", dev, "| Final MSE Loss:", loss_val)
+set_device("cpu")
+print("==================================================================")

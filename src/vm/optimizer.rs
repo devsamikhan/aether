@@ -252,6 +252,11 @@ fn optimize_statement(stmt: &Statement, stats: &mut OptimizationStats) -> Statem
             body: optimize_block(body, stats),
             span: *span,
         },
+        Statement::Sandbox { config, body, span } => Statement::Sandbox {
+            config: config.as_ref().map(|c| optimize_expr(c, stats)),
+            body: optimize_block(body, stats),
+            span: *span,
+        },
         Statement::Expr(expr) => Statement::Expr(optimize_expr(expr, stats)),
         other => other.clone(),
     }

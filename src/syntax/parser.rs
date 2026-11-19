@@ -115,8 +115,83 @@ impl Parser {
             {
                 self.parse_test_statement()
             }
+            TokenKind::Ident(s)
+                if s == "sandbox"
+                    && matches!(
+                        self.peek_next().map(|t| &t.kind),
+                        Some(TokenKind::LParen) | Some(TokenKind::Colon) | Some(TokenKind::LBrace)
+                    ) =>
+            {
+                self.parse_sandbox_statement()
+            }
             _ => self.parse_expr_or_assign_statement(),
         }
+    }
+
+    fn parse_sandbox_statement(&mut self) -> Result<Statement, (String, Span)> {
+        let sb_tok = self.advance(); // consume 'sandbox'
+        let mut config: Option<Expr> = None;
+
+        if self.match_token(&TokenKind::LParen) {
+            let lp_tok = self.advance(); // consume '('
+            if !self.check(&TokenKind::RParen) {
+                // Support either `sandbox(fuel=5000, fs_read=false):` or `sandbox(policy_map):`
+                let is_kw_pair = matches!(self.peek().kind, TokenKind::Ident(_))
+                    && matches!(
+                        self.peek_next().map(|t| &t.kind),
+                        Some(TokenKind::Assign) | Some(TokenKind::Colon)
+                    );
+                if is_kw_pair {
+                    let mut pairs: Vec<(Expr, Expr)> = Vec::new();
+                    while !self.check(&TokenKind::RParen) && !self.is_at_end() {
+                        let key_tok = self.advance();
+                        let key_name = match key_tok.kind {
+                            TokenKind::Ident(s) | TokenKind::String(s) => s,
+                            _ => {
+                                return Err((
+                                    "Expected capability name inside sandbox(...)".to_string(),
+                                    key_tok.span,
+                                ))
+                            }
+                        };
+                        if self.check(&TokenKind::Assign) || self.check(&TokenKind::Colon) {
+                            self.advance();
+                        } else {
+                            return Err((
+                                "Expected '=' or ':' after sandbox capability name".to_string(),
+                                self.current_span(),
+                            ));
+                        }
+                        let val_expr = self.parse_expression(Precedence::None)?;
+                        pairs.push((
+                            Expr::Literal(Literal::String(key_name), key_tok.span),
+                            val_expr,
+                        ));
+                        if self.check(&TokenKind::Comma) {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    let rp_tok =
+                        self.consume(&TokenKind::RParen, "Expected ')' after sandbox options")?;
+                    config = Some(Expr::Map(pairs, lp_tok.span.merge(rp_tok.span)));
+                } else {
+                    let expr = self.parse_expression(Precedence::None)?;
+                    self.consume(
+                        &TokenKind::RParen,
+                        "Expected ')' after sandbox policy expression",
+                    )?;
+                    config = Some(expr);
+                }
+            } else {
+                self.advance(); // consume ')'
+            }
+        }
+
+        let body = self.parse_block()?;
+        let span = sb_tok.span.merge(body.span);
+        Ok(Statement::Sandbox { config, body, span })
     }
 
     fn parse_test_statement(&mut self) -> Result<Statement, (String, Span)> {

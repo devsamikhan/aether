@@ -88,6 +88,12 @@ enum Commands {
         package: Option<String>,
         #[arg(long)]
         release: bool,
+        /// Package script, all transitive modules, and assets into a zero-dependency standalone executable
+        #[arg(long)]
+        standalone: bool,
+        /// Additional asset file(s) to embed inside the standalone binary (repeatable)
+        #[arg(long = "asset")]
+        assets: Vec<String>,
     },
     /// Compile an `.ae` script into a native AOT object file (`.obj` / `.o`)
     #[command(visible_alias = "aot")]
@@ -370,6 +376,8 @@ fn dispatch(cmd: Commands) -> Result<(), String> {
             name,
             package,
             release,
+            standalone: _,
+            assets,
         } => commands::run_build(
             source.as_deref(),
             out.as_deref(),
@@ -377,6 +385,7 @@ fn dispatch(cmd: Commands) -> Result<(), String> {
             name.as_deref(),
             package.as_deref(),
             release,
+            &assets,
         ),
         Commands::Compile { file, out } => commands::run_compile(&file, out.as_deref()),
         Commands::Wasm { file, out } => commands::run_wasm(&file, out.as_deref()),
@@ -485,6 +494,12 @@ fn is_script_path(arg: &str) -> bool {
 fn check_embedded_aot_payload() -> Result<bool, String> {
     if let Ok(exe_path) = std::env::current_exe() {
         if let Ok(bytes) = std::fs::read(&exe_path) {
+            if let Some(bundle) = aether::codegen::aot_builder::extract_embedded_bundle(&bytes) {
+                aether::vm::run_bundle(&bundle.entry_source, bundle.modules, bundle.assets)
+                    .map(|_| ())
+                    .map_err(|e| diagnostics::format_error_with_source(&bundle.entry_source, &e))?;
+                return Ok(true);
+            }
             if let Some(payload_str) =
                 aether::codegen::aot_builder::extract_embedded_payload(&bytes)
             {

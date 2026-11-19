@@ -111,5 +111,24 @@ class LocalLLM:
     def embed(self, text_or_tokens, pooling="mean"):
         return __native_llm.embed(self.id, text_or_tokens, pooling)
 
+    def generate_schema(self, prompt_or_tokens, schema, opts=nil):
+        if opts == nil:
+            return __native_llm.generate_schema(self.id, prompt_or_tokens, schema, {})
+        return __native_llm.generate_schema(self.id, prompt_or_tokens, schema, opts)
+
+    def generate_choices(self, prompt_or_tokens, choices, opts=nil):
+        if opts == nil:
+            return __native_llm.generate_choices(self.id, prompt_or_tokens, choices, {})
+        return __native_llm.generate_choices(self.id, prompt_or_tokens, choices, opts)
+
+    def snapshot_cache(self):
+        return __native_llm.snapshot_cache(self.id)
+
+    def restore_cache(self, snap_id):
+        return __native_llm.restore_cache(self.id, snap_id)
+
+    def cache_len(self):
+        return __native_llm.cache_len(self.id)
+
 def cosine_similarity(a, b):
     return __native_llm.cosine_similarity(a, b)

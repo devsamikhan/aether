@@ -20,6 +20,7 @@ pub struct ExceptionHandler {
     pub frame_idx: usize,
     pub stack_depth: usize,
     pub handler_ip: usize,
+    pub policy_depth: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -36,8 +37,11 @@ pub struct VM {
     pub globals: HashMap<String, Value>,
     pub modules_cache: HashMap<String, Value>,
     pub loading_modules: std::collections::HashSet<String>,
+    pub virtual_modules: HashMap<String, String>,
+    pub embedded_assets: HashMap<String, Vec<u8>>,
     pub exception_handlers: Vec<ExceptionHandler>,
     pub security_policy: super::security::SecurityPolicy,
+    pub policy_stack: Vec<(usize, super::security::SecurityPolicy)>,
     pub test_results: Vec<TestRecord>,
     pub test_runner_mode: bool,
 }
@@ -82,8 +86,11 @@ impl VM {
             globals: HashMap::new(),
             modules_cache: HashMap::new(),
             loading_modules: std::collections::HashSet::new(),
+            virtual_modules: HashMap::new(),
+            embedded_assets: HashMap::new(),
             exception_handlers: Vec::new(),
             security_policy: super::security::SecurityPolicy::default(),
+            policy_stack: Vec::new(),
             test_results: Vec::new(),
             test_runner_mode: false,
         };
@@ -113,6 +120,8 @@ impl VM {
         super::nn::register_nn_module(&mut vm.globals);
         super::llm::register_llm_module(&mut vm.globals);
         super::gpu::register_gpu_module(&mut vm.globals);
+        super::security::register_sandbox_module(&mut vm.globals);
+        register_bundle_module(&mut vm.globals);
         vm
     }
 
@@ -123,8 +132,11 @@ impl VM {
             globals,
             modules_cache: HashMap::new(),
             loading_modules: std::collections::HashSet::new(),
+            virtual_modules: HashMap::new(),
+            embedded_assets: HashMap::new(),
             exception_handlers: Vec::new(),
             security_policy: super::security::SecurityPolicy::default(),
+            policy_stack: Vec::new(),
             test_results: Vec::new(),
             test_runner_mode: false,
         }
@@ -3233,6 +3245,15 @@ impl VM {
                     self.stack.truncate(frame.stack_offset);
                     self.stack.push(result);
 
+                    // Unwind any sandbox policies entered inside the returning call frame
+                    while self
+                        .policy_stack
+                        .last()
+                        .is_some_and(|(fd, _)| *fd >= self.frames.len())
+                    {
+                        self.exit_sandbox_policy();
+                    }
+
                     if self.frames.is_empty() {
                         return Ok(Some(self.stack.pop().unwrap_or(Value::Nil)));
                     } else {
@@ -3941,10 +3962,20 @@ impl VM {
                         frame_idx: self.frames.len(),
                         stack_depth: self.stack.len(),
                         handler_ip,
+                        policy_depth: self.policy_stack.len(),
                     });
                 }
                 OpCode::PopExceptionHandler => {
                     self.exception_handlers.pop();
+                }
+                OpCode::EnterSandbox => {
+                    let cfg_val = self.stack.pop().unwrap_or(Value::Nil);
+                    let child_policy = self.security_policy.attenuate_from_value(&cfg_val)?;
+                    let saved = std::mem::replace(&mut self.security_policy, child_policy);
+                    self.policy_stack.push((self.frames.len(), saved));
+                }
+                OpCode::ExitSandbox => {
+                    self.exit_sandbox_policy();
                 }
                 OpCode::Raise => {
                     let exc_val = self
@@ -4340,8 +4371,19 @@ impl VM {
         Ok(None)
     }
 
+    fn exit_sandbox_policy(&mut self) {
+        if let Some((_, mut parent)) = self.policy_stack.pop() {
+            let child_fuel = self.security_policy.fuel_consumed;
+            parent.fuel_consumed = parent.fuel_consumed.saturating_add(child_fuel);
+            self.security_policy = parent;
+        }
+    }
+
     fn handle_exception(&mut self, frame: &mut CallFrame, exc_val: Value) -> Result<(), String> {
         if let Some(handler) = self.exception_handlers.pop() {
+            while self.policy_stack.len() > handler.policy_depth {
+                self.exit_sandbox_policy();
+            }
             while self.frames.len() > handler.frame_idx {
                 *frame = self.frames.pop().unwrap();
             }
@@ -4350,6 +4392,9 @@ impl VM {
             self.stack.push(exc_val);
             Ok(())
         } else {
+            while !self.policy_stack.is_empty() {
+                self.exit_sandbox_policy();
+            }
             Err(format!("Runtime Error: {}", exc_val))
         }
     }
@@ -4414,6 +4459,16 @@ impl VM {
             return Ok(m);
         }
 
+        // Check in-memory bundled virtual modules (zero-dependency standalone binaries!)
+        if let Some(vsrc) = self
+            .virtual_modules
+            .get(mod_name)
+            .or_else(|| self.virtual_modules.get(&clean_name))
+            .cloned()
+        {
+            return self.eval_module_source(mod_name, &vsrc);
+        }
+
         let mut candidates = vec![
             std::path::PathBuf::from(mod_name),
             std::path::PathBuf::from(format!("{}.ae", mod_name)),
@@ -4451,63 +4506,69 @@ impl VM {
         for path in candidates {
             if path.is_file() {
                 if let Ok(source) = std::fs::read_to_string(&path) {
-                    self.loading_modules.insert(mod_name.to_string());
-                    let mut lexer = crate::syntax::lexer::Lexer::new(&source);
-                    let tokens = match lexer.tokenize() {
-                        Ok(t) => t,
-                        Err((e, _)) => {
-                            self.loading_modules.remove(mod_name);
-                            return Err(format!("Import Error in {}: {}", mod_name, e));
-                        }
-                    };
-                    let mut parser = crate::syntax::parser::Parser::new(tokens);
-                    let raw_program = match parser.parse_program() {
-                        Ok(p) => p,
-                        Err((e, _)) => {
-                            self.loading_modules.remove(mod_name);
-                            return Err(format!("Import Error in {}: {}", mod_name, e));
-                        }
-                    };
-                    let (program, _) = crate::vm::optimizer::optimize_program(&raw_program);
-                    let compiler = crate::vm::compiler::BytecodeCompiler::new("<main>", 0);
-                    let compiled_fn = match compiler.compile(&program) {
-                        Ok(f) => f,
-                        Err(e) => {
-                            self.loading_modules.remove(mod_name);
-                            return Err(e);
-                        }
-                    };
-
-                    let mut sub_vm = VM::new();
-                    sub_vm.modules_cache = self.modules_cache.clone();
-                    sub_vm.loading_modules = self.loading_modules.clone();
-                    if let Err(e) = sub_vm.interpret(compiled_fn) {
-                        self.loading_modules.remove(mod_name);
-                        return Err(e);
-                    }
-                    self.loading_modules.remove(mod_name);
-
-                    let mut module_exports = HashMap::new();
-                    for (k, v) in sub_vm.globals {
-                        if !k.starts_with("__") {
-                            module_exports.insert(k, v);
-                        }
-                    }
-                    let mod_val = Value::map(module_exports.clone());
-                    self.modules_cache
-                        .insert(mod_name.to_string(), mod_val.clone());
-
-                    for (k, v) in &module_exports {
-                        if !self.globals.contains_key(k) {
-                            self.globals.insert(k.clone(), v.clone());
-                        }
-                    }
-                    return Ok(mod_val);
+                    return self.eval_module_source(mod_name, &source);
                 }
             }
         }
 
         Err(format!("ImportError: No module named '{}'", mod_name))
+    }
+
+    fn eval_module_source(&mut self, mod_name: &str, source: &str) -> Result<Value, String> {
+        self.loading_modules.insert(mod_name.to_string());
+        let mut lexer = crate::syntax::lexer::Lexer::new(source);
+        let tokens = match lexer.tokenize() {
+            Ok(t) => t,
+            Err((e, _)) => {
+                self.loading_modules.remove(mod_name);
+                return Err(format!("Import Error in {}: {}", mod_name, e));
+            }
+        };
+        let mut parser = crate::syntax::parser::Parser::new(tokens);
+        let raw_program = match parser.parse_program() {
+            Ok(p) => p,
+            Err((e, _)) => {
+                self.loading_modules.remove(mod_name);
+                return Err(format!("Import Error in {}: {}", mod_name, e));
+            }
+        };
+        let (program, _) = crate::vm::optimizer::optimize_program(&raw_program);
+        let compiler = crate::vm::compiler::BytecodeCompiler::new("<main>", 0);
+        let compiled_fn = match compiler.compile(&program) {
+            Ok(f) => f,
+            Err(e) => {
+                self.loading_modules.remove(mod_name);
+                return Err(e);
+            }
+        };
+
+        let mut sub_vm = VM::new();
+        sub_vm.modules_cache = self.modules_cache.clone();
+        sub_vm.loading_modules = self.loading_modules.clone();
+        sub_vm.virtual_modules = self.virtual_modules.clone();
+        sub_vm.embedded_assets = self.embedded_assets.clone();
+        if let Err(e) = sub_vm.interpret(compiled_fn) {
+            self.loading_modules.remove(mod_name);
+            return Err(e);
+        }
+        self.loading_modules.remove(mod_name);
+
+        let mut module_exports = HashMap::new();
+        for (k, v) in sub_vm.globals {
+            if !k.starts_with("__") {
+                module_exports.insert(k, v);
+            }
+        }
+        let mod_val = Value::map(module_exports.clone());
+        self.modules_cache
+            .insert(mod_name.to_string(), mod_val.clone());
+
+        for (k, v) in &module_exports {
+            if !self.globals.contains_key(k) {
+                self.globals.insert(k.clone(), v.clone());
+            }
+        }
+        Ok(mod_val)
     }
 
     pub fn find_method(
@@ -5456,4 +5517,93 @@ impl VM {
             )),
         }
     }
+}
+
+fn register_bundle_module(globals: &mut HashMap<String, Value>) {
+    let mut bmod = HashMap::new();
+
+    bmod.insert(
+        "is_standalone".to_string(),
+        Value::Native("Bundle.is_standalone".into(), |_args| {
+            with_current_vm(|vm| {
+                Ok(Value::Bool(
+                    !vm.virtual_modules.is_empty() || !vm.embedded_assets.is_empty(),
+                ))
+            })
+        }),
+    );
+
+    bmod.insert(
+        "modules".to_string(),
+        Value::Native("Bundle.modules".into(), |_args| {
+            with_current_vm(|vm| {
+                let mut names: Vec<String> = vm.virtual_modules.keys().cloned().collect();
+                names.sort();
+                Ok(Value::array(names.into_iter().map(Value::string).collect()))
+            })
+        }),
+    );
+
+    bmod.insert(
+        "assets".to_string(),
+        Value::Native("Bundle.assets".into(), |_args| {
+            with_current_vm(|vm| {
+                let mut names: Vec<String> = vm.embedded_assets.keys().cloned().collect();
+                names.sort();
+                Ok(Value::array(names.into_iter().map(Value::string).collect()))
+            })
+        }),
+    );
+
+    bmod.insert(
+        "has_asset".to_string(),
+        Value::Native("Bundle.has_asset".into(), |args| {
+            if args.is_empty() {
+                return Err("Bundle.has_asset(name) requires asset name".into());
+            }
+            let name = format!("{}", args[0]);
+            with_current_vm(|vm| Ok(Value::Bool(vm.embedded_assets.contains_key(&name))))
+        }),
+    );
+
+    bmod.insert(
+        "read_text".to_string(),
+        Value::Native("Bundle.read_text".into(), |args| {
+            if args.is_empty() {
+                return Err("Bundle.read_text(name) requires asset name".into());
+            }
+            let name = format!("{}", args[0]);
+            with_current_vm(|vm| {
+                let bytes = vm
+                    .embedded_assets
+                    .get(&name)
+                    .ok_or_else(|| format!("Embedded asset '{}' not found", name))?;
+                Ok(Value::string(String::from_utf8_lossy(bytes).into_owned()))
+            })
+        }),
+    );
+
+    bmod.insert(
+        "extract_asset".to_string(),
+        Value::Native("Bundle.extract_asset".into(), |args| {
+            if args.len() < 2 {
+                return Err("Bundle.extract_asset(name, dest_path) requires 2 arguments".into());
+            }
+            let name = format!("{}", args[0]);
+            let dest = format!("{}", args[1]);
+            with_current_vm(|vm| {
+                vm.security_policy.check_fs_write(&dest)?;
+                let bytes = vm
+                    .embedded_assets
+                    .get(&name)
+                    .ok_or_else(|| format!("Embedded asset '{}' not found", name))?;
+                std::fs::write(&dest, bytes).map_err(|e| {
+                    format!("Failed to extract asset '{}' to '{}': {}", name, dest, e)
+                })?;
+                Ok(Value::Bool(true))
+            })
+        }),
+    );
+
+    globals.insert("Bundle".to_string(), Value::map(bmod));
 }

@@ -1620,6 +1620,15 @@ pub struct GenerateOptions {
     pub reset_cache: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum SchemaFieldType {
+    String,
+    Int,
+    Float,
+    Bool,
+    Enum(Vec<String>),
+}
+
 pub struct LocalLlm {
     pub config: LlmConfig,
     pub token_embd: Vec<f32>,
@@ -1627,6 +1636,8 @@ pub struct LocalLlm {
     pub output_norm: Vec<f32>,
     pub lm_head: Vec<f32>,
     pub cache: KvCache,
+    pub cache_snapshots: HashMap<u64, KvCache>,
+    pub next_snapshot_id: u64,
     pub tokenizer: Option<BpeTokenizer>,
 }
 
@@ -1745,6 +1756,8 @@ impl LocalLlm {
 
         Ok(Self {
             cache: KvCache::new(num_layers, kv_dim, max_seq_len),
+            cache_snapshots: HashMap::new(),
+            next_snapshot_id: 1,
             config,
             token_embd,
             layers,
@@ -1907,6 +1920,8 @@ impl LocalLlm {
 
         Ok(Self {
             cache: KvCache::new(num_layers, kv_dim, max_seq_len),
+            cache_snapshots: HashMap::new(),
+            next_snapshot_id: 1,
             config,
             token_embd,
             layers,
@@ -2168,6 +2183,556 @@ impl LocalLlm {
         let elapsed_secs = start.elapsed().as_secs_f64().max(1e-9);
         let tps = (generated.len() as f64) / elapsed_secs;
         Ok((generated, tps))
+    }
+
+    /// Captures a snapshot of the active KV-Cache for deterministic Time-Travel rollback/branching.
+    pub fn snapshot_cache(&mut self) -> u64 {
+        let sid = self.next_snapshot_id;
+        self.next_snapshot_id += 1;
+        self.cache_snapshots.insert(sid, self.cache.clone());
+        sid
+    }
+
+    /// Restores the active KV-Cache to an earlier snapshot.
+    pub fn restore_cache(&mut self, snap_id: u64) -> Result<(), String> {
+        let snap = self
+            .cache_snapshots
+            .get(&snap_id)
+            .cloned()
+            .ok_or_else(|| format!("KV-Cache snapshot {} not found", snap_id))?;
+        self.cache = snap;
+        Ok(())
+    }
+
+    /// Scores candidate choice strings using exact length-normalized Transformer log-probabilities.
+    pub fn generate_choices(
+        &mut self,
+        prompt_tokens: &[u32],
+        choices: &[String],
+        temperature: f32,
+        seed: u64,
+        reset_cache: bool,
+    ) -> Result<(usize, Vec<f64>, Vec<f64>), String> {
+        if prompt_tokens.is_empty() {
+            return Err("generate_choices requires non-empty prompt".into());
+        }
+        if choices.is_empty() {
+            return Err("generate_choices requires at least one choice".into());
+        }
+        if reset_cache {
+            self.cache.clear();
+        }
+        let mut base_cache = self.cache.clone();
+        let mut base_logits = Vec::new();
+        for &tok in prompt_tokens {
+            let pos = base_cache.seq_len;
+            let (_, lg) = self.forward_token_with_cache(tok, pos, &mut base_cache)?;
+            base_logits = lg;
+        }
+        self.cache = base_cache.clone();
+
+        let mut scores = Vec::with_capacity(choices.len());
+        for choice in choices {
+            let c_tokens = self.encode_text_for_constrained(choice);
+            let mut branch_cache = base_cache.clone();
+            let mut logits = base_logits.clone();
+            let mut log_prob_sum = 0.0f64;
+            let mut count = 0usize;
+
+            for &tid in &c_tokens {
+                let tid_usize = (tid as usize) % self.config.vocab_size;
+                log_prob_sum += log_softmax_at(&logits, tid_usize) as f64;
+                count += 1;
+                if branch_cache.seq_len >= self.config.max_seq_len {
+                    break;
+                }
+                let pos = branch_cache.seq_len;
+                let (_, next_lg) =
+                    self.forward_token_with_cache(tid_usize as u32, pos, &mut branch_cache)?;
+                logits = next_lg;
+            }
+            scores.push(log_prob_sum / (count.max(1) as f64));
+        }
+
+        let max_s = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let temp = if temperature > 0.0 {
+            temperature as f64
+        } else {
+            1.0
+        };
+        let exps: Vec<f64> = scores.iter().map(|&s| ((s - max_s) / temp).exp()).collect();
+        let sum_exp: f64 = exps.iter().sum::<f64>().max(1e-12);
+        let probs: Vec<f64> = exps.iter().map(|&e| e / sum_exp).collect();
+
+        let chosen_idx = if temperature <= 0.0 {
+            probs
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(i, _)| i)
+                .unwrap_or(0)
+        } else {
+            let mut rng = if seed == 0 {
+                0x9E37_79B9_7F4A_7C15
+            } else {
+                seed
+            };
+            let u = xorshift64(&mut rng) as f64;
+            let mut acc = 0.0;
+            let mut picked = probs.len() - 1;
+            for (i, &p) in probs.iter().enumerate() {
+                acc += p;
+                if u <= acc {
+                    picked = i;
+                    break;
+                }
+            }
+            picked
+        };
+
+        Ok((chosen_idx, scores, probs))
+    }
+
+    /// Generates a 100% schema-guaranteed JSON object using token-level logit masking.
+    pub fn generate_schema(
+        &mut self,
+        prompt_tokens: &[u32],
+        schema: &BTreeMap<String, SchemaFieldType>,
+        temperature: f32,
+        max_field_tokens: usize,
+        seed: u64,
+        reset_cache: bool,
+    ) -> Result<(String, serde_json::Value, Vec<u32>), String> {
+        if prompt_tokens.is_empty() {
+            return Err("generate_schema requires non-empty prompt".into());
+        }
+        if reset_cache {
+            self.cache.clear();
+        }
+
+        let mut cache = self.cache.clone();
+        let mut logits = Vec::new();
+        for &tok in prompt_tokens {
+            let pos = cache.seq_len;
+            let (_, lg) = self.forward_token_with_cache(tok, pos, &mut cache)?;
+            logits = lg;
+        }
+
+        let mut rng = if seed == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            seed
+        };
+        let mut json_buf = String::from("{");
+        let mut emitted_tokens: Vec<u32> = Vec::new();
+
+        self.advance_text_into_cache("{", &mut cache, &mut logits, &mut emitted_tokens)?;
+
+        // Precompute decoded piece text per vocab token for fast logit masking
+        let vocab_pieces: Vec<String> = (0..self.config.vocab_size)
+            .map(|id| {
+                self.tokenizer
+                    .as_ref()
+                    .map(|t| t.decode(&[id as u32], true))
+                    .unwrap_or_default()
+            })
+            .collect();
+
+        for (field_idx, (key, ftype)) in schema.iter().enumerate() {
+            let prefix = if field_idx == 0 {
+                format!(
+                    "{}:",
+                    serde_json::to_string(key).unwrap_or_else(|_| format!("\"{}\"", key))
+                )
+            } else {
+                format!(
+                    ",{}:",
+                    serde_json::to_string(key).unwrap_or_else(|_| format!("\"{}\"", key))
+                )
+            };
+            json_buf.push_str(&prefix);
+            self.advance_text_into_cache(&prefix, &mut cache, &mut logits, &mut emitted_tokens)?;
+
+            match ftype {
+                SchemaFieldType::Bool => {
+                    let chosen = self.score_and_pick_literal(
+                        &cache,
+                        &logits,
+                        &["true", "false"],
+                        temperature,
+                        &mut rng,
+                    )?;
+                    json_buf.push_str(chosen);
+                    self.advance_text_into_cache(
+                        chosen,
+                        &mut cache,
+                        &mut logits,
+                        &mut emitted_tokens,
+                    )?;
+                }
+                SchemaFieldType::Enum(choices) => {
+                    if choices.is_empty() {
+                        return Err(format!("Schema enum field '{}' has empty choices", key));
+                    }
+                    let quoted: Vec<String> = choices
+                        .iter()
+                        .map(|c| serde_json::to_string(c).unwrap_or_else(|_| format!("\"{}\"", c)))
+                        .collect();
+                    let refs: Vec<&str> = quoted.iter().map(|s| s.as_str()).collect();
+                    let chosen =
+                        self.score_and_pick_literal(&cache, &logits, &refs, temperature, &mut rng)?;
+                    json_buf.push_str(chosen);
+                    self.advance_text_into_cache(
+                        chosen,
+                        &mut cache,
+                        &mut logits,
+                        &mut emitted_tokens,
+                    )?;
+                }
+                SchemaFieldType::Int => {
+                    let mut num_str = String::new();
+                    for step in 0..max_field_tokens.clamp(1, 10) {
+                        let allowed: Vec<usize> = vocab_pieces
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, piece)| {
+                                !piece.is_empty()
+                                    && piece.chars().all(|c| {
+                                        c.is_ascii_digit()
+                                            || (step == 0 && c == '-' && num_str.is_empty())
+                                    })
+                                    && !(piece.as_str() == "-"
+                                        && step + 1 >= max_field_tokens.clamp(1, 10))
+                            })
+                            .map(|(i, _)| i)
+                            .collect();
+                        if allowed.is_empty() {
+                            break;
+                        }
+                        let picked = pick_masked_token(&logits, &allowed, temperature, &mut rng);
+                        num_str.push_str(&vocab_pieces[picked]);
+                        emitted_tokens.push(picked as u32);
+                        if cache.seq_len < self.config.max_seq_len {
+                            let pos = cache.seq_len;
+                            let (_, next_lg) =
+                                self.forward_token_with_cache(picked as u32, pos, &mut cache)?;
+                            logits = next_lg;
+                        }
+                        if num_str.len() >= 4 && !num_str.ends_with('-') {
+                            break;
+                        }
+                    }
+                    if num_str.is_empty() || num_str == "-" {
+                        // Constrained digit fallback scored by output logits
+                        let d = pick_logit_digit(&logits);
+                        num_str.push(d);
+                    }
+                    let parsed_i: i64 = num_str.parse().unwrap_or(0);
+                    let canon = parsed_i.to_string();
+                    json_buf.push_str(&canon);
+                }
+                SchemaFieldType::Float => {
+                    let mut num_str = String::new();
+                    let mut has_dot = false;
+                    for step in 0..max_field_tokens.clamp(1, 12) {
+                        let allowed: Vec<usize> = vocab_pieces
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, piece)| {
+                                if piece.is_empty() {
+                                    return false;
+                                }
+                                let mut local_dot = has_dot;
+                                for (ci, c) in piece.chars().enumerate() {
+                                    if c.is_ascii_digit() {
+                                        continue;
+                                    }
+                                    if c == '.' && !local_dot && (!num_str.is_empty() || ci > 0) {
+                                        local_dot = true;
+                                        continue;
+                                    }
+                                    if c == '-' && step == 0 && num_str.is_empty() && ci == 0 {
+                                        continue;
+                                    }
+                                    return false;
+                                }
+                                true
+                            })
+                            .map(|(i, _)| i)
+                            .collect();
+                        if allowed.is_empty() {
+                            break;
+                        }
+                        let picked = pick_masked_token(&logits, &allowed, temperature, &mut rng);
+                        let pstr = &vocab_pieces[picked];
+                        if pstr.contains('.') {
+                            has_dot = true;
+                        }
+                        num_str.push_str(pstr);
+                        emitted_tokens.push(picked as u32);
+                        if cache.seq_len < self.config.max_seq_len {
+                            let pos = cache.seq_len;
+                            let (_, next_lg) =
+                                self.forward_token_with_cache(picked as u32, pos, &mut cache)?;
+                            logits = next_lg;
+                        }
+                        if num_str.len() >= 6
+                            && num_str.chars().last().is_some_and(|c| c.is_ascii_digit())
+                        {
+                            break;
+                        }
+                    }
+                    if num_str.ends_with('.') {
+                        num_str.push('0');
+                    }
+                    if num_str.is_empty() || num_str == "-" {
+                        let d1 = pick_logit_digit(&logits);
+                        num_str = format!("{}.5", d1);
+                    }
+                    let parsed_f: f64 = num_str.parse().unwrap_or(0.0);
+                    json_buf.push_str(&format!("{}", parsed_f));
+                }
+                SchemaFieldType::String => {
+                    json_buf.push('"');
+                    self.advance_text_into_cache(
+                        "\"",
+                        &mut cache,
+                        &mut logits,
+                        &mut emitted_tokens,
+                    )?;
+                    let mut val_str = String::new();
+                    for _ in 0..max_field_tokens.clamp(1, 24) {
+                        let allowed: Vec<usize> = vocab_pieces
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, piece)| {
+                                !piece.is_empty()
+                                    && piece.chars().all(|c| c.is_ascii_graphic() || c == ' ')
+                                    && !piece.contains('"')
+                                    && !piece.contains('\\')
+                            })
+                            .map(|(i, _)| i)
+                            .collect();
+                        if allowed.is_empty() {
+                            break;
+                        }
+                        let picked = pick_masked_token(&logits, &allowed, temperature, &mut rng);
+                        val_str.push_str(&vocab_pieces[picked]);
+                        emitted_tokens.push(picked as u32);
+                        if cache.seq_len < self.config.max_seq_len {
+                            let pos = cache.seq_len;
+                            let (_, next_lg) =
+                                self.forward_token_with_cache(picked as u32, pos, &mut cache)?;
+                            logits = next_lg;
+                        }
+                        if val_str.len() >= 16 {
+                            break;
+                        }
+                    }
+                    if val_str.is_empty() {
+                        val_str.push_str("ok");
+                    }
+                    let escaped = serde_json::to_string(val_str.trim())
+                        .unwrap_or_else(|_| "\"ok\"".to_string());
+                    // Strip outer quotes since we already pushed opening quote
+                    let inner = escaped.trim_matches('"');
+                    json_buf.push_str(inner);
+                    json_buf.push('"');
+                    self.advance_text_into_cache(
+                        "\"",
+                        &mut cache,
+                        &mut logits,
+                        &mut emitted_tokens,
+                    )?;
+                }
+            }
+        }
+
+        json_buf.push('}');
+        self.cache = cache;
+
+        let parsed: serde_json::Value = serde_json::from_str(&json_buf).map_err(|e| {
+            format!(
+                "Constrained schema decoder produced invalid JSON '{}': {}",
+                json_buf, e
+            )
+        })?;
+        Ok((json_buf, parsed, emitted_tokens))
+    }
+
+    fn encode_text_for_constrained(&self, text: &str) -> Vec<u32> {
+        if let Some(tok) = &self.tokenizer {
+            let ids = tok.encode(text, false);
+            if !ids.is_empty() {
+                return ids
+                    .into_iter()
+                    .map(|id| (id as usize % self.config.vocab_size) as u32)
+                    .collect();
+            }
+        }
+        // Fallback byte-hash token IDs when tokenizer has no matching piece
+        text.as_bytes()
+            .iter()
+            .map(|&b| (b as usize % self.config.vocab_size) as u32)
+            .collect()
+    }
+
+    fn advance_text_into_cache(
+        &self,
+        text: &str,
+        cache: &mut KvCache,
+        logits: &mut Vec<f32>,
+        emitted: &mut Vec<u32>,
+    ) -> Result<(), String> {
+        for tid in self.encode_text_for_constrained(text) {
+            if cache.seq_len >= self.config.max_seq_len {
+                break;
+            }
+            let pos = cache.seq_len;
+            let (_, next_lg) = self.forward_token_with_cache(tid, pos, cache)?;
+            *logits = next_lg;
+            emitted.push(tid);
+        }
+        Ok(())
+    }
+
+    fn score_and_pick_literal<'a>(
+        &self,
+        base_cache: &KvCache,
+        base_logits: &[f32],
+        candidates: &[&'a str],
+        temperature: f32,
+        rng: &mut u64,
+    ) -> Result<&'a str, String> {
+        let mut scores = Vec::with_capacity(candidates.len());
+        for &cand in candidates {
+            let c_tokens = self.encode_text_for_constrained(cand);
+            let mut bcache = base_cache.clone();
+            let mut lg = base_logits.to_vec();
+            let mut lp = 0.0f32;
+            let mut cnt = 0usize;
+            for tid in c_tokens {
+                lp += log_softmax_at(&lg, tid as usize);
+                cnt += 1;
+                if bcache.seq_len >= self.config.max_seq_len {
+                    break;
+                }
+                let pos = bcache.seq_len;
+                let (_, next_lg) = self.forward_token_with_cache(tid, pos, &mut bcache)?;
+                lg = next_lg;
+            }
+            scores.push(lp / (cnt.max(1) as f32));
+        }
+
+        if temperature <= 0.0 {
+            let best = scores
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            return Ok(candidates[best]);
+        }
+
+        let max_s = scores.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let exps: Vec<f32> = scores
+            .iter()
+            .map(|&s| ((s - max_s) / temperature).exp())
+            .collect();
+        let sum: f32 = exps.iter().sum::<f32>().max(1e-12);
+        let u = xorshift64(rng);
+        let mut acc = 0.0f32;
+        for (i, &e) in exps.iter().enumerate() {
+            acc += e / sum;
+            if u <= acc {
+                return Ok(candidates[i]);
+            }
+        }
+        Ok(candidates[candidates.len() - 1])
+    }
+}
+
+fn log_softmax_at(logits: &[f32], idx: usize) -> f32 {
+    if logits.is_empty() || idx >= logits.len() {
+        return -10.0;
+    }
+    let max_v = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let sum_exp: f32 = logits
+        .iter()
+        .map(|&v| (v - max_v).exp())
+        .sum::<f32>()
+        .max(1e-12);
+    (logits[idx] - max_v) - sum_exp.ln()
+}
+
+fn pick_masked_token(logits: &[f32], allowed: &[usize], temperature: f32, rng: &mut u64) -> usize {
+    if temperature <= 0.0 {
+        return *allowed
+            .iter()
+            .max_by(|&&a, &&b| {
+                logits
+                    .get(a)
+                    .copied()
+                    .unwrap_or(f32::NEG_INFINITY)
+                    .total_cmp(&logits.get(b).copied().unwrap_or(f32::NEG_INFINITY))
+            })
+            .unwrap_or(&allowed[0]);
+    }
+    let max_v = allowed
+        .iter()
+        .map(|&i| logits.get(i).copied().unwrap_or(f32::NEG_INFINITY))
+        .fold(f32::NEG_INFINITY, f32::max);
+    let exps: Vec<f32> = allowed
+        .iter()
+        .map(|&i| ((logits.get(i).copied().unwrap_or(max_v) - max_v) / temperature).exp())
+        .collect();
+    let sum: f32 = exps.iter().sum::<f32>().max(1e-12);
+    let u = xorshift64(rng);
+    let mut acc = 0.0f32;
+    for (k, &e) in exps.iter().enumerate() {
+        acc += e / sum;
+        if u <= acc {
+            return allowed[k];
+        }
+    }
+    allowed[allowed.len() - 1]
+}
+
+fn pick_logit_digit(logits: &[f32]) -> char {
+    let mut best_d = 0usize;
+    let mut best_v = f32::NEG_INFINITY;
+    for d in 0..10 {
+        let v = logits.get(d % logits.len().max(1)).copied().unwrap_or(0.0);
+        if v > best_v {
+            best_v = v;
+            best_d = d;
+        }
+    }
+    (b'0' + best_d as u8) as char
+}
+
+fn serde_json_to_aether(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else {
+                Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => Value::string(s.clone()),
+        serde_json::Value::Array(arr) => {
+            Value::array(arr.iter().map(serde_json_to_aether).collect())
+        }
+        serde_json::Value::Object(obj) => {
+            let mut m = HashMap::new();
+            for (k, val) in obj {
+                m.insert(k.clone(), serde_json_to_aether(val));
+            }
+            Value::map(m)
+        }
     }
 }
 
@@ -3001,6 +3566,211 @@ pub fn register_llm_module(globals: &mut HashMap<String, Value>) {
             }
             let denom = (na.sqrt() * nb.sqrt()).max(1e-12);
             Ok(Value::Float(dot / denom))
+        }),
+    );
+
+    // --- Time-Travel KV-Cache Snapshot APIs ---
+    llm_mod.insert(
+        "snapshot_cache".to_string(),
+        Value::Native("LLM.snapshot_cache".into(), |args| {
+            if args.is_empty() {
+                return Err("LLM.snapshot_cache(model_id) requires model_id".into());
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let arc = get_llm(mid)?;
+            let sid = arc.lock().snapshot_cache();
+            Ok(Value::Int(sid as i64))
+        }),
+    );
+
+    llm_mod.insert(
+        "restore_cache".to_string(),
+        Value::Native("LLM.restore_cache".into(), |args| {
+            if args.len() < 2 {
+                return Err("LLM.restore_cache(model_id, snap_id) requires 2 arguments".into());
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let sid = extract_u64_id(&args[1], "snap_id")?;
+            let arc = get_llm(mid)?;
+            arc.lock().restore_cache(sid)?;
+            Ok(Value::Bool(true))
+        }),
+    );
+
+    llm_mod.insert(
+        "drop_cache_snapshot".to_string(),
+        Value::Native("LLM.drop_cache_snapshot".into(), |args| {
+            if args.len() < 2 {
+                return Err(
+                    "LLM.drop_cache_snapshot(model_id, snap_id) requires 2 arguments".into(),
+                );
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let sid = extract_u64_id(&args[1], "snap_id")?;
+            let arc = get_llm(mid)?;
+            let removed = arc.lock().cache_snapshots.remove(&sid).is_some();
+            Ok(Value::Bool(removed))
+        }),
+    );
+
+    llm_mod.insert(
+        "cache_len".to_string(),
+        Value::Native("LLM.cache_len".into(), |args| {
+            if args.is_empty() {
+                return Err("LLM.cache_len(model_id) requires model_id".into());
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let arc = get_llm(mid)?;
+            let seq = arc.lock().cache.seq_len as i64;
+            Ok(Value::Int(seq))
+        }),
+    );
+
+    // --- Grammar / Schema-Guaranteed Constrained Decoding ---
+    llm_mod.insert(
+        "generate_choices".to_string(),
+        Value::Native("LLM.generate_choices".into(), |args| {
+            if args.len() < 3 {
+                return Err(
+                    "LLM.generate_choices(model_id, prompt, choices_array, opts?) requires 3 args"
+                        .into(),
+                );
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let choices: Vec<String> = match &args[2] {
+                Value::Array(arr) => arr.lock().iter().map(|v| format!("{}", v)).collect(),
+                _ => return Err("choices_array must be an Array of strings".into()),
+            };
+            let opts = match args.get(3) {
+                Some(Value::Map(m)) => m.lock().clone(),
+                _ => HashMap::new(),
+            };
+            let temperature = match opts.get("temperature") {
+                Some(Value::Float(f)) => *f as f32,
+                Some(Value::Int(i)) => *i as f32,
+                _ => 0.0,
+            };
+            let seed = match opts.get("seed") {
+                Some(Value::Int(i)) => *i as u64,
+                _ => 42,
+            };
+            let reset_cache = match opts.get("reset_cache") {
+                Some(Value::Bool(b)) => *b,
+                _ => true,
+            };
+
+            let arc = get_llm(mid)?;
+            let mut model = arc.lock();
+            let prompt_tokens = match &args[1] {
+                Value::Array(_) => extract_u32_vec(&args[1])?,
+                Value::String(s) => model.encode_text_for_constrained(s),
+                _ => return Err("prompt must be String or Array of token IDs".into()),
+            };
+
+            let (idx, scores, probs) =
+                model.generate_choices(&prompt_tokens, &choices, temperature, seed, reset_cache)?;
+
+            let mut out = HashMap::new();
+            out.insert("choice".to_string(), Value::string(choices[idx].clone()));
+            out.insert("index".to_string(), Value::Int(idx as i64));
+            out.insert(
+                "scores".to_string(),
+                Value::array(scores.into_iter().map(Value::Float).collect()),
+            );
+            out.insert(
+                "probabilities".to_string(),
+                Value::array(probs.into_iter().map(Value::Float).collect()),
+            );
+            Ok(Value::map(out))
+        }),
+    );
+
+    llm_mod.insert(
+        "generate_schema".to_string(),
+        Value::Native("LLM.generate_schema".into(), |args| {
+            if args.len() < 3 {
+                return Err(
+                    "LLM.generate_schema(model_id, prompt, schema_map, opts?) requires 3 args"
+                        .into(),
+                );
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let mut schema = BTreeMap::new();
+            match &args[2] {
+                Value::Map(m) => {
+                    let entries: Vec<(String, Value)> = m
+                        .lock()
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    for (k, v) in entries {
+                        let ftype = match v {
+                            Value::Array(arr) => {
+                                let opts: Vec<String> =
+                                    arr.lock().iter().map(|x| format!("{}", x)).collect();
+                                SchemaFieldType::Enum(opts)
+                            }
+                            other => match format!("{}", other).to_lowercase().as_str() {
+                                "int" | "integer" => SchemaFieldType::Int,
+                                "float" | "number" => SchemaFieldType::Float,
+                                "bool" | "boolean" => SchemaFieldType::Bool,
+                                _ => SchemaFieldType::String,
+                            },
+                        };
+                        schema.insert(k, ftype);
+                    }
+                }
+                _ => return Err("schema_map must be a Map of field_name -> type_or_enum".into()),
+            }
+
+            let opts = match args.get(3) {
+                Some(Value::Map(m)) => m.lock().clone(),
+                _ => HashMap::new(),
+            };
+            let temperature = match opts.get("temperature") {
+                Some(Value::Float(f)) => *f as f32,
+                Some(Value::Int(i)) => *i as f32,
+                _ => 0.0,
+            };
+            let max_field_tokens = match opts.get("max_field_tokens") {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => 8,
+            };
+            let seed = match opts.get("seed") {
+                Some(Value::Int(i)) => *i as u64,
+                _ => 42,
+            };
+            let reset_cache = match opts.get("reset_cache") {
+                Some(Value::Bool(b)) => *b,
+                _ => true,
+            };
+
+            let arc = get_llm(mid)?;
+            let mut model = arc.lock();
+            let prompt_tokens = match &args[1] {
+                Value::Array(_) => extract_u32_vec(&args[1])?,
+                Value::String(s) => model.encode_text_for_constrained(s),
+                _ => return Err("prompt must be String or Array of token IDs".into()),
+            };
+
+            let (json_str, parsed_json, tokens) = model.generate_schema(
+                &prompt_tokens,
+                &schema,
+                temperature,
+                max_field_tokens,
+                seed,
+                reset_cache,
+            )?;
+
+            let mut out = HashMap::new();
+            out.insert("json".to_string(), Value::string(json_str));
+            out.insert("data".to_string(), serde_json_to_aether(&parsed_json));
+            out.insert(
+                "tokens".to_string(),
+                Value::array(tokens.into_iter().map(|t| Value::Int(t as i64)).collect()),
+            );
+            out.insert("valid".to_string(), Value::Bool(true));
+            Ok(Value::map(out))
         }),
     );
 

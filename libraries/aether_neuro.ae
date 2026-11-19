@@ -1,0 +1,101 @@
+# ==============================================================================
+# AetherNeuro — Unified Neuro-Symbolic Engine (SQL + Vector + Graph + LLM + Proof)
+# Single-Process Hybrid GraphRAG + Constrained Reasoning + Formal Verification
+# ==============================================================================
+
+class NeuroSymbolicEngine:
+    def __init__(self, llm=nil):
+        self.llm = llm
+        self.vec_index = Vector.create_index()
+        self.graph_id = Graph.create()
+        self.entity_to_node = {}
+        self.node_to_entity = {}
+        self.entity_texts = {}
+
+    def _embed_text(self, text):
+        if self.llm != nil:
+            return self.llm.embed(text, "mean")
+        return AI.embed(text)
+
+    def add_entity(self, entity_id, text, props=nil):
+        let emb = self._embed_text(text)
+        let meta = {"entity_id": entity_id, "text": text}
+        if props != nil:
+            for k in props.keys():
+                meta[k] = props[k]
+        Vector.add(self.vec_index, entity_id, emb, meta)
+        let nid = Graph.add_node(self.graph_id, entity_id, meta, emb)
+        self.entity_to_node[entity_id] = nid
+        self.node_to_entity[str(nid)] = entity_id
+        self.entity_texts[entity_id] = text
+        return nid
+
+    def add_relation(self, from_entity, to_entity, relation, weight=1.0):
+        let src = self.entity_to_node[from_entity]
+        let dst = self.entity_to_node[to_entity]
+        return Graph.add_edge(self.graph_id, src, dst, relation, weight)
+
+    def register_sql_table(self, table_name, columns_map):
+        let df_id = DataFrame.create(columns_map)
+        Sql.register_table(table_name, df_id)
+        return df_id
+
+    def query_sql(self, sql_query):
+        let res_df = Sql.query(sql_query)
+        let cols = DataFrame.columns(res_df)
+        let shp = DataFrame.shape(res_df)
+        let table = {}
+        for c in cols:
+            table[c] = DataFrame.get_column(res_df, c)
+        return {"df_id": res_df, "rows": shp[0], "cols": shp[1], "columns": table}
+
+    def retrieve_hybrid(self, query_text, top_k=3, graph_hops=1):
+        let q_vec = self._embed_text(query_text)
+        let hits = Vector.search(self.vec_index, q_vec, top_k, "cosine")
+        let expanded = []
+        let seen = {}
+        for h in hits:
+            let eid = h["id"]
+            if !seen.contains(eid):
+                seen[eid] = true
+                expanded.append({"entity": eid, "source": "vector", "score": h["score"], "text": self.entity_texts[eid]})
+            if self.entity_to_node.contains(eid):
+                let nid = self.entity_to_node[eid]
+                let neighbors = Graph.bfs(self.graph_id, nid, graph_hops)
+                for nb in neighbors:
+                    let nkey = str(nb)
+                    if self.node_to_entity.contains(nkey):
+                        let neid = self.node_to_entity[nkey]
+                        if !seen.contains(neid):
+                            seen[neid] = true
+                            expanded.append({"entity": neid, "source": "graph_hop", "score": h["score"] * 0.85, "text": self.entity_texts[neid]})
+        return expanded
+
+    def verify_contract(self, contract_source):
+        let reports = Proof.verify(contract_source)
+        let all_ok = len(reports) > 0
+        for r in reports:
+            if !r["verified"]:
+                all_ok = false
+        return {"all_verified": all_ok, "reports": reports}
+
+    def reason_verified(self, query_text, schema, contract_source=nil, top_k=2, graph_hops=1):
+        let context = self.retrieve_hybrid(query_text, top_k, graph_hops)
+        let prompt = "Query: " + query_text + "\nContext:\n"
+        for item in context:
+            prompt = prompt + "- [" + item["entity"] + "] " + item["text"] + "\n"
+
+        let structured = nil
+        if self.llm != nil:
+            structured = self.llm.generate_schema(prompt, schema, {"temperature": 0.0, "reset_cache": true})
+
+        let proof_res = {"all_verified": true, "reports": []}
+        if contract_source != nil:
+            proof_res = self.verify_contract(contract_source)
+
+        return {
+            "context": context,
+            "structured": structured,
+            "verified": proof_res["all_verified"],
+            "proof_reports": proof_res["reports"]
+        }

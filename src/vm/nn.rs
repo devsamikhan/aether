@@ -9,11 +9,25 @@ use super::value::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 static NEXT_VAR_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_OPT_ID: AtomicU64 = AtomicU64::new(1);
+static NN_USE_GPU: AtomicBool = AtomicBool::new(false);
+
+fn nn_matmul(a: &TensorData, b: &TensorData) -> Result<TensorData, String> {
+    if NN_USE_GPU.load(Ordering::SeqCst) && a.shape.len() == 2 && b.shape.len() == 2 {
+        let (m, k1) = (a.shape[0], a.shape[1]);
+        let (k2, n) = (b.shape[0], b.shape[1]);
+        if k1 == k2 {
+            if let Some(out) = super::gpu::gpu_matmul_f64_direct(&a.data, &b.data, m, k1, n) {
+                return TensorData::new(vec![m, n], out);
+            }
+        }
+    }
+    a.matmul(b)
+}
 
 static AUTOGRAD_NODES: OnceLock<Mutex<HashMap<u64, TapeVar>>> = OnceLock::new();
 static OPTIMIZERS: OnceLock<Mutex<HashMap<u64, AdamWState>>> = OnceLock::new();
@@ -338,8 +352,8 @@ pub fn backward_from(loss_id: u64) -> Result<(), String> {
                 let a = store.get(&a_id).map(|v| v.data.clone());
                 let b = store.get(&b_id).map(|v| v.data.clone());
                 if let (Some(ad), Some(bd)) = (a, b) {
-                    let ga = g.matmul(&bd.transpose()?)?;
-                    let gb = ad.transpose()?.matmul(&g)?;
+                    let ga = nn_matmul(&g, &bd.transpose()?)?;
+                    let gb = nn_matmul(&ad.transpose()?, &g)?;
                     accumulate_grad(&mut store, a_id, ga)?;
                     accumulate_grad(&mut store, b_id, gb)?;
                 }
@@ -996,7 +1010,7 @@ pub fn register_nn_module(globals: &mut HashMap<String, Value>) {
             let b_id = arg_u64(&args[1], "b_id")?;
             let a = get_var_clone(a_id)?;
             let b = get_var_clone(b_id)?;
-            let out = a.data.matmul(&b.data)?;
+            let out = nn_matmul(&a.data, &b.data)?;
             let id = alloc_var(
                 out,
                 a.requires_grad || b.requires_grad,
@@ -1542,6 +1556,49 @@ pub fn register_nn_module(globals: &mut HashMap<String, Value>) {
                 out_map.insert(name, wrap_tensor_handle(tdata));
             }
             Ok(Value::map(out_map))
+        }),
+    );
+
+    // 9. Hardware Device Selection (CPU vs Cross-Platform wgpu GPU Training)
+    nn_mod.insert(
+        "set_device".to_string(),
+        Value::Native("NN.set_device".into(), |args| {
+            if args.is_empty() {
+                return Err("NN.set_device(\"gpu\" | \"cpu\") requires a device string".into());
+            }
+            let req = format!("{}", args[0]).to_lowercase();
+            match req.as_str() {
+                "gpu" | "wgpu" | "vulkan" | "dx12" | "metal" => {
+                    if super::gpu::is_hardware_gpu_available() {
+                        NN_USE_GPU.store(true, Ordering::SeqCst);
+                        Ok(Value::string("gpu".to_string()))
+                    } else {
+                        NN_USE_GPU.store(false, Ordering::SeqCst);
+                        Ok(Value::string("cpu".to_string()))
+                    }
+                }
+                "cpu" => {
+                    NN_USE_GPU.store(false, Ordering::SeqCst);
+                    Ok(Value::string("cpu".to_string()))
+                }
+                other => Err(format!(
+                    "Unknown NN device '{}' (use \"gpu\" or \"cpu\")",
+                    other
+                )),
+            }
+        }),
+    );
+
+    nn_mod.insert(
+        "device".to_string(),
+        Value::Native("NN.device".into(), |_args| {
+            let active =
+                if NN_USE_GPU.load(Ordering::SeqCst) && super::gpu::is_hardware_gpu_available() {
+                    "gpu"
+                } else {
+                    "cpu"
+                };
+            Ok(Value::string(active.to_string()))
         }),
     );
 

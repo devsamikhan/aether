@@ -1147,6 +1147,24 @@ impl BytecodeCompiler {
 
                 self.patch_jump(skip_handlers);
             }
+            Statement::Sandbox { config, body, span } => {
+                if let Some(ref cfg_expr) = config {
+                    self.compile_expression(cfg_expr)?;
+                } else {
+                    self.emit_op(OpCode::Nil, *span);
+                }
+                self.emit_op(OpCode::EnterSandbox, *span);
+                self.begin_scope();
+                for st in &body.statements {
+                    self.compile_statement(st)?;
+                }
+                if let Some(ref res_expr) = body.result {
+                    self.compile_expression(res_expr)?;
+                    self.emit_op(OpCode::Pop, *span);
+                }
+                self.end_scope(body.span);
+                self.emit_op(OpCode::ExitSandbox, body.span);
+            }
             Statement::Raise { expr, span } => {
                 if let Some(ref e) = expr {
                     self.compile_expression(e)?;
@@ -2489,6 +2507,12 @@ impl BytecodeCompiler {
             Statement::Defer { expr, .. } => self.prescan_captures_in_expr(expr),
             Statement::With { resource, body, .. } => {
                 self.prescan_captures_in_expr(resource);
+                self.prescan_captures_in_block(body);
+            }
+            Statement::Sandbox { config, body, .. } => {
+                if let Some(ref cfg) = config {
+                    self.prescan_captures_in_expr(cfg);
+                }
                 self.prescan_captures_in_block(body);
             }
             Statement::Expr(e) => self.prescan_captures_in_expr(e),

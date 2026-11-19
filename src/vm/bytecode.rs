@@ -92,6 +92,10 @@ pub enum OpCode {
     UnpackArrayRest,
     ImplMethod,
     MatchEnumVariant,
+
+    // Capability-Based Scoped Sandbox
+    EnterSandbox,
+    ExitSandbox,
 }
 
 impl From<u8> for OpCode {

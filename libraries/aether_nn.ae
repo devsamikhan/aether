@@ -28,6 +28,9 @@ class Var:
     def data(self):
         return Tensor(__native_nn.data(self.id))
 
+    def item(self):
+        return self.data().sum()
+
     def grad(self):
         let g = __native_nn.grad(self.id)
         if g == nil:
@@ -277,3 +280,81 @@ def load_weights(path):
     for k in raw.keys():
         out[k] = Tensor(raw[k])
     return out
+
+def set_device(dev):
+    return __native_nn.set_device(dev)
+
+def device():
+    return __native_nn.device()
+
+class LoRALinear:
+    def __init__(self, base_weight, rank=4, alpha=8.0, base_bias=nil, seed=1337):
+        let w_tensor = base_weight
+        if _is_var_instance(base_weight):
+            w_tensor = base_weight.data()
+        elif type(base_weight) != "instance":
+            w_tensor = Tensor(base_weight)
+
+        let shp = w_tensor.shape()
+        self.in_features = shp[0]
+        self.out_features = shp[1]
+        self.rank = rank
+        self.alpha = alpha
+        self.scale = alpha / rank
+
+        # Freeze pretrained base weight (zero gradient memory!)
+        self.base_weight = Var(w_tensor, false)
+        if base_bias != nil:
+            if _is_var_instance(base_bias):
+                self.base_bias = Var(base_bias.data(), false)
+            else:
+                self.base_bias = Var(base_bias, false)
+        else:
+            self.base_bias = nil
+
+        # Low-rank A (He-scaled init) and B (zero-initialized -> exact identity delta at step 0)
+        let a_vals = []
+        let st = seed
+        let i = 0
+        let total_a = self.in_features * rank
+        while i < total_a:
+            st = (st * 1103515245 + 12345) % 2147483647
+            let r = ((st % 2001) - 1000) / 1000.0
+            a_vals.append(r * 0.2)
+            i = i + 1
+
+        let b_vals = []
+        let j = 0
+        let total_b = rank * self.out_features
+        while j < total_b:
+            b_vals.append(0.0)
+            j = j + 1
+
+        self.lora_a = Var(Tensor(a_vals, [self.in_features, rank]), true)
+        self.lora_b = Var(Tensor(b_vals, [rank, self.out_features]), true)
+        self.scale_var = Var(Tensor([self.scale], [1, 1]), false)
+
+    def forward(self, x):
+        let xv = _ensure_var(x)
+        let base_out = xv.matmul(self.base_weight)
+        let lora_delta = xv.matmul(self.lora_a).matmul(self.lora_b) * self.scale_var
+        let out = base_out + lora_delta
+        if self.base_bias != nil:
+            out = out + self.base_bias
+        return out
+
+    def parameters(self):
+        return [self.lora_a, self.lora_b]
+
+    def merge(self):
+        let delta = self.lora_a.data().matmul(self.lora_b.data()) * Tensor([self.scale], [1, 1])
+        return self.base_weight.data() + delta
+
+    def save_adapter(self, path):
+        return save_weights({"lora_a": self.lora_a, "lora_b": self.lora_b}, path)
+
+    def load_adapter(self, path):
+        let loaded = load_weights(path)
+        self.lora_a = Var(loaded["lora_a"], true)
+        self.lora_b = Var(loaded["lora_b"], true)
+        return true

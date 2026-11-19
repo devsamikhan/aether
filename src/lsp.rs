@@ -132,6 +132,20 @@ impl AetherLanguageServer {
                 * `GPU.run_wgsl(wgsl_source, inputs, out_len, workgroups)`"
                     .to_string(),
             ),
+            "Sandbox" => Some(
+                "### AETHER Capability-Based Sandbox & Zero-Trust Execution\n\
+                Run untrusted or AI-generated code with monotonic capability attenuation (FS/Net/FFI/Env/Fuel limits) either via `sandbox(fuel=50000, fs_read=false): ...` blocks or `Sandbox.run(code, policy)`.\n\
+                * `Sandbox.run(source_code, [policy_map]) -> Map`\n\
+                * `Sandbox.policy() -> Map` / `Sandbox.fuel_used() -> Int`"
+                    .to_string(),
+            ),
+            "Bundle" => Some(
+                "### AETHER Standalone Single-Binary Bundle Runtime\n\
+                Access embedded virtual modules and binary/text assets packaged via `aether build app.ae --standalone --asset <file>`.\n\
+                * `Bundle.is_standalone()` / `Bundle.modules()` / `Bundle.assets()`\n\
+                * `Bundle.read_text(name)` / `Bundle.extract_asset(name, dest)`"
+                    .to_string(),
+            ),
             "Chem" => Some(
                 "### AETHER Cheminformatics Engine\n\
                 SMILES/SDF molecule parsing, physicochemical descriptors, Lipinski Ro5, Morgan fingerprints, Tanimoto, and affinity prediction.\n\
@@ -607,6 +621,16 @@ impl AetherLanguageServer {
                 "Cross-Platform Hardware GPU Compute Engine (wgpu DX12/Vulkan/Metal)",
             ),
             (
+                "Sandbox",
+                9,
+                "Capability-Based Scoped Sandbox & Zero-Trust Agent Execution",
+            ),
+            (
+                "Bundle",
+                9,
+                "Standalone Single-Binary Embedded Modules & Assets Runtime",
+            ),
+            (
                 "Matrix",
                 9,
                 "Native Multi-Core Tensor & Linear Algebra Module",
@@ -943,6 +967,12 @@ fn member_completions(ns: &str) -> Vec<JsonValue> {
                 2,
                 "NN.load_safetensors(path) -> Map<String, Tensor>",
             ),
+            (
+                "set_device",
+                2,
+                "NN.set_device(\"gpu\" | \"cpu\") -> String",
+            ),
+            ("device", 2, "NN.device() -> String"),
         ],
         "LLM" => &[
             (
@@ -1017,6 +1047,44 @@ fn member_completions(ns: &str) -> Vec<JsonValue> {
                 "cosine_similarity",
                 2,
                 "LLM.cosine_similarity(a, b) -> Float",
+            ),
+            (
+                "generate_schema",
+                2,
+                "LLM.generate_schema(model_id, prompt, schema_map, [opts]) -> Map",
+            ),
+            (
+                "generate_choices",
+                2,
+                "LLM.generate_choices(model_id, prompt, choices, [opts]) -> Map",
+            ),
+            (
+                "snapshot_cache",
+                2,
+                "LLM.snapshot_cache(model_id) -> snap_id",
+            ),
+            (
+                "restore_cache",
+                2,
+                "LLM.restore_cache(model_id, snap_id) -> Bool",
+            ),
+            ("cache_len", 2, "LLM.cache_len(model_id) -> Int"),
+        ],
+        "Sandbox" => &[
+            ("run", 2, "Sandbox.run(source_code, [policy_map]) -> Map"),
+            ("policy", 2, "Sandbox.policy() -> Map"),
+            ("fuel_used", 2, "Sandbox.fuel_used() -> Int"),
+        ],
+        "Bundle" => &[
+            ("is_standalone", 2, "Bundle.is_standalone() -> Bool"),
+            ("modules", 2, "Bundle.modules() -> Array<String>"),
+            ("assets", 2, "Bundle.assets() -> Array<String>"),
+            ("has_asset", 2, "Bundle.has_asset(name) -> Bool"),
+            ("read_text", 2, "Bundle.read_text(name) -> String"),
+            (
+                "extract_asset",
+                2,
+                "Bundle.extract_asset(name, dest) -> Bool",
             ),
         ],
         "GPU" => &[

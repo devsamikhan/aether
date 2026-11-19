@@ -762,11 +762,14 @@ pub fn is_tensor_accel_enabled() -> bool {
     GPU_TENSOR_ACCEL.load(Ordering::SeqCst)
 }
 
-/// Optional transparent hook for `Tensor.matmul` when `GPU.set_tensor_accel(true)` is active.
-pub fn try_gpu_matmul_f64(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) -> Option<Vec<f64>> {
-    if !is_tensor_accel_enabled() || m * k * n < 262_144 {
-        return None;
-    }
+/// Direct hardware GPU matmul hook for `NN` autograd forward/backward when `NN.set_device("gpu")`.
+pub fn gpu_matmul_f64_direct(
+    a: &[f64],
+    b: &[f64],
+    m: usize,
+    k: usize,
+    n: usize,
+) -> Option<Vec<f64>> {
     #[cfg(feature = "gpu")]
     {
         let backend = gpu_backend()?;
@@ -783,6 +786,14 @@ pub fn try_gpu_matmul_f64(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) ->
         let _ = (a, b, m, k, n);
         None
     }
+}
+
+/// Optional transparent hook for `Tensor.matmul` when `GPU.set_tensor_accel(true)` is active.
+pub fn try_gpu_matmul_f64(a: &[f64], b: &[f64], m: usize, k: usize, n: usize) -> Option<Vec<f64>> {
+    if !is_tensor_accel_enabled() || m * k * n < 262_144 {
+        return None;
+    }
+    gpu_matmul_f64_direct(a, b, m, k, n)
 }
 
 // ==============================================================================

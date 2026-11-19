@@ -63,3 +63,20 @@ pub fn run_source_sandboxed(source: &str, policy: SecurityPolicy) -> Result<Valu
     vm.security_policy = policy;
     vm.interpret(compiled_fn)
 }
+
+/// Executes a self-contained AETHER bundle with preloaded virtual modules and embedded assets.
+pub fn run_bundle(
+    entry_source: &str,
+    virtual_modules: std::collections::HashMap<String, String>,
+    embedded_assets: std::collections::HashMap<String, Vec<u8>>,
+) -> Result<Value, String> {
+    let raw_program = crate::syntax::parse(entry_source)
+        .map_err(|(e, span)| format!("{}:{}: {}", span.line, span.col, e))?;
+    let (program, _stats) = optimizer::optimize_program(&raw_program);
+    let compiler = BytecodeCompiler::new("<main>", 0);
+    let compiled_fn = compiler.compile(&program)?;
+    let mut vm = VM::new();
+    vm.virtual_modules = virtual_modules;
+    vm.embedded_assets = embedded_assets;
+    vm.interpret(compiled_fn)
+}
