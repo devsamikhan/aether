@@ -1538,28 +1538,14 @@ impl BytecodeCompiler {
                 let then_jump = self.emit_jump(OpCode::JumpIfFalse, *span);
                 self.emit_op(OpCode::Pop, *span); // pop condition
 
-                for st in &then_branch.statements {
-                    self.compile_statement(st)?;
-                }
-                if let Some(res) = &then_branch.result {
-                    self.compile_expression(res)?;
-                } else {
-                    self.emit_op(OpCode::Nil, *span);
-                }
+                self.compile_scoped_branch(then_branch, *span)?;
 
                 let else_jump = self.emit_jump(OpCode::Jump, *span);
                 self.patch_jump(then_jump);
                 self.emit_op(OpCode::Pop, *span); // pop condition on false
 
                 if let Some(eb) = else_branch {
-                    for st in &eb.statements {
-                        self.compile_statement(st)?;
-                    }
-                    if let Some(res) = &eb.result {
-                        self.compile_expression(res)?;
-                    } else {
-                        self.emit_op(OpCode::Nil, *span);
-                    }
+                    self.compile_scoped_branch(eb, *span)?;
                 } else {
                     self.emit_op(OpCode::Nil, *span);
                 }
@@ -2659,6 +2645,44 @@ impl BytecodeCompiler {
                 break;
             }
         }
+    }
+
+    fn compile_scoped_branch(&mut self, branch: &Block, span: Span) -> Result<(), String> {
+        if self.scope_depth == 0 {
+            for st in &branch.statements {
+                self.compile_statement(st)?;
+            }
+            if let Some(res) = &branch.result {
+                self.compile_expression(res)?;
+            } else {
+                self.emit_op(OpCode::Nil, span);
+            }
+            return Ok(());
+        }
+
+        let locals_before = self.locals.len();
+        self.begin_scope();
+        for st in &branch.statements {
+            self.compile_statement(st)?;
+        }
+        if let Some(res) = &branch.result {
+            self.compile_expression(res)?;
+            let added = self.locals.len().saturating_sub(locals_before);
+            self.scope_depth -= 1;
+            if added > 0 {
+                // Move branch result down into the first branch-local slot, then pop extras
+                self.emit_op(OpCode::SetLocal, span);
+                self.emit_u16(locals_before as u16, span);
+                for _ in 0..added {
+                    self.emit_op(OpCode::Pop, span);
+                    self.locals.pop();
+                }
+            }
+        } else {
+            self.end_scope(span);
+            self.emit_op(OpCode::Nil, span);
+        }
+        Ok(())
     }
 
     fn add_local(&mut self, name: String, _span: Span) -> Result<(), String> {

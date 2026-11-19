@@ -1,0 +1,52 @@
+# ==============================================================================
+# AetherVision — Pure-Rust Computer Vision & Image Processing Library
+# Zero OpenCV / Zero Pillow — Direct NCHW Tensor Bridge to AetherNN Conv2d
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+class Image:
+    def __init__(self, handle_id):
+        self.id = handle_id
+
+    def create(width, height, channels=3, fill_or_pixels=0.0):
+        return Image(__native_vision.create(width, height, channels, fill_or_pixels))
+
+    def load(path):
+        return Image(__native_vision.load(path))
+
+    def from_tensor(t):
+        let h = t
+        if type(t) == "instance":
+            h = t.handle
+        return Image(__native_vision.from_tensor(h))
+
+    def info(self):
+        return __native_vision.info(self.id)
+
+    def save_bmp(self, path):
+        return __native_vision.save_bmp(self.id, path)
+
+    def save_ppm(self, path):
+        return __native_vision.save_ppm(self.id, path)
+
+    def resize(self, new_w, new_h):
+        return Image(__native_vision.resize(self.id, new_w, new_h))
+
+    def grayscale(self):
+        return Image(__native_vision.grayscale(self.id))
+
+    def crop(self, x, y, w, h):
+        return Image(__native_vision.crop(self.id, x, y, w, h))
+
+    def flip_h(self):
+        return Image(__native_vision.flip_h(self.id))
+
+    def normalize(self, mean=0.5, std=0.5):
+        return Image(__native_vision.normalize(self.id, mean, std))
+
+    def sobel_edges(self):
+        return Image(__native_vision.sobel_edges(self.id))
+
+    def to_tensor(self):
+        return Tensor(__native_vision.to_tensor(self.id))

@@ -1,0 +1,107 @@
+# ==============================================================================
+# Project 4 — EdgeVision CNN: Pure-Rust Computer Vision + Conv2d Classifier
+# Zero OpenCV, Zero Pillow, Zero PyTorch, Zero Python!
+# ==============================================================================
+
+from aether_vision import Image
+from aether_tensor import Tensor
+from aether_nn import Conv2d, MaxPool2d, Flatten, Linear, AdamW, cross_entropy_loss
+
+print("==========================================================================")
+print("   PROJECT 4: EdgeVision CNN — Pure-Rust Vision + Conv2d Classifier")
+print("   Standalone Binary Mode:", Bundle.is_standalone())
+print("==========================================================================")
+
+# Helper: Generate 6x6 grayscale images: class 0 = horizontal bar, class 1 = vertical bar
+def make_pattern_pixels(kind, offset):
+    let pix = []
+    let y = 0
+    while y < 6:
+        let x = 0
+        while x < 6:
+            let val = 0.05
+            if kind == 0:
+                if y == (2 + offset) or y == (3 + offset):
+                    val = 0.95
+            else:
+                if x == (2 + offset) or x == (3 + offset):
+                    val = 0.95
+            pix.append(val)
+            x = x + 1
+        y = y + 1
+    return pix
+
+# 1. Demonstrate Pure-Rust Vision Image Pipeline (BMP I/O + Resize + Sobel Edges)
+let sample_img = Image.create(6, 6, 1, make_pattern_pixels(1, 0))
+let bmp_path = "_edge_vision_sample.tmp.bmp"
+sample_img.save_bmp(bmp_path)
+let reloaded = Image.load(bmp_path)
+let resized = reloaded.resize(12, 12)
+let edges = resized.sobel_edges()
+let einfo = edges.info()
+File.delete(bmp_path)
+print("[1] Vision Pipeline | Loaded BMP:", reloaded.info()["width"], "x", reloaded.info()["height"], "| Resized + Sobel Max Edge:", Math.round(einfo["max"], 3))
+
+# 2. Build 4D NCHW Batch [4, 1, 6, 6] (2 Horizontal = class 0, 2 Vertical = class 1)
+let batch_flat = []
+let p0 = make_pattern_pixels(0, 0)
+let p1 = make_pattern_pixels(0, 1)
+let p2 = make_pattern_pixels(1, 0)
+let p3 = make_pattern_pixels(1, 1)
+for v in p0:
+    batch_flat.append(v)
+for v in p1:
+    batch_flat.append(v)
+for v in p2:
+    batch_flat.append(v)
+for v in p3:
+    batch_flat.append(v)
+
+let X_batch = Tensor(batch_flat, [4, 1, 6, 6])
+let y_batch = [0, 0, 1, 1]
+
+# 3. Define & Train Pure-Rust CNN: Conv2d(1->4, 3x3) -> ReLU -> MaxPool2d(2) -> Flatten -> Linear(16->2)
+let conv1 = Conv2d(1, 4, 3, 1, 0)
+let pool1 = MaxPool2d(2, 2)
+let flat = Flatten()
+let fc1 = Linear(16, 2, 77)
+
+let params = []
+for p in conv1.parameters():
+    params.append(p)
+for p in fc1.parameters():
+    params.append(p)
+
+let opt = AdamW(params, 0.05)
+print("[2] Training Edge CNN (Conv2d -> ReLU -> MaxPool2d -> Flatten -> Linear)...")
+let ep = 0
+let last_loss = 0.0
+while ep < 35:
+    opt.zero_grad()
+    let z = conv1.forward(X_batch).relu()
+    let p = pool1.forward(z)
+    let f = flat.forward(p)
+    let logits = fc1.forward(f)
+    let loss = cross_entropy_loss(logits, y_batch)
+    last_loss = loss.item()
+    loss.backward()
+    opt.step()
+    if ep == 0 or ep == 17 or ep == 34:
+        print("    Epoch", ep, "| CrossEntropy Loss:", last_loss)
+    ep = ep + 1
+
+# 4. Live Inference on New Image via Vision.to_tensor()
+let test_vert = Image.create(6, 6, 1, make_pattern_pixels(1, 0)).to_tensor()
+let test_horiz = Image.create(6, 6, 1, make_pattern_pixels(0, 0)).to_tensor()
+let lv = fc1.forward(flat.forward(pool1.forward(conv1.forward(test_vert).relu()))).data().to_array()[0]
+let lh = fc1.forward(flat.forward(pool1.forward(conv1.forward(test_horiz).relu()))).data().to_array()[0]
+
+let pred_h = 0
+if lh[1] > lh[0]:
+    pred_h = 1
+let pred_v = 0
+if lv[1] > lv[0]:
+    pred_v = 1
+
+print("[3] Live Vision Inference | Horizontal Pattern -> Class:", pred_h, "| Vertical Pattern -> Class:", pred_v)
+print("==========================================================================")

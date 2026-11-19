@@ -698,9 +698,216 @@ pub fn register_graph_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // 9. Graph.save(graph_id, path) -> Bool
+    mod_map.insert(
+        "save".to_string(),
+        Value::Native("Graph.save".into(), |args| {
+            if args.len() < 2 {
+                return Err("Graph.save(graph_id, path) requires 2 arguments".into());
+            }
+            let gid = match args[0] {
+                Value::Int(i) if i > 0 => i as u64,
+                _ => return Err("graph_id must be positive integer".into()),
+            };
+            let path = format!("{}", args[1]);
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
+
+            let g_arc = get_graph(gid)?;
+            let g = g_arc.lock().unwrap();
+
+            let mut nodes_json = Vec::new();
+            for n in g.nodes.values() {
+                let mut props = serde_json::Map::new();
+                for (k, v) in &n.properties {
+                    props.insert(k.clone(), value_to_json_graph(v));
+                }
+                nodes_json.push(serde_json::json!({
+                    "id": n.id,
+                    "label": n.label,
+                    "properties": props,
+                    "embedding": n.embedding,
+                }));
+            }
+            let mut edges_json = Vec::new();
+            for e in g.edges.values() {
+                let mut props = serde_json::Map::new();
+                for (k, v) in &e.properties {
+                    props.insert(k.clone(), value_to_json_graph(v));
+                }
+                edges_json.push(serde_json::json!({
+                    "id": e.id,
+                    "from": e.from,
+                    "to": e.to,
+                    "label": e.label,
+                    "weight": e.weight,
+                    "properties": props,
+                }));
+            }
+            let root = serde_json::json!({
+                "name": g.name,
+                "next_node_id": g.next_node_id,
+                "next_edge_id": g.next_edge_id,
+                "nodes": nodes_json,
+                "edges": edges_json,
+            });
+            let txt = serde_json::to_string_pretty(&root)
+                .map_err(|e| format!("Failed to serialize graph: {}", e))?;
+            std::fs::write(&path, txt)
+                .map_err(|e| format!("Failed to write graph '{}': {}", path, e))?;
+            Ok(Value::Bool(true))
+        }),
+    );
+
+    // 10. Graph.load(path) -> graph_id
+    mod_map.insert(
+        "load".to_string(),
+        Value::Native("Graph.load".into(), |args| {
+            if args.is_empty() {
+                return Err("Graph.load(path) requires file path".into());
+            }
+            let path = format!("{}", args[0]);
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read graph '{}': {}", path, e))?;
+            let root: serde_json::Value = serde_json::from_str(&raw)
+                .map_err(|e| format!("Invalid graph JSON '{}': {}", path, e))?;
+
+            let gid = NEXT_GRAPH_ID.fetch_add(1, AtomicOrdering::SeqCst);
+            let name = root
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("loaded_graph")
+                .to_string();
+            let mut g = PropertyGraph::new(gid, name);
+
+            if let Some(nodes) = root.get("nodes").and_then(|v| v.as_array()) {
+                for n in nodes {
+                    let id = n.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+                    if id == 0 {
+                        continue;
+                    }
+                    let label = n
+                        .get("label")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let mut properties = HashMap::new();
+                    if let Some(po) = n.get("properties").and_then(|v| v.as_object()) {
+                        for (k, v) in po {
+                            properties.insert(k.clone(), json_to_value_graph(v));
+                        }
+                    }
+                    let embedding = n
+                        .get("embedding")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|x| x.as_f64()).collect());
+                    g.nodes.insert(
+                        id,
+                        GraphNode {
+                            id,
+                            label,
+                            properties,
+                            embedding,
+                        },
+                    );
+                    g.outgoing.entry(id).or_default();
+                    g.incoming.entry(id).or_default();
+                    g.next_node_id = g.next_node_id.max(id + 1);
+                }
+            }
+
+            if let Some(edges) = root.get("edges").and_then(|v| v.as_array()) {
+                for e in edges {
+                    let id = e.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let from = e.get("from").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let to = e.get("to").and_then(|v| v.as_u64()).unwrap_or(0);
+                    if id == 0 || !g.nodes.contains_key(&from) || !g.nodes.contains_key(&to) {
+                        continue;
+                    }
+                    let label = e
+                        .get("label")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let weight = e.get("weight").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                    let mut properties = HashMap::new();
+                    if let Some(po) = e.get("properties").and_then(|v| v.as_object()) {
+                        for (k, v) in po {
+                            properties.insert(k.clone(), json_to_value_graph(v));
+                        }
+                    }
+                    g.edges.insert(
+                        id,
+                        GraphEdge {
+                            id,
+                            from,
+                            to,
+                            label,
+                            weight,
+                            properties,
+                        },
+                    );
+                    g.outgoing.entry(from).or_default().push(id);
+                    g.incoming.entry(to).or_default().push(id);
+                    g.next_edge_id = g.next_edge_id.max(id + 1);
+                }
+            }
+
+            get_registry()
+                .lock()
+                .unwrap()
+                .insert(gid, Arc::new(Mutex::new(g)));
+            Ok(Value::Int(gid as i64))
+        }),
+    );
+
     let val = Value::map(mod_map);
     globals.insert("__native_graph".to_string(), val.clone());
     globals.insert("graph".to_string(), val.clone());
     globals.insert("aether_graph".to_string(), val.clone());
     globals.insert("Graph".to_string(), val);
+}
+
+fn value_to_json_graph(val: &Value) -> serde_json::Value {
+    match val {
+        Value::Nil => serde_json::Value::Null,
+        Value::Bool(b) => serde_json::Value::Bool(*b),
+        Value::Int(i) => serde_json::Value::from(*i),
+        Value::Float(f) => serde_json::Value::from(*f),
+        Value::String(s) => serde_json::Value::String(s.to_string()),
+        Value::Array(a) => {
+            serde_json::Value::Array(a.lock().iter().map(value_to_json_graph).collect())
+        }
+        Value::Map(m) => {
+            let mut obj = serde_json::Map::new();
+            for (k, v) in m.lock().iter() {
+                obj.insert(k.clone(), value_to_json_graph(v));
+            }
+            serde_json::Value::Object(obj)
+        }
+        other => serde_json::Value::String(format!("{}", other)),
+    }
+}
+
+fn json_to_value_graph(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else {
+                Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => Value::string(s.clone()),
+        serde_json::Value::Array(a) => Value::array(a.iter().map(json_to_value_graph).collect()),
+        serde_json::Value::Object(obj) => {
+            let mut m = HashMap::new();
+            for (k, val) in obj {
+                m.insert(k.clone(), json_to_value_graph(val));
+            }
+            Value::map(m)
+        }
+    }
 }

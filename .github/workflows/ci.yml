@@ -27,8 +27,10 @@ jobs:
           key: ${{ runner.os }}-lint-${{ hashFiles('**/Cargo.lock') }}
       - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: Clippy checks
+      - name: Clippy checks (default + wgpu)
         run: cargo clippy --all-targets -- -D warnings
+      - name: Clippy checks (headless zero-wgpu edge build)
+        run: cargo clippy --no-default-features --all-targets -- -D warnings
 
   build-and-test:
     name: Build & Test (${{ matrix.os }})

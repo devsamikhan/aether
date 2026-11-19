@@ -93,6 +93,18 @@ pub enum TapeOp {
         d_k: usize,
         causal: bool,
     },
+    Conv2d {
+        x: u64,
+        weight: u64,
+        bias: Option<u64>,
+        stride: usize,
+        padding: usize,
+    },
+    MaxPool2d {
+        x: u64,
+        in_shape: Vec<usize>,
+        argmax: Vec<usize>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -127,6 +139,16 @@ impl TapeOp {
             TapeOp::LayerNorm { x, gamma, beta, .. } => vec![*x, *gamma, *beta],
             TapeOp::Embedding { table, .. } => vec![*table],
             TapeOp::Attention { q, k, v, .. } => vec![*q, *k, *v],
+            TapeOp::Conv2d {
+                x, weight, bias, ..
+            } => {
+                let mut v = vec![*x, *weight];
+                if let Some(b) = bias {
+                    v.push(*b);
+                }
+                v
+            }
+            TapeOp::MaxPool2d { x, .. } => vec![*x],
         }
     }
 }
@@ -564,6 +586,78 @@ pub fn backward_from(loss_id: u64) -> Result<(), String> {
                     accumulate_grad(&mut store, k, dk)?;
                     accumulate_grad(&mut store, v, dv)?;
                 }
+            }
+            TapeOp::Conv2d {
+                x,
+                weight,
+                bias,
+                stride,
+                padding,
+            } => {
+                let x_data = store.get(&x).map(|n| n.data.clone());
+                let w_data = store.get(&weight).map(|n| n.data.clone());
+                if let (Some(xd), Some(wd)) = (x_data, w_data) {
+                    let (n, c_in, h, w) = (xd.shape[0], xd.shape[1], xd.shape[2], xd.shape[3]);
+                    let (c_out, _, kh, kw) = (wd.shape[0], wd.shape[1], wd.shape[2], wd.shape[3]);
+                    let (out_h, out_w) = (g.shape[2], g.shape[3]);
+
+                    let mut dx = vec![0.0; xd.data.len()];
+                    let mut dw = vec![0.0; wd.data.len()];
+                    let mut db = vec![0.0; c_out];
+
+                    for bi in 0..n {
+                        for (co, db_slot) in db.iter_mut().enumerate().take(c_out) {
+                            for oh in 0..out_h {
+                                for ow in 0..out_w {
+                                    let go = g.data[((bi * c_out + co) * out_h + oh) * out_w + ow];
+                                    *db_slot += go;
+                                    for ci in 0..c_in {
+                                        for r in 0..kh {
+                                            let ih_i =
+                                                (oh * stride + r) as isize - padding as isize;
+                                            if ih_i < 0 || ih_i >= h as isize {
+                                                continue;
+                                            }
+                                            let ih = ih_i as usize;
+                                            for c in 0..kw {
+                                                let iw_i =
+                                                    (ow * stride + c) as isize - padding as isize;
+                                                if iw_i < 0 || iw_i >= w as isize {
+                                                    continue;
+                                                }
+                                                let iw = iw_i as usize;
+                                                let x_idx = ((bi * c_in + ci) * h + ih) * w + iw;
+                                                let w_idx = ((co * c_in + ci) * kh + r) * kw + c;
+                                                dx[x_idx] += go * wd.data[w_idx];
+                                                dw[w_idx] += go * xd.data[x_idx];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    accumulate_grad(&mut store, x, TensorData::new(xd.shape.clone(), dx)?)?;
+                    accumulate_grad(&mut store, weight, TensorData::new(wd.shape.clone(), dw)?)?;
+                    if let Some(b_id) = bias {
+                        accumulate_grad(&mut store, b_id, TensorData::new(vec![c_out], db)?)?;
+                    }
+                }
+            }
+            TapeOp::MaxPool2d {
+                x,
+                in_shape,
+                argmax,
+            } => {
+                let total_in: usize = in_shape.iter().product();
+                let mut dx = vec![0.0; total_in];
+                for (&src_idx, &go) in argmax.iter().zip(g.data.iter()) {
+                    if src_idx < total_in {
+                        dx[src_idx] += go;
+                    }
+                }
+                accumulate_grad(&mut store, x, TensorData::new(in_shape, dx)?)?;
             }
         }
     }
@@ -1599,6 +1693,200 @@ pub fn register_nn_module(globals: &mut HashMap<String, Value>) {
                     "cpu"
                 };
             Ok(Value::string(active.to_string()))
+        }),
+    );
+
+    // 10. Computer Vision CNN Ops (Conv2d, MaxPool2d, Flatten)
+    nn_mod.insert(
+        "conv2d".to_string(),
+        Value::Native("NN.conv2d".into(), |args| {
+            if args.len() < 2 {
+                return Err(
+                    "NN.conv2d(x_id, weight_id, bias_id?, stride?, padding?) requires 2 args".into(),
+                );
+            }
+            let x_id = arg_u64(&args[0], "x_id")?;
+            let w_id = arg_u64(&args[1], "weight_id")?;
+            let bias_id = match args.get(2) {
+                Some(Value::Int(i)) if *i > 0 => Some(*i as u64),
+                _ => None,
+            };
+            let stride = match args.get(3) {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => 1,
+            };
+            let padding = match args.get(4) {
+                Some(Value::Int(i)) if *i >= 0 => *i as usize,
+                _ => 0,
+            };
+
+            let x = get_var_clone(x_id)?;
+            let w = get_var_clone(w_id)?;
+            if x.data.shape.len() != 4 || w.data.shape.len() != 4 {
+                return Err(format!(
+                    "NN.conv2d expects 4D NCHW input and [C_out,C_in,KH,KW] weight, got {:?} and {:?}",
+                    x.data.shape, w.data.shape
+                ));
+            }
+            let (n, c_in, h, wi) = (x.data.shape[0], x.data.shape[1], x.data.shape[2], x.data.shape[3]);
+            let (c_out, w_cin, kh, kw) = (w.data.shape[0], w.data.shape[1], w.data.shape[2], w.data.shape[3]);
+            if c_in != w_cin {
+                return Err(format!("Conv2d channel mismatch: input {} vs weight {}", c_in, w_cin));
+            }
+            if h + 2 * padding < kh || wi + 2 * padding < kw {
+                return Err("Conv2d kernel larger than padded input".into());
+            }
+            let out_h = (h + 2 * padding - kh) / stride + 1;
+            let out_w = (wi + 2 * padding - kw) / stride + 1;
+
+            let bias_var = match bias_id {
+                Some(bid) => Some(get_var_clone(bid)?),
+                None => None,
+            };
+            let mut out = vec![0.0; n * c_out * out_h * out_w];
+            for bi in 0..n {
+                for co in 0..c_out {
+                    let b_val = bias_var
+                        .as_ref()
+                        .and_then(|bv| bv.data.data.get(co).copied())
+                        .unwrap_or(0.0);
+                    for oh in 0..out_h {
+                        for ow in 0..out_w {
+                            let mut acc = b_val;
+                            for ci in 0..c_in {
+                                for r in 0..kh {
+                                    let ih_i = (oh * stride + r) as isize - padding as isize;
+                                    if ih_i < 0 || ih_i >= h as isize {
+                                        continue;
+                                    }
+                                    let ih = ih_i as usize;
+                                    for c in 0..kw {
+                                        let iw_i = (ow * stride + c) as isize - padding as isize;
+                                        if iw_i < 0 || iw_i >= wi as isize {
+                                            continue;
+                                        }
+                                        let iw = iw_i as usize;
+                                        let xv = x.data.data[((bi * c_in + ci) * h + ih) * wi + iw];
+                                        let wv = w.data.data[((co * c_in + ci) * kh + r) * kw + c];
+                                        acc += xv * wv;
+                                    }
+                                }
+                            }
+                            out[((bi * c_out + co) * out_h + oh) * out_w + ow] = acc;
+                        }
+                    }
+                }
+            }
+
+            let req_grad = x.requires_grad
+                || w.requires_grad
+                || bias_var.as_ref().is_some_and(|b| b.requires_grad);
+            let td = TensorData::new(vec![n, c_out, out_h, out_w], out)?;
+            let id = alloc_var(
+                td,
+                req_grad,
+                TapeOp::Conv2d {
+                    x: x_id,
+                    weight: w_id,
+                    bias: bias_id,
+                    stride,
+                    padding,
+                },
+            );
+            Ok(Value::Int(id as i64))
+        }),
+    );
+
+    nn_mod.insert(
+        "max_pool2d".to_string(),
+        Value::Native("NN.max_pool2d".into(), |args| {
+            if args.is_empty() {
+                return Err("NN.max_pool2d(x_id, kernel_size?, stride?) requires x_id".into());
+            }
+            let x_id = arg_u64(&args[0], "x_id")?;
+            let k = match args.get(1) {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => 2,
+            };
+            let stride = match args.get(2) {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => k,
+            };
+            let x = get_var_clone(x_id)?;
+            if x.data.shape.len() != 4 {
+                return Err(format!(
+                    "NN.max_pool2d expects 4D NCHW tensor, got {:?}",
+                    x.data.shape
+                ));
+            }
+            let (n, c, h, w) = (
+                x.data.shape[0],
+                x.data.shape[1],
+                x.data.shape[2],
+                x.data.shape[3],
+            );
+            if h < k || w < k {
+                return Err("MaxPool2d kernel larger than spatial dims".into());
+            }
+            let out_h = (h - k) / stride + 1;
+            let out_w = (w - k) / stride + 1;
+            let mut out = vec![0.0; n * c * out_h * out_w];
+            let mut argmax = vec![0usize; n * c * out_h * out_w];
+
+            for bi in 0..n {
+                for ch in 0..c {
+                    for oh in 0..out_h {
+                        for ow in 0..out_w {
+                            let mut best_v = f64::NEG_INFINITY;
+                            let mut best_idx = 0usize;
+                            for r in 0..k {
+                                for col in 0..k {
+                                    let ih = oh * stride + r;
+                                    let iw = ow * stride + col;
+                                    let idx = ((bi * c + ch) * h + ih) * w + iw;
+                                    let v = x.data.data[idx];
+                                    if v > best_v {
+                                        best_v = v;
+                                        best_idx = idx;
+                                    }
+                                }
+                            }
+                            let o_idx = ((bi * c + ch) * out_h + oh) * out_w + ow;
+                            out[o_idx] = best_v;
+                            argmax[o_idx] = best_idx;
+                        }
+                    }
+                }
+            }
+
+            let td = TensorData::new(vec![n, c, out_h, out_w], out)?;
+            let id = alloc_var(
+                td,
+                x.requires_grad,
+                TapeOp::MaxPool2d {
+                    x: x_id,
+                    in_shape: x.data.shape.clone(),
+                    argmax,
+                },
+            );
+            Ok(Value::Int(id as i64))
+        }),
+    );
+
+    nn_mod.insert(
+        "flatten".to_string(),
+        Value::Native("NN.flatten".into(), |args| {
+            if args.is_empty() {
+                return Err("NN.flatten(node_id) requires node_id".into());
+            }
+            let a_id = arg_u64(&args[0], "node_id")?;
+            let a = get_var_clone(a_id)?;
+            let orig_shape = a.data.shape.clone();
+            let batch = orig_shape.first().copied().unwrap_or(1);
+            let rest: usize = orig_shape.iter().skip(1).product::<usize>().max(1);
+            let reshaped = a.data.reshape(vec![batch, rest])?;
+            let id = alloc_var(reshaped, a.requires_grad, TapeOp::Reshape(a_id, orig_shape));
+            Ok(Value::Int(id as i64))
         }),
     );
 

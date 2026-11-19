@@ -146,6 +146,13 @@ impl AetherLanguageServer {
                 * `Bundle.read_text(name)` / `Bundle.extract_asset(name, dest)`"
                     .to_string(),
             ),
+            "Vision" => Some(
+                "### AETHER Pure-Rust Computer Vision & Image Processing Engine\n\
+                Zero-OpenCV BMP/PPM/PGM I/O, bilinear resize, grayscale, crop, flip, Sobel edge detection, and direct NCHW tensor conversion for `NN.conv2d`.\n\
+                * `Vision.load(path)` / `Vision.create(w, h, c)` / `Vision.save_bmp(id, path)`\n\
+                * `Vision.resize(id, w, h)` / `Vision.sobel_edges(id)` / `Vision.to_tensor(id)`"
+                    .to_string(),
+            ),
             "Chem" => Some(
                 "### AETHER Cheminformatics Engine\n\
                 SMILES/SDF molecule parsing, physicochemical descriptors, Lipinski Ro5, Morgan fingerprints, Tanimoto, and affinity prediction.\n\
@@ -631,6 +638,11 @@ impl AetherLanguageServer {
                 "Standalone Single-Binary Embedded Modules & Assets Runtime",
             ),
             (
+                "Vision",
+                9,
+                "Pure-Rust Computer Vision, BMP/PPM I/O, Sobel & CNN Tensor Bridge",
+            ),
+            (
                 "Matrix",
                 9,
                 "Native Multi-Core Tensor & Linear Algebra Module",
@@ -1069,6 +1081,34 @@ fn member_completions(ns: &str) -> Vec<JsonValue> {
                 "LLM.restore_cache(model_id, snap_id) -> Bool",
             ),
             ("cache_len", 2, "LLM.cache_len(model_id) -> Int"),
+            (
+                "generate_stream",
+                2,
+                "LLM.generate_stream(model_id, prompt, callback_fn, [opts]) -> Map",
+            ),
+        ],
+        "Vision" => &[
+            (
+                "create",
+                2,
+                "Vision.create(w, h, c, [fill_or_pixels]) -> img_id",
+            ),
+            ("load", 2, "Vision.load(path) -> img_id"),
+            ("save_bmp", 2, "Vision.save_bmp(img_id, path) -> Bool"),
+            ("save_ppm", 2, "Vision.save_ppm(img_id, path) -> Bool"),
+            ("info", 2, "Vision.info(img_id) -> Map"),
+            ("resize", 2, "Vision.resize(img_id, new_w, new_h) -> img_id"),
+            ("grayscale", 2, "Vision.grayscale(img_id) -> img_id"),
+            ("crop", 2, "Vision.crop(img_id, x, y, w, h) -> img_id"),
+            ("flip_h", 2, "Vision.flip_h(img_id) -> img_id"),
+            (
+                "normalize",
+                2,
+                "Vision.normalize(img_id, mean, std) -> img_id",
+            ),
+            ("sobel_edges", 2, "Vision.sobel_edges(img_id) -> img_id"),
+            ("to_tensor", 2, "Vision.to_tensor(img_id) -> Tensor"),
+            ("from_tensor", 2, "Vision.from_tensor(tensor) -> img_id"),
         ],
         "Sandbox" => &[
             ("run", 2, "Sandbox.run(source_code, [policy_map]) -> Map"),

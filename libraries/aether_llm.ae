@@ -121,6 +121,11 @@ class LocalLLM:
             return __native_llm.generate_choices(self.id, prompt_or_tokens, choices, {})
         return __native_llm.generate_choices(self.id, prompt_or_tokens, choices, opts)
 
+    def generate_stream(self, prompt_or_tokens, callback_fn, opts=nil):
+        if opts == nil:
+            return __native_llm.generate_stream(self.id, prompt_or_tokens, callback_fn, {})
+        return __native_llm.generate_stream(self.id, prompt_or_tokens, callback_fn, opts)
+
     def snapshot_cache(self):
         return __native_llm.snapshot_cache(self.id)
 

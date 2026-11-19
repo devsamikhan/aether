@@ -358,3 +358,52 @@ class LoRALinear:
         self.lora_a = Var(loaded["lora_a"], true)
         self.lora_b = Var(loaded["lora_b"], true)
         return true
+
+class Conv2d:
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0, bias=true):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        let bound = 0.2
+        self.W = Var(Tensor.random([out_channels, in_channels, kernel_size, kernel_size], -bound, bound), true)
+        if bias:
+            self.b = Var(Tensor.zeros([out_channels]), true)
+        else:
+            self.b = nil
+
+    def forward(self, x):
+        let xv = _ensure_var(x)
+        let bid = nil
+        if self.b != nil:
+            bid = self.b.id
+        return Var.from_id(__native_nn.conv2d(xv.id, self.W.id, bid, self.stride, self.padding))
+
+    def parameters(self):
+        if self.b != nil:
+            return [self.W, self.b]
+        return [self.W]
+
+class MaxPool2d:
+    def __init__(self, kernel_size=2, stride=nil):
+        self.kernel_size = kernel_size
+        self.stride = stride
+
+    def forward(self, x):
+        let xv = _ensure_var(x)
+        return Var.from_id(__native_nn.max_pool2d(xv.id, self.kernel_size, self.stride))
+
+    def parameters(self):
+        return []
+
+class Flatten:
+    def __init__(self):
+        self._noop = true
+
+    def forward(self, x):
+        let xv = _ensure_var(x)
+        return Var.from_id(__native_nn.flatten(xv.id))
+
+    def parameters(self):
+        return []

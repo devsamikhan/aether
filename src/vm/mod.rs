@@ -33,6 +33,7 @@ pub mod timetravel;
 pub mod timetravel_tui;
 pub mod value;
 pub mod vector;
+pub mod vision;
 pub mod wasm_runtime;
 
 pub use bytecode::{Chunk, OpCode};

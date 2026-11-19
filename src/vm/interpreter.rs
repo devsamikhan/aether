@@ -120,6 +120,7 @@ impl VM {
         super::nn::register_nn_module(&mut vm.globals);
         super::llm::register_llm_module(&mut vm.globals);
         super::gpu::register_gpu_module(&mut vm.globals);
+        super::vision::register_vision_module(&mut vm.globals);
         super::security::register_sandbox_module(&mut vm.globals);
         register_bundle_module(&mut vm.globals);
         vm

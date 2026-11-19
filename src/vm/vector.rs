@@ -389,6 +389,143 @@ pub fn register_vector_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // 12. Vector.save(index_id, path) -> Bool (Persistent JSON disk storage)
+    mod_map.insert(
+        "save".to_string(),
+        Value::Native("Vector.save".into(), |args| {
+            if args.len() < 2 {
+                return Err("Vector.save(index_id, path) requires 2 arguments".into());
+            }
+            let index_id = match args[0] {
+                Value::Int(i) if i > 0 => i as u64,
+                _ => return Err("index_id must be positive integer".into()),
+            };
+            let path = format!("{}", args[1]);
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_write(&path))?;
+
+            let stores = get_vector_stores().lock().unwrap();
+            let store_arc = stores
+                .get(&index_id)
+                .cloned()
+                .ok_or_else(|| format!("Vector store {} not found", index_id))?;
+            drop(stores);
+
+            let store = store_arc.lock().unwrap();
+            let serialized_records: Vec<serde_json::Value> = store
+                .records
+                .values()
+                .map(|rec| {
+                    serde_json::json!({
+                        "id": rec.id,
+                        "vector": rec.vector,
+                        "metadata": value_to_json_vec(&rec.metadata),
+                    })
+                })
+                .collect();
+            let payload = serde_json::json!({ "records": serialized_records });
+            let text = serde_json::to_string_pretty(&payload)
+                .map_err(|e| format!("Failed to serialize vector index: {}", e))?;
+            std::fs::write(&path, text)
+                .map_err(|e| format!("Failed to write vector index '{}': {}", path, e))?;
+            Ok(Value::Bool(true))
+        }),
+    );
+
+    // 13. Vector.load(path) -> index_id
+    mod_map.insert(
+        "load".to_string(),
+        Value::Native("Vector.load".into(), |args| {
+            if args.is_empty() {
+                return Err("Vector.load(path) requires file path".into());
+            }
+            let path = format!("{}", args[0]);
+            crate::vm::interpreter::with_current_vm(|vm| vm.security_policy.check_fs_read(&path))?;
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read vector index '{}': {}", path, e))?;
+            let root: serde_json::Value = serde_json::from_str(&raw)
+                .map_err(|e| format!("Invalid vector index JSON '{}': {}", path, e))?;
+            let mut store = VectorIndexStore::default();
+            if let Some(arr) = root.get("records").and_then(|v| v.as_array()) {
+                for item in arr {
+                    let id = item
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let vector: Vec<f64> = item
+                        .get("vector")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|x| x.as_f64()).collect())
+                        .unwrap_or_default();
+                    let metadata = item
+                        .get("metadata")
+                        .map(json_to_value_vec)
+                        .unwrap_or_else(|| Value::map(HashMap::new()));
+                    if !id.is_empty() {
+                        store.records.insert(
+                            id.clone(),
+                            VectorRecord {
+                                id,
+                                vector,
+                                metadata,
+                            },
+                        );
+                    }
+                }
+            }
+            let new_id = NEXT_INDEX_ID.fetch_add(1, Ordering::SeqCst);
+            get_vector_stores()
+                .lock()
+                .unwrap()
+                .insert(new_id, Arc::new(Mutex::new(store)));
+            Ok(Value::Int(new_id as i64))
+        }),
+    );
+
     globals.insert("Vector".to_string(), Value::map(mod_map.clone()));
     globals.insert("__native_vector".to_string(), Value::map(mod_map));
+}
+
+fn value_to_json_vec(val: &Value) -> serde_json::Value {
+    match val {
+        Value::Nil => serde_json::Value::Null,
+        Value::Bool(b) => serde_json::Value::Bool(*b),
+        Value::Int(i) => serde_json::Value::from(*i),
+        Value::Float(f) => serde_json::Value::from(*f),
+        Value::String(s) => serde_json::Value::String(s.to_string()),
+        Value::Array(a) => {
+            serde_json::Value::Array(a.lock().iter().map(value_to_json_vec).collect())
+        }
+        Value::Map(m) => {
+            let mut obj = serde_json::Map::new();
+            for (k, v) in m.lock().iter() {
+                obj.insert(k.clone(), value_to_json_vec(v));
+            }
+            serde_json::Value::Object(obj)
+        }
+        other => serde_json::Value::String(format!("{}", other)),
+    }
+}
+
+fn json_to_value_vec(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else {
+                Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => Value::string(s.clone()),
+        serde_json::Value::Array(a) => Value::array(a.iter().map(json_to_value_vec).collect()),
+        serde_json::Value::Object(obj) => {
+            let mut m = HashMap::new();
+            for (k, val) in obj {
+                m.insert(k.clone(), json_to_value_vec(val));
+            }
+            Value::map(m)
+        }
+    }
 }

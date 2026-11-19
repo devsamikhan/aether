@@ -3774,6 +3774,161 @@ pub fn register_llm_module(globals: &mut HashMap<String, Value>) {
         }),
     );
 
+    // --- Token-by-Token Streaming LLM Generation (with early cancellation) ---
+    llm_mod.insert(
+        "generate_stream".to_string(),
+        Value::Native("LLM.generate_stream".into(), |args| {
+            if args.len() < 3 {
+                return Err(
+                    "LLM.generate_stream(model_id, prompt, callback_fn, opts?) requires 3 args"
+                        .into(),
+                );
+            }
+            let mid = extract_u64_id(&args[0], "model_id")?;
+            let callback = args[2].clone();
+            let opts = match args.get(3) {
+                Some(Value::Map(m)) => m.lock().clone(),
+                _ => HashMap::new(),
+            };
+            let max_tokens = match opts.get("max_tokens") {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => 32,
+            };
+            let temperature = match opts.get("temperature") {
+                Some(Value::Float(f)) => *f as f32,
+                Some(Value::Int(i)) => *i as f32,
+                _ => 0.0,
+            };
+            let top_k = match opts.get("top_k") {
+                Some(Value::Int(i)) if *i > 0 => *i as usize,
+                _ => 40,
+            };
+            let top_p = match opts.get("top_p") {
+                Some(Value::Float(f)) => *f as f32,
+                _ => 0.95,
+            };
+            let rep_penalty = match opts.get("repetition_penalty") {
+                Some(Value::Float(f)) => *f as f32,
+                _ => 1.0,
+            };
+            let seed = match opts.get("seed") {
+                Some(Value::Int(i)) => *i as u64,
+                _ => 42,
+            };
+            let reset_cache = match opts.get("reset_cache") {
+                Some(Value::Bool(b)) => *b,
+                _ => true,
+            };
+
+            let arc = get_llm(mid)?;
+            let start = Instant::now();
+
+            // Prefill prompt while holding model lock, then stream each token
+            let (prompt_tokens, mut logits, mut cache, eos_id, max_seq, tok_opt) = {
+                let mut model = arc.lock();
+                if reset_cache {
+                    model.cache.clear();
+                }
+                let p_tokens = match &args[1] {
+                    Value::Array(_) => extract_u32_vec(&args[1])?,
+                    Value::String(s) => model.encode_text_for_constrained(s),
+                    _ => return Err("prompt must be String or Array of token IDs".into()),
+                };
+                if p_tokens.is_empty() {
+                    return Err("generate_stream requires non-empty prompt".into());
+                }
+                let mut c = model.cache.clone();
+                let mut lg = Vec::new();
+                for &t in &p_tokens {
+                    let pos = c.seq_len;
+                    let (_, next_lg) = model.forward_token_with_cache(t, pos, &mut c)?;
+                    lg = next_lg;
+                }
+                (
+                    p_tokens,
+                    lg,
+                    c,
+                    model.config.eos_token_id,
+                    model.config.max_seq_len,
+                    model.tokenizer.clone(),
+                )
+            };
+
+            let mut rng = if seed == 0 {
+                0x9E37_79B9_7F4A_7C15
+            } else {
+                seed
+            };
+            let mut history = prompt_tokens.clone();
+            let mut generated: Vec<u32> = Vec::with_capacity(max_tokens);
+            let mut full_text = String::new();
+            let mut cancelled = false;
+
+            for step in 0..max_tokens {
+                let next_tok = sample_logits(
+                    &mut logits,
+                    &history,
+                    temperature,
+                    top_k,
+                    top_p,
+                    rep_penalty,
+                    &mut rng,
+                );
+                generated.push(next_tok);
+                history.push(next_tok);
+
+                let piece = tok_opt
+                    .as_ref()
+                    .map(|t| t.decode(&[next_tok], true))
+                    .unwrap_or_else(|| format!("<{}>", next_tok));
+                full_text.push_str(&piece);
+
+                // Invoke user AETHER streaming callback(token_text, token_id, step)
+                let cb_res = crate::vm::interpreter::with_current_vm(|vm| {
+                    vm.call_value(
+                        callback.clone(),
+                        vec![
+                            Value::string(piece),
+                            Value::Int(next_tok as i64),
+                            Value::Int(step as i64),
+                        ],
+                    )
+                })?;
+                if matches!(cb_res, Value::Bool(false)) {
+                    cancelled = true;
+                    break;
+                }
+
+                if Some(next_tok) == eos_id || cache.seq_len >= max_seq {
+                    break;
+                }
+                let pos = cache.seq_len;
+                let model = arc.lock();
+                let (_, next_lg) = model.forward_token_with_cache(next_tok, pos, &mut cache)?;
+                logits = next_lg;
+            }
+
+            arc.lock().cache = cache;
+            let elapsed = start.elapsed().as_secs_f64().max(1e-9);
+            let tps = (generated.len() as f64) / elapsed;
+
+            let mut out = HashMap::new();
+            out.insert("text".to_string(), Value::string(full_text));
+            out.insert(
+                "tokens".to_string(),
+                Value::array(
+                    generated
+                        .into_iter()
+                        .map(|t| Value::Int(t as i64))
+                        .collect(),
+                ),
+            );
+            out.insert("cancelled".to_string(), Value::Bool(cancelled));
+            out.insert("tokens_per_sec".to_string(), Value::Float(tps));
+            Ok(Value::map(out))
+        }),
+    );
+
     globals.insert("LLM".to_string(), Value::map(llm_mod.clone()));
     globals.insert("__native_llm".to_string(), Value::map(llm_mod));
 }
