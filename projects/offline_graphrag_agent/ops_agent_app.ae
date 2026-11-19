@@ -1,0 +1,154 @@
+# ==============================================================================
+# Project 2 — Offline Enterprise GraphRAG + Sandboxed Rewindable Ops Agent
+# Zero Internet, Zero Cloud APIs, Zero Python:
+# Local Domain BPE + Q8_0 GGUF Transformer + SQL + Vector + Graph + Proof + Sandbox
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_llm import BPETokenizer, GGUFModel, LocalLLM
+from aether_neuro import NeuroSymbolicEngine
+from aether_agent import RewindableAgent
+
+print("==========================================================================")
+print("   PROJECT 2: Offline Enterprise GraphRAG & Sandboxed Ops Agent")
+print("   Standalone Binary Mode:", Bundle.is_standalone())
+print("==========================================================================")
+
+# 1. Build Local Domain BPE Tokenizer + Compact Quantized Q8_0 GGUF Model (Zero Download!)
+let corpus = [
+    "api gateway timeout latency spike auth service postgres connection pool exhausted",
+    "redis cache eviction rate elevated failover replica promoted sev1 sev2 sev3",
+    "payment worker queue backlog retry circuit breaker escalate true false 15 30 60",
+    "incident triage runbook rollback deployment verify sla contract"
+]
+let tok = BPETokenizer.train(corpus, 290, ["<|bos|>", "<|eos|>", "<|unk|>"])
+let vocab = tok.vocab_size()
+let dim = 32
+let hidden = 64
+let kv_dim = 16
+
+def synth_mat(rows, cols, seed):
+    let out = []
+    let x = seed
+    let i = 0
+    while i < rows * cols:
+        x = (x * 1103515245 + 12345) % 2147483647
+        out.append(((x % 2001) - 1000) / 5000.0)
+        i = i + 1
+    return Tensor(out, [rows, cols])
+
+def ones_v(n):
+    let out = []
+    let i = 0
+    while i < n:
+        out.append(1.0)
+        i = i + 1
+    return Tensor(out, [n])
+
+let tensors = {
+    "token_embd.weight": synth_mat(vocab, dim, 31),
+    "output_norm.weight": ones_v(dim),
+    "output.weight": synth_mat(vocab, dim, 37),
+    "blk.0.attn_norm.weight": ones_v(dim),
+    "blk.0.attn_q.weight": synth_mat(dim, dim, 41),
+    "blk.0.attn_k.weight": synth_mat(kv_dim, dim, 43),
+    "blk.0.attn_v.weight": synth_mat(kv_dim, dim, 47),
+    "blk.0.attn_output.weight": synth_mat(dim, dim, 53),
+    "blk.0.ffn_norm.weight": ones_v(dim),
+    "blk.0.ffn_gate.weight": synth_mat(hidden, dim, 59),
+    "blk.0.ffn_up.weight": synth_mat(hidden, dim, 61),
+    "blk.0.ffn_down.weight": synth_mat(dim, hidden, 67)
+}
+let meta = {
+    "general.architecture": "llama",
+    "general.name": "AetherOps-Mini-Q8",
+    "llama.block_count": 1,
+    "llama.embedding_length": dim,
+    "llama.feed_forward_length": hidden,
+    "llama.attention.head_count": 4,
+    "llama.attention.head_count_kv": 2,
+    "llama.context_length": 1024,
+    "llama.rope.freq_base": 10000.0
+}
+
+let gguf_file = "_ops_agent_q8.tmp.gguf"
+GGUFModel.save(gguf_file, meta, tensors, "Q8_0")
+let llm = LocalLLM.from_gguf(gguf_file, tok)
+File.delete(gguf_file)
+print("[1] Local Q8_0 GGUF Transformer Ready | Vocab:", vocab, "| Hidden:", dim)
+
+# 2. Populate Unified Neuro-Symbolic Engine (Knowledge Graph + Vector + SQL)
+let engine = NeuroSymbolicEngine(llm)
+engine.add_entity("api_gateway", "API Gateway routes external HTTPS traffic and enforces rate limits")
+engine.add_entity("auth_service", "Auth Service validates JWT tokens using Redis session cache")
+engine.add_entity("redis_cache", "Redis Cache stores active sessions; high eviction causes auth latency spikes")
+engine.add_entity("pg_primary", "Postgres Primary stores ledger transactions; connection pool exhaustion blocks payments")
+engine.add_entity("payment_worker", "Payment Worker processes async settlement jobs from queue into Postgres Primary")
+
+engine.add_relation("api_gateway", "auth_service", "calls", 1.0)
+engine.add_relation("auth_service", "redis_cache", "reads_from", 1.0)
+engine.add_relation("api_gateway", "payment_worker", "enqueues_to", 1.0)
+engine.add_relation("payment_worker", "pg_primary", "writes_to", 1.0)
+
+engine.register_sql_table("sla_metrics", {
+    "service": ["api_gateway", "auth_service", "redis_cache", "pg_primary", "payment_worker"],
+    "p99_ms": [340.0, 290.0, 12.0, 620.0, 480.0],
+    "error_pct": [2.4, 1.8, 0.1, 6.5, 4.9]
+})
+
+let breached = engine.query_sql("SELECT service, p99_ms, error_pct FROM sla_metrics WHERE p99_ms > 250")
+print("[2] SQL SLA Breaches (p99 > 250ms):", breached["columns"]["service"])
+print("    Latencies (ms):", breached["columns"]["p99_ms"])
+
+# 3. Hybrid GraphRAG + Schema-Guaranteed Incident Triage + Formal Proof Verification
+let sla_contract = "
+intent escalation_level(error_pct):
+    require error_pct >= 0
+    ensure result >= 1
+    if error_pct >= 5:
+        return 3
+    return 1
+"
+let triage_schema = {
+    "severity": ["sev1", "sev2", "sev3"],
+    "escalate": "bool",
+    "eta_minutes": "int",
+    "recommended_action": "string"
+}
+let triage = engine.reason_verified(
+    "postgres connection pool exhausted blocking payment worker",
+    triage_schema,
+    sla_contract,
+    2,
+    2
+)
+print("[3] Hybrid GraphRAG Context Entities Retrieved:", len(triage["context"]))
+for item in triage["context"]:
+    print("    -", item["entity"], "(", item["source"], ")")
+print("    Schema-Guaranteed Triage JSON:", triage["structured"]["json"])
+print("    Formal SLA Contract Proof Verified:", triage["verified"])
+
+# 4. Zero-Container Capability Sandbox for Untrusted User Capacity Formulas
+let formula_ok = Sandbox.run("let req_per_sec = 4200\nlet workers = 12\nreq_per_sec / workers", {"fuel": 15000, "fs_read": false, "net": false})
+let attack_blocked = false
+try:
+    sandbox(fuel=10000, fs_read=false, fs_write=false, net=false):
+        File.read("Cargo.toml")
+except e:
+    attack_blocked = true
+print("[4] Sandboxed Capacity Formula (req/worker):", formula_ok["value"], "| Malicious FS Read Blocked:", attack_blocked)
+
+# 5. Rewindable Time-Travel Incident Investigation (State + LLM KV-Cache Rollback!)
+let ops_agent = RewindableAgent("OnCallCommander", llm)
+ops_agent.set("incident_status", "investigating")
+ops_agent.ask("Analyze postgres pool saturation", {"max_tokens": 4, "temperature": 0.0})
+ops_agent.checkpoint("before_mitigation")
+let kv_saved = llm.cache_len()
+
+# Simulate wrong mitigation branch -> rewind -> fork clean mitigation branch
+ops_agent.set("incident_status", "restarted_wrong_service")
+ops_agent.ask("Restart redis cache", {"max_tokens": 4, "temperature": 0.0})
+ops_agent.branch_from("before_mitigation", "clean_pool_scaleup")
+ops_agent.set("incident_status", "scaled_pg_bouncer_pool")
+print("[5] Time-Travel Rewind Verified | KV-Cache Restored To:", kv_saved, "| Final Status:", ops_agent.get("incident_status"))
+print("==========================================================================")

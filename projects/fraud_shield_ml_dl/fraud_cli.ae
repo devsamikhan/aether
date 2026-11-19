@@ -1,0 +1,77 @@
+# ==============================================================================
+# Project 1 — FraudShield Standalone Production Scorer (Single-Binary .exe)
+# Loads Embedded Scaler + FraudNet .safetensors + Verifies Risk Rule via Proof
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_nn import Var, load_weights
+
+print("======================================================================")
+print("   FraudShield Edge Scorer | Standalone Mode:", Bundle.is_standalone())
+print("======================================================================")
+
+# Resolve artifacts from embedded standalone bundle (or local project dir)
+let scaler_file = "projects/fraud_shield_ml_dl/scaler.json"
+let weights_file = "projects/fraud_shield_ml_dl/fraudnet_weights.safetensors"
+let cleanup_tmp = false
+
+if Bundle.is_standalone() and Bundle.has_asset("scaler.json") and Bundle.has_asset("fraudnet_weights.safetensors"):
+    scaler_file = "_fraudshield_scaler.tmp.json"
+    weights_file = "_fraudshield_weights.tmp.safetensors"
+    Bundle.extract_asset("scaler.json", scaler_file)
+    Bundle.extract_asset("fraudnet_weights.safetensors", weights_file)
+    cleanup_tmp = true
+
+let scaler_id = ML.load_model(scaler_file)
+let w = load_weights(weights_file)
+
+# Formal Proof Safety Check on Alert Threshold Contract
+let threshold_contract = "
+intent risk_band(score_pct):
+    require score_pct >= 0
+    ensure result >= 0
+    if score_pct >= 70:
+        return 2
+    if score_pct >= 40:
+        return 1
+    return 0
+"
+let proof_reports = Proof.verify(threshold_contract)
+print("[1] Formal Risk Policy Contract Verified:", proof_reports[0]["verified"])
+
+# Score 3 Live Incoming Transactions
+let incoming = [
+    [42.5,   14.0, 1.0,  3.5,   0.95, 0.12],
+    [2450.0,  2.5, 8.0, 1450.0, 0.15, 0.88],
+    [480.0,  15.0, 2.0,  380.0, 0.88, 0.18]
+]
+let labels = ["Normal Coffee/Grocery", "Night High-Amt + Untrusted + 1450km", "Trusted Traveler"]
+
+let scaled = ML.transform(scaler_id, incoming)
+let x_var = Var(Tensor(scaled), false)
+let h1 = x_var.matmul(Var(w["fc1.w"], false)) + Var(w["fc1.b"], false)
+let h1_ln = Var.from_id(__native_nn.layer_norm(h1.id, Var(w["ln1.g"], false).id, Var(w["ln1.b"], false).id, 0.00001)).gelu()
+let h2 = (h1_ln.matmul(Var(w["fc2.w"], false)) + Var(w["fc2.b"], false)).gelu()
+let logits = (h2.matmul(Var(w["fc3.w"], false)) + Var(w["fc3.b"], false)).data().to_array()
+
+print("[2] Live Neural Fraud Scoring Results:")
+let idx = 0
+while idx < len(logits):
+    let l0 = logits[idx][0]
+    let l1 = logits[idx][1]
+    let m = l0
+    if l1 > m:
+        m = l1
+    let e0 = Math.exp(l0 - m)
+    let e1 = Math.exp(l1 - m)
+    let prob = e1 / (e0 + e1)
+    let verdict = "ALLOW"
+    if prob >= 0.5:
+        verdict = "BLOCK_FRAUD"
+    print("    Tx #" + str(idx + 1) + " (" + labels[idx] + ") -> Fraud Prob:", prob, "| Verdict:", verdict)
+    idx = idx + 1
+
+if cleanup_tmp:
+    File.delete(scaler_file)
+    File.delete(weights_file)
+print("======================================================================")

@@ -1,0 +1,81 @@
+# ==============================================================================
+# Project 1 — FraudShield: Realistic Financial Transaction CSV Generator
+# ==============================================================================
+
+def generate_transactions_csv(path, n_rows=1200, seed=2026):
+    let lines = ["tx_id,amount_usd,hour_of_day,tx_velocity_1h,geo_distance_km,device_trust,merchant_risk,is_fraud"]
+    let st = seed
+    let i = 0
+    let fraud_count = 0
+
+    while i < n_rows:
+        # Deterministic LCG PRNG
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u1 = (st % 10000) / 10000.0
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u2 = (st % 10000) / 10000.0
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u3 = (st % 10000) / 10000.0
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u4 = (st % 10000) / 10000.0
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u5 = (st % 10000) / 10000.0
+        st = (st * 1103515245 + 12345) % 2147483647
+        let u6 = (st % 10000) / 10000.0
+
+        # ~22% realistic fraud patterns with overlapping noise
+        let is_fraud = 0
+        let amount = 15.0 + u1 * 480.0
+        let hour = 7.0 + u2 * 15.0
+        let velocity = 1.0 + u3 * 3.0
+        let geo_km = u4 * 45.0
+        let trust = 0.65 + u5 * 0.35
+        let merch = 0.05 + u6 * 0.35
+
+        if (i % 9) == 0:
+            # Pattern A: Card-not-present high-amount + untrusted device
+            is_fraud = 1
+            amount = 900.0 + u1 * 3200.0
+            hour = u2 * 6.0
+            velocity = 3.0 + u3 * 7.0
+            geo_km = 120.0 + u4 * 1800.0
+            trust = 0.05 + u5 * 0.38
+            merch = 0.55 + u6 * 0.45
+        elif (i % 11) == 0:
+            # Pattern B: Account takeover rapid velocity + impossible geo jump
+            is_fraud = 1
+            amount = 280.0 + u1 * 1400.0
+            hour = 21.0 + u2 * 2.9
+            velocity = 6.0 + u3 * 9.0
+            geo_km = 450.0 + u4 * 2400.0
+            trust = 0.15 + u5 * 0.42
+            merch = 0.40 + u6 * 0.55
+        elif (i % 17) == 0:
+            # Borderline legitimate traveler (hard negative!)
+            is_fraud = 0
+            amount = 350.0 + u1 * 1100.0
+            hour = 5.0 + u2 * 16.0
+            velocity = 2.0 + u3 * 4.5
+            geo_km = 300.0 + u4 * 900.0
+            trust = 0.45 + u5 * 0.45
+            merch = 0.25 + u6 * 0.45
+        elif (i % 23) == 0:
+            # Subtle low-value card-testing fraud (hard positive!)
+            is_fraud = 1
+            amount = 18.0 + u1 * 95.0
+            hour = 1.0 + u2 * 5.0
+            velocity = 5.0 + u3 * 6.0
+            geo_km = 40.0 + u4 * 200.0
+            trust = 0.30 + u5 * 0.35
+            merch = 0.45 + u6 * 0.35
+
+        if is_fraud == 1:
+            fraud_count = fraud_count + 1
+
+        let row = str(i + 1) + "," + str(amount) + "," + str(hour) + "," + str(velocity) + "," + str(geo_km) + "," + str(trust) + "," + str(merch) + "," + str(is_fraud)
+        lines.append(row)
+        i = i + 1
+
+    let csv_text = lines.join("\n")
+    File.write(path, csv_text)
+    return {"rows": n_rows, "fraud_count": fraud_count}

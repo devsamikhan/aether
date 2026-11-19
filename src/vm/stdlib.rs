@@ -361,6 +361,69 @@ pub fn register_stdlib(globals: &mut HashMap<String, Value>) {
             Ok(Value::Float(rounded))
         }),
     );
+    math_module.insert(
+        "exp".to_string(),
+        Value::Native("Math.exp".into(), |args| {
+            let v = match args.first() {
+                Some(Value::Float(f)) => *f,
+                Some(Value::Int(i)) => *i as f64,
+                _ => return Err("Math.exp(x) requires a number".into()),
+            };
+            Ok(Value::Float(v.exp()))
+        }),
+    );
+    math_module.insert(
+        "log".to_string(),
+        Value::Native("Math.log".into(), |args| {
+            let v = match args.first() {
+                Some(Value::Float(f)) => *f,
+                Some(Value::Int(i)) => *i as f64,
+                _ => return Err("Math.log(x) requires a number".into()),
+            };
+            Ok(Value::Float(v.ln()))
+        }),
+    );
+    math_module.insert(
+        "log10".to_string(),
+        Value::Native("Math.log10".into(), |args| {
+            let v = match args.first() {
+                Some(Value::Float(f)) => *f,
+                Some(Value::Int(i)) => *i as f64,
+                _ => return Err("Math.log10(x) requires a number".into()),
+            };
+            Ok(Value::Float(v.log10()))
+        }),
+    );
+    math_module.insert(
+        "tanh".to_string(),
+        Value::Native("Math.tanh".into(), |args| {
+            let v = match args.first() {
+                Some(Value::Float(f)) => *f,
+                Some(Value::Int(i)) => *i as f64,
+                _ => return Err("Math.tanh(x) requires a number".into()),
+            };
+            Ok(Value::Float(v.tanh()))
+        }),
+    );
+    math_module.insert(
+        "pow".to_string(),
+        Value::Native("Math.pow".into(), |args| {
+            if args.len() < 2 {
+                return Err("Math.pow(base, exp) requires 2 numbers".into());
+            }
+            let a = match args[0] {
+                Value::Float(f) => f,
+                Value::Int(i) => i as f64,
+                _ => return Err("Math.pow base must be a number".into()),
+            };
+            let b = match args[1] {
+                Value::Float(f) => f,
+                Value::Int(i) => i as f64,
+                _ => return Err("Math.pow exp must be a number".into()),
+            };
+            Ok(Value::Float(a.powf(b)))
+        }),
+    );
 
     globals.insert("Math".to_string(), Value::map(math_module));
 

@@ -1,0 +1,197 @@
+# ==============================================================================
+# Project 1 — FraudShield: Real-World Zero-Python ML + GPU Deep Learning Pipeline
+# DataFrame + SQL EDA + ML Shootout + Custom GPU FraudNet + LoRA + Safetensors
+# ==============================================================================
+
+from projects.fraud_shield_ml_dl.dataset_gen import generate_transactions_csv
+from aether_tensor import Tensor
+from aether_ml import StandardScaler, LogisticRegression, DecisionTree, RandomForest, KNN, train_test_split
+from aether_nn import Var, Linear, LayerNorm, LoRALinear, AdamW, cross_entropy_loss, mse_loss, save_weights, set_device
+
+print("==========================================================================")
+print("   PROJECT 1: FraudShield — Real-World Zero-Python ML + GPU DL Pipeline")
+print("==========================================================================")
+
+# 1. Generate & Load Real Multi-Feature CSV Dataset
+let csv_path = "projects/fraud_shield_ml_dl/transactions.csv"
+let gen = generate_transactions_csv(csv_path, 1200, 2026)
+print("[1] Generated CSV:", csv_path, "| Total Rows:", gen["rows"], "| Fraud Cases:", gen["fraud_count"])
+
+let df = DataFrame.from_csv(csv_path)
+Sql.register_table("txns", df)
+let high_val = Sql.query("SELECT amount_usd, is_fraud FROM txns WHERE amount_usd > 800")
+print("    SQL EDA -> High-Value Transactions (> $800):", DataFrame.shape(high_val)[0])
+
+# 2. Build Feature Matrix X [N, 6] & Labels y [N]
+let c_amt = DataFrame.get_column(df, "amount_usd")
+let c_hr  = DataFrame.get_column(df, "hour_of_day")
+let c_vel = DataFrame.get_column(df, "tx_velocity_1h")
+let c_geo = DataFrame.get_column(df, "geo_distance_km")
+let c_tru = DataFrame.get_column(df, "device_trust")
+let c_mrk = DataFrame.get_column(df, "merchant_risk")
+let c_lbl = DataFrame.get_column(df, "is_fraud")
+
+let X = []
+let y = []
+let n = len(c_amt)
+let i = 0
+while i < n:
+    X.append([c_amt[i], c_hr[i], c_vel[i], c_geo[i], c_tru[i], c_mrk[i]])
+    y.append(c_lbl[i])
+    i = i + 1
+
+let split = train_test_split(X, y, 0.25, 42)
+let scaler = StandardScaler()
+let X_train = scaler.fit_transform(split["X_train"])
+let X_test  = scaler.transform(split["X_test"])
+let y_train = split["y_train"]
+let y_test  = split["y_test"]
+print("[2] Train/Test Split:", len(X_train), "train /", len(X_test), "test (StandardScaler fitted)")
+
+# 3. Classical ML Shootout (Zero Scikit-Learn!)
+print("\n[3] Classical ML Model Shootout (Held-Out Test Set):")
+let lr = LogisticRegression(0.15, 250, 0.001)
+lr.fit(X_train, y_train)
+let lr_preds = lr.predict(X_test)
+let lr_prf = ML.precision_recall_f1(y_test, lr_preds)
+print("    LogisticRegression | Acc:", ML.accuracy(y_test, lr_preds), "| F1:", lr_prf["f1"], "| Recall:", lr_prf["recall"])
+
+let dt = DecisionTree(6, 4)
+dt.fit(X_train, y_train)
+let dt_preds = dt.predict(X_test)
+let dt_prf = ML.precision_recall_f1(y_test, dt_preds)
+print("    DecisionTree       | Acc:", ML.accuracy(y_test, dt_preds), "| F1:", dt_prf["f1"], "| Recall:", dt_prf["recall"])
+
+let rf = RandomForest(21, 6, 42)
+rf.fit(X_train, y_train)
+let rf_preds = rf.predict(X_test)
+let rf_prf = ML.precision_recall_f1(y_test, rf_preds)
+print("    RandomForest (21)  | Acc:", ML.accuracy(y_test, rf_preds), "| F1:", rf_prf["f1"], "| Recall:", rf_prf["recall"])
+
+let knn = KNN(5)
+knn.fit(X_train, y_train)
+let knn_preds = knn.predict(X_test)
+let knn_prf = ML.precision_recall_f1(y_test, knn_preds)
+print("    KNN (k=5)          | Acc:", ML.accuracy(y_test, knn_preds), "| F1:", knn_prf["f1"], "| Recall:", knn_prf["recall"])
+
+# 4. Custom Deep Learning Architecture (`FraudNet`) Trained on Live Hardware GPU (`wgpu`)!
+let active_dev = set_device("gpu")
+print("\n[4] Training Custom Deep Neural Network `FraudNet` (6 -> 24 -> 12 -> 2) on Device:", active_dev)
+
+let fc1 = Linear(6, 24, 101)
+let ln1 = LayerNorm(24)
+let fc2 = Linear(24, 12, 202)
+let fc3 = Linear(12, 2, 303)
+
+let all_params = []
+for p in fc1.parameters():
+    all_params.append(p)
+for p in ln1.parameters():
+    all_params.append(p)
+for p in fc2.parameters():
+    all_params.append(p)
+for p in fc3.parameters():
+    all_params.append(p)
+
+let opt = AdamW(all_params, 0.03)
+let X_tr_t = Tensor(X_train)
+let X_te_t = Tensor(X_test)
+
+# Convert labels to integer target indices for CrossEntropyLoss
+let y_tr_idx = []
+for lbl in y_train:
+    if lbl > 0.5:
+        y_tr_idx.append(1)
+    else:
+        y_tr_idx.append(0)
+
+let epoch = 0
+let last_loss = 0.0
+while epoch < 45:
+    opt.zero_grad()
+    let h1 = ln1.forward(fc1.forward(X_tr_t)).gelu()
+    let h2 = fc2.forward(h1).gelu()
+    let logits = fc3.forward(h2)
+    let loss = cross_entropy_loss(logits, y_tr_idx)
+    last_loss = loss.item()
+    loss.backward()
+    opt.step()
+    if epoch == 0 or epoch == 20 or epoch == 44:
+        print("    Epoch", epoch, "| CrossEntropy Loss:", last_loss)
+    epoch = epoch + 1
+
+# Evaluate FraudNet on Held-Out Test Set
+let te_h1 = ln1.forward(fc1.forward(X_te_t)).gelu()
+let te_h2 = fc2.forward(te_h1).gelu()
+let te_logits = fc3.forward(te_h2).data().to_array()
+
+let nn_preds = []
+let nn_scores = []
+let ti = 0
+while ti < len(te_logits):
+    let l0 = te_logits[ti][0]
+    let l1 = te_logits[ti][1]
+    if l1 > l0:
+        nn_preds.append(1.0)
+    else:
+        nn_preds.append(0.0)
+    # Softmax probability of class 1 (fraud)
+    let m = l0
+    if l1 > m:
+        m = l1
+    let e0 = Math.exp(l0 - m)
+    let e1 = Math.exp(l1 - m)
+    nn_scores.append(e1 / (e0 + e1))
+    ti = ti + 1
+
+let nn_prf = ML.precision_recall_f1(y_test, nn_preds)
+let nn_auc = ML.roc_auc(y_test, nn_scores)
+let cm = ML.confusion_matrix(y_test, nn_preds)
+print("    FraudNet (GPU NN)  | Acc:", ML.accuracy(y_test, nn_preds), "| F1:", nn_prf["f1"], "| ROC-AUC:", nn_auc)
+print("    Confusion Matrix:", cm)
+
+# 5. LoRA Online Adaptation on Emerging Fraud Wave (Freeze Base fc3 Weights!)
+print("\n[5] LoRA Adaptation on Emerging Fraud Wave (Base Weights Frozen):")
+let lora_head = LoRALinear(fc3.W, 2, 4.0, fc3.b)
+let lora_opt = AdamW(lora_head.parameters(), 0.05)
+let wave_x = te_h2.data().slice_rows(0, 16)
+let wave_y = Tensor(te_logits).slice_rows(0, 16)
+let lstep = 0
+let lora_loss = 0.0
+while lstep < 15:
+    lora_opt.zero_grad()
+    let lout = lora_head.forward(wave_x)
+    let ll = mse_loss(lout, wave_y)
+    lora_loss = ll.item()
+    ll.backward()
+    lora_opt.step()
+    lstep = lstep + 1
+print("    LoRA Adapter Converged MSE:", lora_loss, "| Adapter Params: 2 tiny low-rank matrices")
+
+# 6. Export Production Artifacts (Scaler JSON + FraudNet .safetensors + LoRA Adapter + RF JSON)
+let scaler_path = "projects/fraud_shield_ml_dl/scaler.json"
+let weights_path = "projects/fraud_shield_ml_dl/fraudnet_weights.safetensors"
+let lora_path = "projects/fraud_shield_ml_dl/fraudnet_lora.safetensors"
+let rf_path = "projects/fraud_shield_ml_dl/rf_model.json"
+
+scaler.save(scaler_path)
+rf.save(rf_path)
+save_weights({
+    "fc1.w": fc1.W,
+    "fc1.b": fc1.b,
+    "ln1.g": ln1.gamma,
+    "ln1.b": ln1.beta,
+    "fc2.w": fc2.W,
+    "fc2.b": fc2.b,
+    "fc3.w": fc3.W,
+    "fc3.b": fc3.b
+}, weights_path)
+lora_head.save_adapter(lora_path)
+set_device("cpu")
+
+print("\n[6] Exported Production Artifacts:")
+print("    -", scaler_path)
+print("    -", weights_path)
+print("    -", lora_path)
+print("    -", rf_path)
+print("==========================================================================")
