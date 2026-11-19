@@ -101,6 +101,11 @@ impl TensorData {
             ));
         }
 
+        // Optional transparent hardware GPU acceleration when GPU.set_tensor_accel(true)
+        if let Some(gpu_out) = super::gpu::try_gpu_matmul_f64(&self.data, &other.data, m, k1, n) {
+            return Self::new(vec![m, n], gpu_out);
+        }
+
         let mut out_data = vec![0.0; m * n];
         // Parallel multi-core IKJ matrix multiplication for medium/large matrices
         let work = m.saturating_mul(k1).saturating_mul(n);

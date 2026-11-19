@@ -1,0 +1,115 @@
+# ==============================================================================
+# AetherLLM — Pure-Rust BPE Tokenizer, GGUF Quantized Model Loader & Local LLM
+# Zero-Python Replacement for tiktoken, tokenizers, llama-cpp-python & transformers
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+class BPETokenizer:
+    def __init__(self, handle_id):
+        self.id = handle_id
+
+    def train(texts, vocab_size=512, special_tokens=nil):
+        let tid = __native_llm.bpe_train(texts, vocab_size, special_tokens)
+        return BPETokenizer(tid)
+
+    def load(path):
+        let tid = __native_llm.bpe_load(path)
+        return BPETokenizer(tid)
+
+    def from_gguf(gguf_model):
+        let gid = gguf_model
+        if type(gguf_model) == "instance":
+            gid = gguf_model.id
+        let tid = __native_llm.bpe_from_gguf(gid)
+        return BPETokenizer(tid)
+
+    def save(self, path):
+        return __native_llm.bpe_save(self.id, path)
+
+    def encode(self, text, add_special=false):
+        return __native_llm.bpe_encode(self.id, text, add_special)
+
+    def decode(self, ids, skip_special=true):
+        return __native_llm.bpe_decode(self.id, ids, skip_special)
+
+    def vocab_size(self):
+        return __native_llm.bpe_vocab_size(self.id)
+
+class GGUFModel:
+    def __init__(self, handle_id):
+        self.id = handle_id
+
+    def open(path):
+        let gid = __native_llm.load_gguf(path)
+        return GGUFModel(gid)
+
+    def save(path, metadata, tensors, quant_mode="Q8_0"):
+        let payload = {}
+        for k in tensors.keys():
+            let v = tensors[k]
+            if type(v) == "instance":
+                payload[k] = v.handle
+            else:
+                payload[k] = v
+        return __native_llm.save_gguf(path, metadata, payload, quant_mode)
+
+    def metadata(self):
+        return __native_llm.gguf_metadata(self.id)
+
+    def tensor_names(self):
+        return __native_llm.gguf_tensor_names(self.id)
+
+    def tensor_info(self, name):
+        return __native_llm.gguf_tensor_info(self.id, name)
+
+    def tensor(self, name):
+        let raw = __native_llm.gguf_read_tensor(self.id, name)
+        return Tensor(raw)
+
+class LocalLLM:
+    def __init__(self, handle_id):
+        self.id = handle_id
+
+    def from_gguf(path_or_gguf, tokenizer=nil):
+        let src = path_or_gguf
+        if type(path_or_gguf) == "instance":
+            src = path_or_gguf.id
+        let tid = nil
+        if tokenizer != nil:
+            if type(tokenizer) == "instance":
+                tid = tokenizer.id
+            else:
+                tid = tokenizer
+        let mid = __native_llm.load_model_gguf(src, tid)
+        return LocalLLM(mid)
+
+    def from_safetensors(path, config, tokenizer=nil):
+        let tid = nil
+        if tokenizer != nil:
+            if type(tokenizer) == "instance":
+                tid = tokenizer.id
+            else:
+                tid = tokenizer
+        let mid = __native_llm.load_model_safetensors(path, config, tid)
+        return LocalLLM(mid)
+
+    def info(self):
+        return __native_llm.model_info(self.id)
+
+    def reset_cache(self):
+        return __native_llm.reset_cache(self.id)
+
+    def logits(self, token_ids):
+        return __native_llm.forward_logits(self.id, token_ids)
+
+    def generate(self, prompt_or_tokens, opts=nil):
+        if opts == nil:
+            return __native_llm.generate(self.id, prompt_or_tokens, {})
+        return __native_llm.generate(self.id, prompt_or_tokens, opts)
+
+    def embed(self, text_or_tokens, pooling="mean"):
+        return __native_llm.embed(self.id, text_or_tokens, pooling)
+
+def cosine_similarity(a, b):
+    return __native_llm.cosine_similarity(a, b)

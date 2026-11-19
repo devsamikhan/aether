@@ -1,0 +1,66 @@
+# ==============================================================================
+# Example 48: Cross-Platform Hardware GPU Compute (wgpu: DX12 / Vulkan / Metal)
+# Tiled WGSL GEMM, RMSNorm, Flash-Style Attention, Custom WGSL & Benchmark
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_gpu import GpuTensor, available, info, benchmark, run_wgsl
+
+print("==================================================================")
+print("   AETHER Native GPU Compute Engine (wgpu: DX12 / Vulkan / Metal)")
+print("==================================================================")
+
+let dev = info()
+print("[1] Hardware GPU Available:", available())
+print("    Adapter:", dev["name"], "| Backend:", dev["backend"], "| Type:", dev["device_type"])
+
+# 2. VRAM-Resident Transformer Block Ops (MatMul -> RMSNorm -> GELU -> Softmax)
+let gx = GpuTensor([[1.0, -2.0, 3.0, 4.0], [-1.0, 2.0, -3.0, 4.0]])
+let gw = GpuTensor([
+    [0.5, -0.5, 0.2, 0.1],
+    [0.1,  0.4, -0.3, 0.2],
+    [-0.2, 0.3, 0.5, -0.1],
+    [0.4,  0.1, 0.2, 0.3]
+])
+let gamma = GpuTensor([1.0, 1.0, 1.0, 1.0], [4])
+
+let chained = gx.matmul(gw).rmsnorm(gamma).gelu().softmax()
+print("[2] VRAM-Chained Softmax Output:", chained.cpu().to_array())
+gx.free()
+gw.free()
+gamma.free()
+chained.free()
+
+# 3. GPU-Accelerated Causal Self-Attention
+let q = GpuTensor([[1.0, 0.2], [0.3, 0.9], [0.8, 0.7]])
+let k = GpuTensor([[1.0, 0.2], [0.3, 0.9], [0.8, 0.7]])
+let v = GpuTensor([[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]])
+let attn_out = q.attention(k, v, true)
+print("[3] GPU Causal Attention Output:", attn_out.cpu().to_array())
+q.free()
+k.free()
+v.free()
+attn_out.free()
+
+# 4. Custom User WGSL Compute Shader directly from AETHER
+if available():
+    let custom_shader = "
+@group(0) @binding(0) var<storage, read> x: array<f32>;
+@group(0) @binding(1) var<storage, read> y: array<f32>;
+@group(0) @binding(2) var<storage, read_write> out: array<f32>;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let i = gid.x;
+    if (i < arrayLength(&out)) {
+        out[i] = x[i] * x[i] + y[i];
+    }
+}
+"
+    let wgsl_out = run_wgsl(custom_shader, [[2.0, 3.0, 4.0, 5.0], [1.0, 1.0, 1.0, 1.0]], 4, [1, 1, 1])
+    print("[4] Custom WGSL Shader (x^2 + y):", wgsl_out)
+
+# 5. Hardware GPU vs Multi-Core CPU MatMul Benchmark (256x256)
+let b = benchmark(256)
+print("[5] 256x256 GEMM Benchmark | Backend:", b["backend"])
+print("    CPU:", b["cpu_ms"], "ms (", b["cpu_gflops"], "GFLOPS ) | GPU:", b["gpu_ms"], "ms (", b["gpu_gflops"], "GFLOPS ) | max_diff:", b["max_abs_diff"])
+print("==================================================================")

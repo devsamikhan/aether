@@ -1,0 +1,116 @@
+# ==============================================================================
+# Example 47: Pure-Rust BPE Tokenizer, Q8_0 GGUF Export/Load & Local LLM Engine
+# Zero Python, Zero tiktoken, Zero llama-cpp-python
+# ==============================================================================
+
+from aether_tensor import Tensor
+from aether_llm import BPETokenizer, GGUFModel, LocalLLM, cosine_similarity
+
+print("==================================================================")
+print("   AETHER Native LLM Engine: BPE + GGUF Q8_0 + Local Transformer")
+print("==================================================================")
+
+# 1. Train a Pure-Rust Byte-Level BPE Tokenizer on Domain Corpus
+let corpus = [
+    "aether executes edge ai models without python dependencies",
+    "aether compiles quantized gguf transformers directly in rust",
+    "edge ai devices run local embeddings and retrieval offline",
+    "quantized transformers run fast with kv cache in aether"
+]
+let tok = BPETokenizer.train(corpus, 300, ["<|bos|>", "<|eos|>", "<|unk|>"])
+let prompt = "aether runs quantized transformers offline"
+let ids = tok.encode(prompt, false)
+let decoded = tok.decode(ids, true)
+print("[1] BPE Vocab Size:", tok.vocab_size(), "| Encoded tokens:", len(ids), "vs bytes:", len(prompt))
+print("    Decoded:", decoded)
+
+# 2. Build & Quantize a Compact 2-Layer Llama GQA Model into GGUF (Q8_0)
+let vocab = 64
+let dim = 32
+let hidden = 64
+let n_heads = 4
+let n_kv_heads = 2
+let kv_dim = 16
+
+def synth_mat(rows, cols, seed):
+    let out = []
+    let x = seed
+    let i = 0
+    while i < rows * cols:
+        x = (x * 1103515245 + 12345) % 2147483647
+        out.append(((x % 2001) - 1000) / 5000.0)
+        i = i + 1
+    return Tensor(out, [rows, cols])
+
+def ones_vec(n):
+    let out = []
+    let i = 0
+    while i < n:
+        out.append(1.0)
+        i = i + 1
+    return Tensor(out, [n])
+
+let tensors = {
+    "token_embd.weight": synth_mat(vocab, dim, 101),
+    "output_norm.weight": ones_vec(dim),
+    "output.weight": synth_mat(vocab, dim, 103),
+    "blk.0.attn_norm.weight": ones_vec(dim),
+    "blk.0.attn_q.weight": synth_mat(dim, dim, 107),
+    "blk.0.attn_k.weight": synth_mat(kv_dim, dim, 109),
+    "blk.0.attn_v.weight": synth_mat(kv_dim, dim, 113),
+    "blk.0.attn_output.weight": synth_mat(dim, dim, 127),
+    "blk.0.ffn_norm.weight": ones_vec(dim),
+    "blk.0.ffn_gate.weight": synth_mat(hidden, dim, 131),
+    "blk.0.ffn_up.weight": synth_mat(hidden, dim, 137),
+    "blk.0.ffn_down.weight": synth_mat(dim, hidden, 139),
+    "blk.1.attn_norm.weight": ones_vec(dim),
+    "blk.1.attn_q.weight": synth_mat(dim, dim, 149),
+    "blk.1.attn_k.weight": synth_mat(kv_dim, dim, 151),
+    "blk.1.attn_v.weight": synth_mat(kv_dim, dim, 157),
+    "blk.1.attn_output.weight": synth_mat(dim, dim, 163),
+    "blk.1.ffn_norm.weight": ones_vec(dim),
+    "blk.1.ffn_gate.weight": synth_mat(hidden, dim, 167),
+    "blk.1.ffn_up.weight": synth_mat(hidden, dim, 173),
+    "blk.1.ffn_down.weight": synth_mat(dim, hidden, 179)
+}
+
+let tok_vocab = []
+let vi = 0
+while vi < vocab:
+    tok_vocab.append("tok_" + str(vi) + " ")
+    vi = vi + 1
+
+let meta = {
+    "general.architecture": "llama",
+    "general.name": "AetherEdgeLlama-Q8",
+    "llama.block_count": 2,
+    "llama.embedding_length": dim,
+    "llama.feed_forward_length": hidden,
+    "llama.attention.head_count": n_heads,
+    "llama.attention.head_count_kv": n_kv_heads,
+    "llama.context_length": 256,
+    "llama.rope.freq_base": 10000.0,
+    "tokenizer.ggml.model": "gpt2",
+    "tokenizer.ggml.tokens": tok_vocab,
+    "tokenizer.ggml.bos_token_id": 1,
+    "tokenizer.ggml.eos_token_id": 2
+}
+
+let gguf_path = "aether_demo_edge_q8.gguf"
+GGUFModel.save(gguf_path, meta, tensors, "Q8_0")
+let gf = GGUFModel.open(gguf_path)
+let q_info = gf.tensor_info("blk.0.attn_q.weight")
+print("[2] Saved & Loaded GGUF:", gguf_path, "| blk.0.attn_q dtype:", q_info["dtype"])
+
+# 3. Autoregressive Generation with RoPE + GQA + SwiGLU + KV-Cache
+let llm = LocalLLM.from_gguf(gf)
+let gen = llm.generate([4, 8, 12], {"max_tokens": 8, "temperature": 0.7, "top_k": 16, "top_p": 0.9, "seed": 42})
+print("[3] Generated Tokens:", gen["tokens"], "| Throughput (tok/s):", gen["tokens_per_sec"])
+
+# 4. True Transformer Dense Embeddings
+let emb_a = llm.embed([4, 8, 12], "mean")
+let emb_b = llm.embed([4, 8, 15], "mean")
+let emb_c = llm.embed([40, 41, 42], "mean")
+print("[4] Embedding Similarity (near vs far):", cosine_similarity(emb_a, emb_b), "vs", cosine_similarity(emb_a, emb_c))
+File.remove(gguf_path)
+print("==================================================================")

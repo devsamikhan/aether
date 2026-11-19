@@ -111,6 +111,8 @@ impl VM {
         super::chem::register_chem_module(&mut vm.globals);
         super::ml::register_ml_module(&mut vm.globals);
         super::nn::register_nn_module(&mut vm.globals);
+        super::llm::register_llm_module(&mut vm.globals);
+        super::gpu::register_gpu_module(&mut vm.globals);
         vm
     }
 

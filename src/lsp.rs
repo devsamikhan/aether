@@ -116,6 +116,22 @@ impl AetherLanguageServer {
                 * `NN.adamw_create(params, lr, ...)` / `NN.save_safetensors(map, path)` / `NN.load_safetensors(path)`"
                     .to_string(),
             ),
+            "LLM" => Some(
+                "### AETHER Pure-Rust BPE Tokenizer, GGUF Quantized Loader & Local LLM Engine\n\
+                Train/load BPE tokenizers, read/write quantized `.gguf` v2/v3 models (F32/F16/BF16/Q8_0/Q4_0/Q4_1/Q5_0), and run local Llama-architecture inference with RoPE, GQA, SwiGLU, KV-Cache, and dense Transformer embeddings.\n\
+                * `LLM.bpe_train(texts, vocab_size)` / `LLM.bpe_encode(tid, text)` / `LLM.bpe_decode(tid, ids)`\n\
+                * `LLM.load_gguf(path)` / `LLM.save_gguf(path, meta, tensors, quant_mode)`\n\
+                * `LLM.load_model_gguf(path)` / `LLM.generate(mid, prompt, opts)` / `LLM.embed(mid, text)`"
+                    .to_string(),
+            ),
+            "GPU" => Some(
+                "### AETHER Cross-Platform Hardware GPU Compute Engine (`wgpu` — DX12 / Vulkan / Metal)\n\
+                Runs compiled WGSL compute shaders for Tiled GEMM, activations, Softmax, RMSNorm, LayerNorm, Flash-style Attention, VRAM-resident tensor chaining, and custom WGSL shaders with transparent multi-core CPU fallback.\n\
+                * `GPU.available()` / `GPU.info()` / `GPU.benchmark(size)` / `GPU.set_tensor_accel(bool)`\n\
+                * `GPU.upload(tensor)` / `GPU.matmul_buf(a, b)` / `GPU.attention_buf(q, k, v, causal)` / `GPU.download(id)`\n\
+                * `GPU.run_wgsl(wgsl_source, inputs, out_len, workgroups)`"
+                    .to_string(),
+            ),
             "Chem" => Some(
                 "### AETHER Cheminformatics Engine\n\
                 SMILES/SDF molecule parsing, physicochemical descriptors, Lipinski Ro5, Morgan fingerprints, Tanimoto, and affinity prediction.\n\
@@ -581,6 +597,16 @@ impl AetherLanguageServer {
                 "Pure-Rust Deep Learning Autograd, Attention & Safetensors Module",
             ),
             (
+                "LLM",
+                9,
+                "Pure-Rust BPE Tokenizer, GGUF Quantized Loader & Local LLM Engine",
+            ),
+            (
+                "GPU",
+                9,
+                "Cross-Platform Hardware GPU Compute Engine (wgpu DX12/Vulkan/Metal)",
+            ),
+            (
                 "Matrix",
                 9,
                 "Native Multi-Core Tensor & Linear Algebra Module",
@@ -660,6 +686,8 @@ fn detect_member_prefix_fallback(raw_payload: &str) -> Option<String> {
         "AI",
         "ML",
         "NN",
+        "LLM",
+        "GPU",
         "Matrix",
         "AetherBridge",
         "DB",
@@ -915,6 +943,119 @@ fn member_completions(ns: &str) -> Vec<JsonValue> {
                 2,
                 "NN.load_safetensors(path) -> Map<String, Tensor>",
             ),
+        ],
+        "LLM" => &[
+            (
+                "bpe_train",
+                2,
+                "LLM.bpe_train(texts, vocab_size, [special]) -> tok_id",
+            ),
+            ("bpe_load", 2, "LLM.bpe_load(path) -> tok_id"),
+            ("bpe_save", 2, "LLM.bpe_save(tok_id, path) -> Bool"),
+            ("bpe_from_gguf", 2, "LLM.bpe_from_gguf(gguf_id) -> tok_id"),
+            (
+                "bpe_encode",
+                2,
+                "LLM.bpe_encode(tok_id, text, [add_special]) -> Array<Int>",
+            ),
+            (
+                "bpe_decode",
+                2,
+                "LLM.bpe_decode(tok_id, ids, [skip_special]) -> String",
+            ),
+            ("bpe_vocab_size", 2, "LLM.bpe_vocab_size(tok_id) -> Int"),
+            ("load_gguf", 2, "LLM.load_gguf(path) -> gguf_id"),
+            (
+                "save_gguf",
+                2,
+                "LLM.save_gguf(path, metadata, tensors, [quant_mode]) -> Bool",
+            ),
+            ("gguf_metadata", 2, "LLM.gguf_metadata(gguf_id) -> Map"),
+            (
+                "gguf_tensor_names",
+                2,
+                "LLM.gguf_tensor_names(gguf_id) -> Array<String>",
+            ),
+            (
+                "gguf_tensor_info",
+                2,
+                "LLM.gguf_tensor_info(gguf_id, name) -> Map",
+            ),
+            (
+                "gguf_read_tensor",
+                2,
+                "LLM.gguf_read_tensor(gguf_id, name) -> Tensor",
+            ),
+            (
+                "load_model_gguf",
+                2,
+                "LLM.load_model_gguf(path_or_id, [tok_id]) -> model_id",
+            ),
+            (
+                "load_model_safetensors",
+                2,
+                "LLM.load_model_safetensors(path, config, [tok_id]) -> model_id",
+            ),
+            ("model_info", 2, "LLM.model_info(model_id) -> Map"),
+            ("reset_cache", 2, "LLM.reset_cache(model_id) -> Bool"),
+            (
+                "forward_logits",
+                2,
+                "LLM.forward_logits(model_id, token_ids) -> Array<Float>",
+            ),
+            (
+                "generate",
+                2,
+                "LLM.generate(model_id, prompt, [opts]) -> Map",
+            ),
+            (
+                "embed",
+                2,
+                "LLM.embed(model_id, text_or_tokens, [pooling]) -> Array<Float>",
+            ),
+            (
+                "cosine_similarity",
+                2,
+                "LLM.cosine_similarity(a, b) -> Float",
+            ),
+        ],
+        "GPU" => &[
+            ("available", 2, "GPU.available() -> Bool"),
+            ("info", 2, "GPU.info() -> Map"),
+            (
+                "set_tensor_accel",
+                2,
+                "GPU.set_tensor_accel(enabled) -> Bool",
+            ),
+            (
+                "upload",
+                2,
+                "GPU.upload(tensor_or_array, [shape]) -> buf_id",
+            ),
+            ("download", 2, "GPU.download(buf_id) -> Tensor"),
+            ("shape", 2, "GPU.shape(buf_id) -> Array<Int>"),
+            ("free", 2, "GPU.free(buf_id) -> Bool"),
+            ("matmul", 2, "GPU.matmul(a, b) -> Tensor"),
+            ("matmul_buf", 2, "GPU.matmul_buf(a_id, b_id) -> out_id"),
+            ("add", 2, "GPU.add(a, b) -> Tensor"),
+            ("mul", 2, "GPU.mul(a, b) -> Tensor"),
+            ("relu", 2, "GPU.relu(x) -> Tensor"),
+            ("gelu", 2, "GPU.gelu(x) -> Tensor"),
+            ("silu", 2, "GPU.silu(x) -> Tensor"),
+            ("softmax", 2, "GPU.softmax(x) -> Tensor"),
+            ("rmsnorm", 2, "GPU.rmsnorm(x, gamma, [eps]) -> Tensor"),
+            (
+                "layernorm",
+                2,
+                "GPU.layernorm(x, gamma, beta, [eps]) -> Tensor",
+            ),
+            ("attention", 2, "GPU.attention(q, k, v, [causal]) -> Tensor"),
+            (
+                "run_wgsl",
+                2,
+                "GPU.run_wgsl(src, inputs, out_len, workgroups, [entry]) -> Array<Float>",
+            ),
+            ("benchmark", 2, "GPU.benchmark([size]) -> Map"),
         ],
         "Matrix" => &[
             ("zeros", 2, "Matrix.zeros(shape) -> Tensor"),

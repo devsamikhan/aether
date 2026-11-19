@@ -126,6 +126,9 @@ class Tensor:
     def to_list(self):
         return __native_matrix.to_list(self.handle)
 
+    def to_array(self):
+        return __native_matrix.to_list(self.handle)
+
     def __add__(self, other):
         let other_h = other
         if type(other) == "instance":

@@ -1,0 +1,91 @@
+# ==============================================================================
+# AetherGPU — Cross-Platform Hardware GPU Tensors (DirectX 12 / Vulkan / Metal)
+# VRAM-Resident Computation Chaining + Custom WGSL Shaders + CPU Fallback
+# ==============================================================================
+
+from aether_tensor import Tensor
+
+def available():
+    return __native_gpu.available()
+
+def info():
+    return __native_gpu.info()
+
+def set_tensor_accel(enabled):
+    return __native_gpu.set_tensor_accel(enabled)
+
+def benchmark(size=256):
+    return __native_gpu.benchmark(size)
+
+def run_wgsl(wgsl_source, inputs, out_len, workgroups, entry_point="main"):
+    let raw_inputs = []
+    for item in inputs:
+        if type(item) == "instance":
+            raw_inputs.append(item.handle)
+        else:
+            raw_inputs.append(item)
+    return __native_gpu.run_wgsl(wgsl_source, raw_inputs, out_len, workgroups, entry_point)
+
+class GpuTensor:
+    def __init__(self, data_or_id, shape=nil, _raw_id=nil):
+        self._is_gpu_tensor = true
+        if _raw_id != nil:
+            self.id = _raw_id
+        elif type(data_or_id) == "instance":
+            self.id = __native_gpu.upload(data_or_id.handle, shape)
+        else:
+            self.id = __native_gpu.upload(data_or_id, shape)
+
+    def from_id(buf_id):
+        return GpuTensor(nil, nil, buf_id)
+
+    def shape(self):
+        return __native_gpu.shape(self.id)
+
+    def cpu(self):
+        return Tensor(__native_gpu.download(self.id))
+
+    def free(self):
+        return __native_gpu.free(self.id)
+
+    def matmul(self, other):
+        return GpuTensor.from_id(__native_gpu.matmul_buf(self.id, other.id))
+
+    def add(self, other):
+        return GpuTensor.from_id(__native_gpu.binary_buf("add", self.id, other.id))
+
+    def sub(self, other):
+        return GpuTensor.from_id(__native_gpu.binary_buf("sub", self.id, other.id))
+
+    def mul(self, other):
+        return GpuTensor.from_id(__native_gpu.binary_buf("mul", self.id, other.id))
+
+    def div(self, other):
+        return GpuTensor.from_id(__native_gpu.binary_buf("div", self.id, other.id))
+
+    def relu(self):
+        return GpuTensor.from_id(__native_gpu.unary_buf("relu", self.id))
+
+    def sigmoid(self):
+        return GpuTensor.from_id(__native_gpu.unary_buf("sigmoid", self.id))
+
+    def tanh(self):
+        return GpuTensor.from_id(__native_gpu.unary_buf("tanh", self.id))
+
+    def gelu(self):
+        return GpuTensor.from_id(__native_gpu.unary_buf("gelu", self.id))
+
+    def silu(self):
+        return GpuTensor.from_id(__native_gpu.unary_buf("silu", self.id))
+
+    def softmax(self):
+        return GpuTensor.from_id(__native_gpu.softmax_buf(self.id))
+
+    def rmsnorm(self, gamma, eps=0.00001):
+        return GpuTensor.from_id(__native_gpu.rmsnorm_buf(self.id, gamma.id, eps))
+
+    def layernorm(self, gamma, beta, eps=0.00001):
+        return GpuTensor.from_id(__native_gpu.layernorm_buf(self.id, gamma.id, beta.id, eps))
+
+    def attention(self, k, v, causal=false):
+        return GpuTensor.from_id(__native_gpu.attention_buf(self.id, k.id, v.id, causal))
